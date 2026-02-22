@@ -9,6 +9,7 @@ export default defineConfig({
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),
+      "@runelink/sdk": path.resolve(__dirname, "../runelink-sdk-js/src/index.ts"),
     },
   },
 })

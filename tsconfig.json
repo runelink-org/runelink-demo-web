@@ -7,7 +7,8 @@
   "compilerOptions": {
     "baseUrl": ".",
     "paths": {
-      "@/*": ["./src/*"]
+      "@/*": ["./src/*"],
+      "@runelink/sdk": ["../runelink-sdk-js/src/index.ts"]
     }
   }
 }
