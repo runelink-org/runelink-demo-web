@@ -80,6 +80,12 @@ function mergeMessages(messages: Message[]): Record<string, Message> {
   return Object.fromEntries(messages.map((message) => [message.id, message]));
 }
 
+function sortMessages(messages: Message[]): Message[] {
+  return [...messages].sort(
+    (left, right) => left.created_at.getTime() - right.created_at.getTime()
+  );
+}
+
 export const useMessagesStore = create<MessagesState>((set) => ({
   ...initialState,
 
@@ -93,7 +99,7 @@ export const useMessagesStore = create<MessagesState>((set) => ({
       });
 
       set((state) => ({
-        allMessages: reply.data,
+        allMessages: sortMessages(reply.data),
         messageById: {
           ...state.messageById,
           ...mergeMessages(reply.data),
@@ -144,11 +150,16 @@ export const useMessagesStore = create<MessagesState>((set) => ({
       set((state) => ({
         messagesByServerId: {
           ...state.messagesByServerId,
-          [serverId]: reply.data,
+          [serverId]: sortMessages(reply.data),
         },
         messagesByChannelKey: {
           ...state.messagesByChannelKey,
-          ...channelMessages,
+          ...Object.fromEntries(
+            Object.entries(channelMessages).map(([key, messages]) => [
+              key,
+              sortMessages(messages),
+            ])
+          ),
         },
         messageById: {
           ...state.messageById,
@@ -210,7 +221,7 @@ export const useMessagesStore = create<MessagesState>((set) => ({
       set((state) => ({
         messagesByChannelKey: {
           ...state.messagesByChannelKey,
-          [channelKey]: reply.data,
+          [channelKey]: sortMessages(reply.data),
         },
         messageById: {
           ...state.messageById,
@@ -273,16 +284,17 @@ export const useMessagesStore = create<MessagesState>((set) => ({
       set((state) => ({
         messagesByChannelKey: {
           ...state.messagesByChannelKey,
-          [channelKey]: upsertMessage(
-            state.messagesByChannelKey[channelKey] ?? [],
-            reply.data
+          [channelKey]: sortMessages(
+            upsertMessage(
+              state.messagesByChannelKey[channelKey] ?? [],
+              reply.data
+            )
           ),
         },
         messagesByServerId: {
           ...state.messagesByServerId,
-          [serverId]: upsertMessage(
-            state.messagesByServerId[serverId] ?? [],
-            reply.data
+          [serverId]: sortMessages(
+            upsertMessage(state.messagesByServerId[serverId] ?? [], reply.data)
           ),
         },
         messageById: {
@@ -319,74 +331,40 @@ export const useMessagesStore = create<MessagesState>((set) => ({
 
   async createMessage(serverId, channelId, newMessage, targetHost = null) {
     const channelKey = serverChannelKey(serverId, channelId);
-    set((state) => ({
-      isLoadingByChannelKey: {
-        ...state.isLoadingByChannelKey,
-        [channelKey]: true,
+    const reply = await requestExpected("messages_create", {
+      type: "messages_create",
+      data: {
+        server_id: serverId,
+        channel_id: channelId,
+        new_message: newMessage,
+        target_host: targetHost,
       },
-      errorByChannelKey: {
-        ...state.errorByChannelKey,
-        [channelKey]: null,
+    });
+
+    set((state) => ({
+      allMessages: sortMessages(upsertMessage(state.allMessages, reply.data)),
+      messagesByServerId: {
+        ...state.messagesByServerId,
+        [serverId]: sortMessages(
+          upsertMessage(state.messagesByServerId[serverId] ?? [], reply.data)
+        ),
+      },
+      messagesByChannelKey: {
+        ...state.messagesByChannelKey,
+        [channelKey]: sortMessages(
+          upsertMessage(
+            state.messagesByChannelKey[channelKey] ?? [],
+            reply.data
+          )
+        ),
+      },
+      messageById: {
+        ...state.messageById,
+        [reply.data.id]: reply.data,
       },
     }));
 
-    try {
-      const reply = await requestExpected("messages_create", {
-        type: "messages_create",
-        data: {
-          server_id: serverId,
-          channel_id: channelId,
-          new_message: newMessage,
-          target_host: targetHost,
-        },
-      });
-
-      set((state) => ({
-        allMessages: upsertMessage(state.allMessages, reply.data),
-        messagesByServerId: {
-          ...state.messagesByServerId,
-          [serverId]: upsertMessage(
-            state.messagesByServerId[serverId] ?? [],
-            reply.data
-          ),
-        },
-        messagesByChannelKey: {
-          ...state.messagesByChannelKey,
-          [channelKey]: upsertMessage(
-            state.messagesByChannelKey[channelKey] ?? [],
-            reply.data
-          ),
-        },
-        messageById: {
-          ...state.messageById,
-          [reply.data.id]: reply.data,
-        },
-        isLoadingByChannelKey: {
-          ...state.isLoadingByChannelKey,
-          [channelKey]: false,
-        },
-        errorByChannelKey: {
-          ...state.errorByChannelKey,
-          [channelKey]: null,
-        },
-      }));
-
-      return reply.data;
-    } catch (error) {
-      const message =
-        error instanceof Error ? error.message : "Failed to create message";
-      set((state) => ({
-        isLoadingByChannelKey: {
-          ...state.isLoadingByChannelKey,
-          [channelKey]: false,
-        },
-        errorByChannelKey: {
-          ...state.errorByChannelKey,
-          [channelKey]: message,
-        },
-      }));
-      throw error;
-    }
+    return reply.data;
   },
 
   async deleteMessage(serverId, channelId, messageId, targetHost = null) {

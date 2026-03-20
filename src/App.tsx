@@ -104,6 +104,7 @@ export function App() {
   const fetchMessagesByChannel = useMessagesStore(
     (state) => state.fetchMessagesByChannel
   );
+  const createMessage = useMessagesStore((state) => state.createMessage);
 
   const activeAccountKey = activeAccount
     ? `${activeAccount.name}@${activeAccount.host}`
@@ -269,6 +270,9 @@ export function App() {
   const isMessagesLoading = selectedChannelKey
     ? (isLoadingByChannelKey[selectedChannelKey] ?? false)
     : false;
+  const hasFetchedSelectedMessages = selectedChannelKey
+    ? selectedChannelKey in messagesByChannelKey
+    : false;
   const messagesError = selectedChannelKey
     ? (errorByChannelKey[selectedChannelKey] ?? null)
     : null;
@@ -277,6 +281,7 @@ export function App() {
     if (
       !selectedServerId ||
       !selectedChannelId ||
+      hasFetchedSelectedMessages ||
       connectionStatus !== "connected" ||
       !selectedServer ||
       !activeAccount
@@ -293,6 +298,8 @@ export function App() {
     activeAccount,
     connectionStatus,
     fetchMessagesByChannel,
+    hasFetchedSelectedMessages,
+    messagesByChannelKey,
     selectedChannelId,
     selectedServer,
     selectedServerId,
@@ -318,6 +325,22 @@ export function App() {
 
   function handleSelectChannel(serverId: string, channel: Channel) {
     selectChannel(serverId, channel.id);
+  }
+
+  async function handleSendMessage(body: string) {
+    if (!activeAccount || !selectedServer || !selectedChannel) {
+      return;
+    }
+
+    await createMessage(
+      selectedServer.server.id,
+      selectedChannel.id,
+      {
+        author: activeAccount,
+        body,
+      },
+      getTargetHost(selectedServer.server.host, activeAccount.host)
+    );
   }
 
   return (
@@ -365,6 +388,7 @@ export function App() {
             hydratedServerCount={hydratedServers.length}
             isMessagesLoading={isMessagesLoading}
             messagesError={messagesError}
+            onSendMessage={handleSendMessage}
           />
         )}
       </main>

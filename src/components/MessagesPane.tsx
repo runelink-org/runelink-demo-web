@@ -1,6 +1,15 @@
 import type { Message, ServerWithChannels } from "@runelink/sdk";
-import { Hash, MessagesSquare, ServerCrash } from "lucide-react";
+import {
+  type FormEvent,
+  type KeyboardEvent,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
+import { Hash, MessagesSquare, SendHorizonal, ServerCrash } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
 
 type MessagesPaneProps = {
   selectedServer: ServerWithChannels | null;
@@ -11,6 +20,7 @@ type MessagesPaneProps = {
   hydratedServerCount: number;
   isMessagesLoading: boolean;
   messagesError: string | null;
+  onSendMessage: (body: string) => Promise<void>;
 };
 
 function formatMessageTimestamp(value: Date): string {
@@ -71,7 +81,74 @@ export function MessagesPane({
   hydratedServerCount,
   isMessagesLoading,
   messagesError,
+  onSendMessage,
 }: MessagesPaneProps) {
+  const [draft, setDraft] = useState("");
+  const [isSending, setIsSending] = useState(false);
+  const [sendError, setSendError] = useState<string | null>(null);
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+
+  const canCompose = !!selectedServer && !!selectedChannel && !sidebarError;
+  const isSendDisabled = !canCompose || isSending || draft.trim().length === 0;
+
+  useEffect(() => {
+    if (!sendError) {
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      setSendError(null);
+    }, 4000);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
+  }, [sendError]);
+
+  useEffect(() => {
+    if (!canCompose || isSending) {
+      return;
+    }
+
+    textareaRef.current?.focus();
+  }, [canCompose, isSending, selectedChannel?.id, selectedServer?.server.id]);
+
+  async function handleSubmit() {
+    const nextBody = draft.trim();
+
+    if (!nextBody || !canCompose) {
+      return;
+    }
+
+    setIsSending(true);
+    setSendError(null);
+
+    try {
+      await onSendMessage(nextBody);
+      setDraft("");
+    } catch (error) {
+      setSendError(
+        error instanceof Error ? error.message : "Failed to send message"
+      );
+    } finally {
+      setIsSending(false);
+    }
+  }
+
+  async function handleKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
+    if (event.key !== "Enter" || event.shiftKey) {
+      return;
+    }
+
+    event.preventDefault();
+    await handleSubmit();
+  }
+
+  function handleFormSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    void handleSubmit();
+  }
+
   return (
     <section className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
       <header className="border-b border-border/70 bg-background/80 px-4 py-4 backdrop-blur sm:px-6">
@@ -115,7 +192,7 @@ export function MessagesPane({
         )}
       </header>
 
-      <div className="flex min-h-0 flex-1 flex-col bg-[linear-gradient(180deg,color-mix(in_oklab,var(--color-background)_92%,transparent),color-mix(in_oklab,var(--color-muted)_35%,white))]">
+      <div className="relative flex min-h-0 flex-1 flex-col bg-[linear-gradient(180deg,color-mix(in_oklab,var(--color-background)_92%,transparent),color-mix(in_oklab,var(--color-muted)_35%,white))]">
         {sidebarError ? (
           <div className="flex flex-1 items-center justify-center px-6">
             <div className="max-w-md rounded-3xl border border-destructive/20 bg-destructive/5 p-6 text-center">
@@ -190,6 +267,49 @@ export function MessagesPane({
         ) : (
           <MessageList messages={selectedMessages} />
         )}
+
+        {canCompose ? (
+          <div className="border-t border-border/70 bg-background/85 px-4 py-4 backdrop-blur sm:px-6">
+            <form
+              className="rounded-3xl border border-border/70 bg-background/95 p-3 shadow-sm"
+              onSubmit={handleFormSubmit}
+            >
+              <Textarea
+                ref={textareaRef}
+                value={draft}
+                onChange={(event) => {
+                  setDraft(event.target.value);
+                }}
+                onKeyDown={(event) => {
+                  void handleKeyDown(event);
+                }}
+                placeholder={`Message #${selectedChannel.title}`}
+                className="min-h-20 resize-none border-0 bg-transparent px-1 py-1 shadow-none focus-visible:ring-0"
+                disabled={isSending}
+              />
+              <div className="mt-3 flex items-center justify-between gap-3">
+                <p className="text-xs text-muted-foreground">
+                  Enter to send, Shift+Enter for a new line.
+                </p>
+                <Button type="submit" size="sm" disabled={isSendDisabled}>
+                  <SendHorizonal className="size-4" />
+                  {isSending ? "Sending..." : "Send"}
+                </Button>
+              </div>
+            </form>
+          </div>
+        ) : null}
+
+        {sendError ? (
+          <div className="pointer-events-none absolute bottom-24 right-4 z-10 sm:right-6">
+            <div className="pointer-events-auto max-w-sm rounded-2xl border border-destructive/25 bg-background/95 px-4 py-3 shadow-lg backdrop-blur">
+              <p className="text-sm font-semibold text-destructive">
+                Unable to send message
+              </p>
+              <p className="mt-1 text-sm text-muted-foreground">{sendError}</p>
+            </div>
+          </div>
+        ) : null}
       </div>
     </section>
   );
