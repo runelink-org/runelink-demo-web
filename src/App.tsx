@@ -32,7 +32,11 @@ export function App() {
     activeAccountKey !== manageOriginAccountKey;
 
   const shouldShowAuthScreen = useMemo(() => {
-    return (isManagingAccounts && !switchedToReadyAccount) || !activeAccount || !activeAuth;
+    return (
+      (isManagingAccounts && !switchedToReadyAccount) ||
+      !activeAccount ||
+      !activeAuth
+    );
   }, [activeAccount, activeAuth, isManagingAccounts, switchedToReadyAccount]);
 
   return (
@@ -54,9 +58,7 @@ export function App() {
       <main className="flex min-h-screen flex-1">
         {shouldShowAuthScreen ? (
           <AuthScreen
-            key={
-              `${manageSessionId}:${activeAccount ? `${activeAccount.name}@${activeAccount.host}` : "no-account"}`
-            }
+            key={`${manageSessionId}:${activeAccount ? `${activeAccount.name}@${activeAccount.host}` : "no-account"}`}
             canClose={!!activeAccount && !!activeAuth}
             prefillAccount={shouldPrefillAccount}
             onDone={() => {

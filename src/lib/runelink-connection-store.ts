@@ -1,4 +1,9 @@
-import { RunelinkConnection, type UserRef } from "@runelink/sdk";
+import {
+  RunelinkConnection,
+  type UserRef,
+  type WsReply,
+  type WsRequest,
+} from "@runelink/sdk";
 import { create } from "zustand";
 import { accountStorageKey, sameUserRef } from "@/lib/account-storage";
 import {
@@ -20,6 +25,7 @@ type RunelinkConnectionStore = {
   lastError: string | null;
   connectedAccount: UserRef | null;
   disconnect: () => void;
+  request: (message: WsRequest) => Promise<WsReply>;
 };
 
 let currentConnection: RunelinkConnection | null = null;
@@ -43,20 +49,65 @@ export const useRunelinkConnectionStore = create<RunelinkConnectionStore>(
         connectedAccount: null,
       });
     },
+    request(message) {
+      return requestRunelink(message);
+    },
   })
 );
+
+async function waitForAuthenticatedConnection(): Promise<RunelinkConnection> {
+  const state = useRunelinkConnectionStore.getState();
+  if (state.status === "connected" && currentConnection) {
+    return currentConnection;
+  }
+
+  await syncConnectionToActiveAccount();
+
+  const nextState = useRunelinkConnectionStore.getState();
+  if (nextState.status === "connected" && currentConnection) {
+    return currentConnection;
+  }
+
+  if (nextState.status === "disconnected") {
+    throw new Error(
+      nextState.lastError ?? "RuneLink connection is not available"
+    );
+  }
+
+  return new Promise((resolve, reject) => {
+    const unsubscribe = useRunelinkConnectionStore.subscribe((storeState) => {
+      if (storeState.status === "connected" && currentConnection) {
+        unsubscribe();
+        resolve(currentConnection);
+      } else if (storeState.status === "disconnected") {
+        unsubscribe();
+        reject(
+          new Error(
+            storeState.lastError ?? "RuneLink connection is not available"
+          )
+        );
+      }
+    });
+  });
+}
+
+export async function requestRunelink(message: WsRequest): Promise<WsReply> {
+  const connection = await waitForAuthenticatedConnection();
+  if (connection !== currentConnection) {
+    throw new Error("RuneLink connection changed before request could be sent");
+  }
+  return connection.send(message);
+}
 
 function teardownConnection(): void {
   currentStatusCleanup?.();
   currentErrorCleanup?.();
   currentStatusCleanup = null;
   currentErrorCleanup = null;
-
   if (currentConnection) {
     currentConnection.disconnect();
     currentConnection = null;
   }
-
   currentConnectionKey = null;
 }
 
@@ -148,7 +199,6 @@ async function syncConnectionToActiveAccount(): Promise<void> {
     if (connection !== currentConnection) {
       return;
     }
-
     if (status === "connected") {
       useRunelinkConnectionStore.setState({
         status: "authenticating",
@@ -158,7 +208,6 @@ async function syncConnectionToActiveAccount(): Promise<void> {
       void authenticateConnection(connection, activeAccount, generation);
       return;
     }
-
     useRunelinkConnectionStore.setState({
       status,
       connectedAccount: null,
@@ -169,7 +218,6 @@ async function syncConnectionToActiveAccount(): Promise<void> {
     if (connection !== currentConnection) {
       return;
     }
-
     useRunelinkConnectionStore.setState({
       lastError: error.message,
     });
@@ -181,7 +229,6 @@ async function syncConnectionToActiveAccount(): Promise<void> {
     if (generation !== syncGeneration || connection !== currentConnection) {
       return;
     }
-
     useRunelinkConnectionStore.setState({
       status: "disconnected",
       lastError: error instanceof Error ? error.message : "Unable to connect",
@@ -191,10 +238,7 @@ async function syncConnectionToActiveAccount(): Promise<void> {
 }
 
 export function initializeRunelinkConnectionStore(): void {
-  if (lifecycleInitialized) {
-    return;
-  }
-
+  if (lifecycleInitialized) return;
   lifecycleInitialized = true;
   void syncConnectionToActiveAccount();
   useAuthStore.subscribe(() => {
