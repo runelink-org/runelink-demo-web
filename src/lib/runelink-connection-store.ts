@@ -1,94 +1,203 @@
-import {
-  RunelinkConnection,
-  type RunelinkConnectionStatus,
-} from "@runelink/sdk";
+import { RunelinkConnection, type UserRef } from "@runelink/sdk";
 import { create } from "zustand";
+import { accountStorageKey, sameUserRef } from "@/lib/account-storage";
+import {
+  getActiveAccount,
+  getActiveAccountAuth,
+  useAuthStore,
+} from "@/lib/auth-store";
 
-const connection = new RunelinkConnection("localhost", {
-  autoReconnect: true,
-});
-
-let listenersInitialized = false;
+export type AccountConnectionStatus =
+  | "disconnected"
+  | "connecting"
+  | "reconnecting"
+  | "authenticating"
+  | "connected";
 
 type RunelinkConnectionStore = {
   initialized: boolean;
-  status: RunelinkConnectionStatus;
+  status: AccountConnectionStatus;
   lastError: string | null;
-  lastMessageSentAt: string | null;
-  lastMessageReceivedAt: string | null;
-  start: () => Promise<void>;
-  ping: () => Promise<boolean>;
+  connectedAccount: UserRef | null;
   disconnect: () => void;
 };
 
+let currentConnection: RunelinkConnection | null = null;
+let currentConnectionKey: string | null = null;
+let currentStatusCleanup: (() => void) | null = null;
+let currentErrorCleanup: (() => void) | null = null;
+let lifecycleInitialized = false;
+let syncGeneration = 0;
+
 export const useRunelinkConnectionStore = create<RunelinkConnectionStore>(
-  (set, get) => {
-    function initializeListeners() {
-      if (listenersInitialized) {
-        return;
-      }
-
-      listenersInitialized = true;
-
-      connection.subscribeStatus((status) => {
-        set({ status });
+  (set) => ({
+    initialized: false,
+    status: "disconnected",
+    lastError: null,
+    connectedAccount: null,
+    disconnect() {
+      teardownConnection();
+      set({
+        status: "disconnected",
+        lastError: null,
+        connectedAccount: null,
       });
+    },
+  })
+);
 
-      connection.onError((error) => {
-        set({ lastError: error.message });
-      });
+function teardownConnection(): void {
+  currentStatusCleanup?.();
+  currentErrorCleanup?.();
+  currentStatusCleanup = null;
+  currentErrorCleanup = null;
+
+  if (currentConnection) {
+    currentConnection.disconnect();
+    currentConnection = null;
+  }
+
+  currentConnectionKey = null;
+}
+
+async function authenticateConnection(
+  connection: RunelinkConnection,
+  userRef: UserRef,
+  generation: number
+): Promise<void> {
+  try {
+    const accessToken = await useAuthStore
+      .getState()
+      .ensureAccessToken(userRef);
+    const reply = await connection.send({
+      type: "auth_token_access",
+      data: {
+        access_token: accessToken,
+      },
+    });
+
+    if (generation !== syncGeneration || connection !== currentConnection) {
+      return;
     }
 
-    return {
-      initialized: false,
-      status: connection.getStatus(),
+    if (
+      reply.type !== "auth_token_access" ||
+      reply.data.type !== "authenticated" ||
+      !sameUserRef(reply.data.data.user_ref, userRef)
+    ) {
+      throw new Error(
+        "Websocket authentication returned an unexpected account"
+      );
+    }
+
+    useRunelinkConnectionStore.setState({
+      status: "connected",
       lastError: null,
-      lastMessageSentAt: null,
-      lastMessageReceivedAt: null,
-      async start() {
-        initializeListeners();
+      connectedAccount: userRef,
+    });
+  } catch (error) {
+    if (generation !== syncGeneration || connection !== currentConnection) {
+      return;
+    }
 
-        if (!get().initialized) {
-          set({ initialized: true });
-        }
-
-        try {
-          await connection.connect();
-        } catch (error) {
-          set({
-            lastError:
-              error instanceof Error ? error.message : "Failed to connect",
-          });
-        }
-      },
-      async ping() {
-        initializeListeners();
-        set({
-          lastError: null,
-          lastMessageSentAt: new Date().toLocaleTimeString(),
-        });
-
-        try {
-          const reply = await connection.send({ type: "ping" });
-
-          if (reply.type !== "pong") {
-            throw new Error(`Unexpected reply type: ${reply.type}`);
-          }
-
-          set({
-            lastMessageReceivedAt: new Date().toLocaleTimeString(),
-          });
-          return true;
-        } catch (error) {
-          set({
-            lastError: error instanceof Error ? error.message : "Ping failed",
-          });
-          return false;
-        }
-      },
-      disconnect() {
-        connection.disconnect();
-      },
-    };
+    connection.disconnect();
+    useRunelinkConnectionStore.setState({
+      status: "disconnected",
+      lastError:
+        error instanceof Error
+          ? error.message
+          : "Unable to authenticate websocket",
+      connectedAccount: null,
+    });
   }
-);
+}
+
+async function syncConnectionToActiveAccount(): Promise<void> {
+  const generation = ++syncGeneration;
+  const authState = useAuthStore.getState();
+  const activeAccount = getActiveAccount(authState);
+  const activeAuth = getActiveAccountAuth(authState);
+
+  useRunelinkConnectionStore.setState({ initialized: true });
+
+  if (!activeAccount || !activeAuth) {
+    teardownConnection();
+    useRunelinkConnectionStore.setState({
+      status: "disconnected",
+      lastError: authState.authError,
+      connectedAccount: null,
+    });
+    return;
+  }
+
+  const nextKey = accountStorageKey(activeAccount);
+  if (currentConnection && currentConnectionKey === nextKey) {
+    return;
+  }
+
+  teardownConnection();
+
+  const connection = new RunelinkConnection(activeAccount.host, {
+    autoReconnect: true,
+  });
+
+  currentConnection = connection;
+  currentConnectionKey = nextKey;
+
+  currentStatusCleanup = connection.subscribeStatus((status) => {
+    if (connection !== currentConnection) {
+      return;
+    }
+
+    if (status === "connected") {
+      useRunelinkConnectionStore.setState({
+        status: "authenticating",
+        lastError: null,
+        connectedAccount: null,
+      });
+      void authenticateConnection(connection, activeAccount, generation);
+      return;
+    }
+
+    useRunelinkConnectionStore.setState({
+      status,
+      connectedAccount: null,
+    });
+  });
+
+  currentErrorCleanup = connection.onError((error) => {
+    if (connection !== currentConnection) {
+      return;
+    }
+
+    useRunelinkConnectionStore.setState({
+      lastError: error.message,
+    });
+  });
+
+  try {
+    await connection.connect();
+  } catch (error) {
+    if (generation !== syncGeneration || connection !== currentConnection) {
+      return;
+    }
+
+    useRunelinkConnectionStore.setState({
+      status: "disconnected",
+      lastError: error instanceof Error ? error.message : "Unable to connect",
+      connectedAccount: null,
+    });
+  }
+}
+
+export function initializeRunelinkConnectionStore(): void {
+  if (lifecycleInitialized) {
+    return;
+  }
+
+  lifecycleInitialized = true;
+  void syncConnectionToActiveAccount();
+  useAuthStore.subscribe(() => {
+    void syncConnectionToActiveAccount();
+  });
+}

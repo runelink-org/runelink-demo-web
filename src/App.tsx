@@ -1,40 +1,74 @@
-import { useEffect } from "react";
-import { ConnectionCard } from "@/components/ConnectionCard";
-import { NewUserForm } from "@/components/NewUserForm";
-import { Badge } from "@/components/ui/badge";
-import { useRunelinkConnectionStore } from "@/lib/runelink-connection-store";
-
-const statusStyles = {
-  connected: "border-emerald-200 bg-emerald-50 text-emerald-700",
-  connecting: "border-sky-200 bg-sky-50 text-sky-700",
-  reconnecting: "border-amber-200 bg-amber-50 text-amber-700",
-  disconnected: "border-rose-200 bg-rose-50 text-rose-700",
-};
+import { useEffect, useMemo, useState } from "react";
+import { AuthScreen } from "@/components/AuthScreen";
+import { Sidebar } from "@/components/Sidebar";
+import {
+  getActiveAccount,
+  getActiveAccountAuth,
+  useAuthStore,
+} from "@/lib/auth-store";
+import { initializeRunelinkConnectionStore } from "@/lib/runelink-connection-store";
 
 export function App() {
-  const start = useRunelinkConnectionStore((state) => state.start);
-  const status = useRunelinkConnectionStore((state) => state.status);
+  const [isManagingAccounts, setIsManagingAccounts] = useState(false);
+  const [manageSessionId, setManageSessionId] = useState(0);
+  const [shouldPrefillAccount, setShouldPrefillAccount] = useState(true);
+  const [manageOriginAccountKey, setManageOriginAccountKey] = useState<
+    string | null
+  >(null);
+  const activeAccount = useAuthStore(getActiveAccount);
+  const activeAuth = useAuthStore(getActiveAccountAuth);
+  const activeAccountKey = activeAccount
+    ? `${activeAccount.name}@${activeAccount.host}`
+    : null;
 
   useEffect(() => {
-    void start();
-  }, [start]);
+    initializeRunelinkConnectionStore();
+  }, []);
+
+  const switchedToReadyAccount =
+    isManagingAccounts &&
+    !!activeAccount &&
+    !!activeAuth &&
+    activeAccountKey !== manageOriginAccountKey;
+
+  const shouldShowAuthScreen = useMemo(() => {
+    return (isManagingAccounts && !switchedToReadyAccount) || !activeAccount || !activeAuth;
+  }, [activeAccount, activeAuth, isManagingAccounts, switchedToReadyAccount]);
 
   return (
-    <div className="min-h-screen bg-background px-4 py-6 sm:px-6">
-      <div className="mx-auto flex w-full max-w-5xl justify-end">
-        <Badge variant="outline" className={statusStyles[status]}>
-          <span className="size-2 rounded-full bg-current/80" />
-          {status}
-        </Badge>
-      </div>
+    <div className="flex min-h-screen bg-[radial-gradient(circle_at_top,_color-mix(in_oklab,var(--color-primary)_10%,transparent),transparent_35%),linear-gradient(180deg,color-mix(in_oklab,var(--color-muted)_45%,white),transparent_30%)]">
+      <Sidebar
+        onManageAccounts={() => {
+          setManageOriginAccountKey(activeAccountKey);
+          setShouldPrefillAccount(false);
+          setManageSessionId((value) => value + 1);
+          setIsManagingAccounts(true);
+        }}
+        onSelectAccount={() => {
+          setShouldPrefillAccount(true);
+          setManageSessionId((value) => value + 1);
+          setIsManagingAccounts(true);
+        }}
+      />
 
-      <div className="mx-auto mt-10 flex w-full max-w-5xl flex-col gap-6 lg:flex-row lg:items-start lg:justify-center">
-        <ConnectionCard />
-
-        <div className="w-full max-w-md lg:order-1">
-          <NewUserForm />
-        </div>
-      </div>
+      <main className="flex min-h-screen flex-1">
+        {shouldShowAuthScreen ? (
+          <AuthScreen
+            key={
+              `${manageSessionId}:${activeAccount ? `${activeAccount.name}@${activeAccount.host}` : "no-account"}`
+            }
+            canClose={!!activeAccount && !!activeAuth}
+            prefillAccount={shouldPrefillAccount}
+            onDone={() => {
+              setIsManagingAccounts(false);
+              setManageOriginAccountKey(null);
+              setShouldPrefillAccount(true);
+            }}
+          />
+        ) : (
+          <div className="flex-1" />
+        )}
+      </main>
     </div>
   );
 }
