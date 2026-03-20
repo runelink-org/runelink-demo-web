@@ -55,6 +55,7 @@ function removeServer(servers: Server[], serverId: ServerId): Server[] {
 
 export const useServersStore = create<ServersState>((set) => ({
   ...initialState,
+
   async fetchServers(targetHost = null) {
     set({ isLoading: true, error: null });
 
@@ -86,6 +87,7 @@ export const useServersStore = create<ServersState>((set) => ({
       throw error;
     }
   },
+
   async fetchServerById(serverId, targetHost = null) {
     set({ isLoading: true, error: null });
 
@@ -116,6 +118,7 @@ export const useServersStore = create<ServersState>((set) => ({
       throw error;
     }
   },
+
   async fetchServerWithChannels(serverId, targetHost = null) {
     set({ isLoading: true, error: null });
 
@@ -152,6 +155,7 @@ export const useServersStore = create<ServersState>((set) => ({
       throw error;
     }
   },
+
   async createServer(newServer, targetHost = null) {
     set({ isLoading: true, error: null });
 
@@ -182,6 +186,7 @@ export const useServersStore = create<ServersState>((set) => ({
       throw error;
     }
   },
+
   async deleteServer(serverId, targetHost = null) {
     set({ isLoading: true, error: null });
 
@@ -215,6 +220,7 @@ export const useServersStore = create<ServersState>((set) => ({
       throw error;
     }
   },
+
   reset() {
     set(initialState);
   },

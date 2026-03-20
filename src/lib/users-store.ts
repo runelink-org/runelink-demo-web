@@ -46,6 +46,7 @@ function removeUser(users: User[], userRef: UserRef): User[] {
 
 export const useUsersStore = create<UsersState>((set) => ({
   ...initialState,
+
   async fetchUsers(targetHost = null) {
     set({ isLoading: true, error: null });
 
@@ -77,6 +78,7 @@ export const useUsersStore = create<UsersState>((set) => ({
       throw error;
     }
   },
+
   async fetchUserByRef(userRef, targetHost = null) {
     set({ isLoading: true, error: null });
 
@@ -107,6 +109,7 @@ export const useUsersStore = create<UsersState>((set) => ({
       throw error;
     }
   },
+
   async fetchAssociatedHosts(userRef, targetHost = null) {
     set({ isLoading: true, error: null });
 
@@ -138,6 +141,7 @@ export const useUsersStore = create<UsersState>((set) => ({
       throw error;
     }
   },
+
   async createUser(newUser) {
     set({ isLoading: true, error: null });
 
@@ -165,6 +169,7 @@ export const useUsersStore = create<UsersState>((set) => ({
       throw error;
     }
   },
+
   async deleteUser(userRef) {
     set({ isLoading: true, error: null });
 
@@ -196,6 +201,7 @@ export const useUsersStore = create<UsersState>((set) => ({
       throw error;
     }
   },
+
   reset() {
     set(initialState);
   },

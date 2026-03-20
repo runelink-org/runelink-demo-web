@@ -68,6 +68,7 @@ function groupChannelsByServer(channels: Channel[]): Record<string, Channel[]> {
 
 export const useChannelsStore = create<ChannelsState>((set) => ({
   ...initialState,
+
   async fetchChannels(targetHost = null) {
     set({ isLoading: true, error: null });
 
@@ -103,6 +104,7 @@ export const useChannelsStore = create<ChannelsState>((set) => ({
       throw error;
     }
   },
+
   async fetchChannelsByServer(serverId, targetHost = null) {
     set((state) => ({
       isLoadingByServerId: {
@@ -166,6 +168,7 @@ export const useChannelsStore = create<ChannelsState>((set) => ({
       throw error;
     }
   },
+
   async fetchChannelById(serverId, channelId, targetHost = null) {
     set((state) => ({
       isLoadingByServerId: {
@@ -227,6 +230,7 @@ export const useChannelsStore = create<ChannelsState>((set) => ({
       throw error;
     }
   },
+
   async createChannel(serverId, newChannel, targetHost = null) {
     set((state) => ({
       isLoadingByServerId: {
@@ -288,6 +292,7 @@ export const useChannelsStore = create<ChannelsState>((set) => ({
       throw error;
     }
   },
+
   async deleteChannel(serverId, channelId, targetHost = null) {
     set((state) => ({
       isLoadingByServerId: {
@@ -349,6 +354,7 @@ export const useChannelsStore = create<ChannelsState>((set) => ({
       throw error;
     }
   },
+
   reset() {
     set(initialState);
   },

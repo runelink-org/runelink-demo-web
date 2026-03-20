@@ -96,7 +96,6 @@ function buildStoredAuth(
   clientId: string
 ): StoredAccountAuth {
   const nowInSeconds = Math.floor(Date.now() / 1000);
-
   return {
     refresh_token: tokenResponse.refresh_token,
     access_token: tokenResponse.access_token,
@@ -114,11 +113,9 @@ export function getActiveAccountAuth(
   state: AuthStore
 ): StoredAccountAuth | null {
   const activeAccount = getActiveAccount(state);
-
   if (!activeAccount) {
     return null;
   }
-
   return state.authCache.accounts[accountStorageKey(activeAccount)] ?? null;
 }
 
@@ -126,6 +123,7 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
   config: initialConfig,
   authCache: initialAuthCache,
   authError: null,
+
   selectAccount(userRef) {
     const normalizedAccount = normalizeAccountInput(userRef);
 
@@ -143,12 +141,15 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
       };
     });
   },
+
   openAccount(userRef) {
     get().selectAccount(userRef);
   },
+
   clearAuthError() {
     set({ authError: null });
   },
+
   async signup(credentials) {
     try {
       const normalizedAccount = normalizeAccountInput(credentials);
@@ -157,7 +158,6 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
         name: normalizedAccount.name,
         password: credentials.password,
       });
-
       return await get().login({
         host: normalizedAccount.host,
         name: normalizedAccount.name,
@@ -170,6 +170,7 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
       return { success: false, error: errorMessage };
     }
   },
+
   async login(credentials) {
     try {
       const normalizedAccount = normalizeAccountInput(credentials);
@@ -211,19 +212,17 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
       return { success: false, error: errorMessage };
     }
   },
+
   logoutActive() {
     const activeAccount = get().config.default_account;
-    if (!activeAccount) {
-      return;
-    }
-
+    if (!activeAccount) return;
     get().clearAccountAuth(activeAccount);
   },
+
   async ensureAccessToken(userRef) {
     const normalizedAccount = normalizeAccountInput(userRef);
     const key = accountStorageKey(normalizedAccount);
     const auth = get().authCache.accounts[key];
-
     if (!auth) {
       throw new Error("No stored session for this account");
     }
@@ -248,7 +247,6 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
         clientId: auth.client_id,
         scope: auth.scope,
       });
-
       const nextClientId = auth.client_id ?? crypto.randomUUID();
 
       set((state) => {
@@ -275,9 +273,9 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
       throw new Error(errorMessage);
     }
   },
+
   clearAccountAuth(userRef, errorMessage) {
     const normalizedAccount = normalizeAccountInput(userRef);
-
     set((state) => {
       const nextAuthCache = clearTokenState(state.authCache, normalizedAccount);
       persistState(state.config, nextAuthCache);

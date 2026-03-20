@@ -117,6 +117,7 @@ function toServerMembership(
 
 export const useMembershipsStore = create<MembershipsState>((set) => ({
   ...initialState,
+
   async fetchMembershipsByUser(userRef) {
     const userKey = userRefKey(userRef);
     set((state) => ({
@@ -159,6 +160,7 @@ export const useMembershipsStore = create<MembershipsState>((set) => ({
       throw error;
     }
   },
+
   async fetchMembersByServer(serverId, targetHost = null) {
     set((state) => ({
       isLoadingByServerId: {
@@ -216,6 +218,7 @@ export const useMembershipsStore = create<MembershipsState>((set) => ({
       throw error;
     }
   },
+
   async fetchMembershipByUserAndServer(serverId, userRef, targetHost = null) {
     set((state) => ({
       isLoadingByServerId: {
@@ -271,6 +274,7 @@ export const useMembershipsStore = create<MembershipsState>((set) => ({
       throw error;
     }
   },
+
   async createMembership(serverId, newMembership) {
     set({ error: null });
 
@@ -317,6 +321,7 @@ export const useMembershipsStore = create<MembershipsState>((set) => ({
       throw error;
     }
   },
+
   async deleteMembership(serverId, userRef, targetHost = null) {
     set({ error: null });
 
@@ -361,6 +366,7 @@ export const useMembershipsStore = create<MembershipsState>((set) => ({
       throw error;
     }
   },
+
   reset() {
     set(initialState);
   },

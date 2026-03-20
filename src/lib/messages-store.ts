@@ -82,6 +82,7 @@ function mergeMessages(messages: Message[]): Record<string, Message> {
 
 export const useMessagesStore = create<MessagesState>((set) => ({
   ...initialState,
+
   async fetchMessages(targetHost = null) {
     set({ isLoading: true, error: null });
 
@@ -109,6 +110,7 @@ export const useMessagesStore = create<MessagesState>((set) => ({
       throw error;
     }
   },
+
   async fetchMessagesByServer(serverId, targetHost = null) {
     set((state) => ({
       isLoadingByServerId: {
@@ -181,6 +183,7 @@ export const useMessagesStore = create<MessagesState>((set) => ({
       throw error;
     }
   },
+
   async fetchMessagesByChannel(serverId, channelId, targetHost = null) {
     const channelKey = serverChannelKey(serverId, channelId);
     set((state) => ({
@@ -242,6 +245,7 @@ export const useMessagesStore = create<MessagesState>((set) => ({
       throw error;
     }
   },
+
   async fetchMessageById(serverId, channelId, messageId, targetHost = null) {
     const channelKey = serverChannelKey(serverId, channelId);
     set((state) => ({
@@ -312,6 +316,7 @@ export const useMessagesStore = create<MessagesState>((set) => ({
       throw error;
     }
   },
+
   async createMessage(serverId, channelId, newMessage, targetHost = null) {
     const channelKey = serverChannelKey(serverId, channelId);
     set((state) => ({
@@ -383,6 +388,7 @@ export const useMessagesStore = create<MessagesState>((set) => ({
       throw error;
     }
   },
+
   async deleteMessage(serverId, channelId, messageId, targetHost = null) {
     const channelKey = serverChannelKey(serverId, channelId);
     set((state) => ({
@@ -454,6 +460,7 @@ export const useMessagesStore = create<MessagesState>((set) => ({
       throw error;
     }
   },
+
   reset() {
     set(initialState);
   },

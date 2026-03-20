@@ -50,6 +50,7 @@ export function ProfileSelector({
   const connectionStatus = useRunelinkConnectionStore((state) => state.status);
 
   const activeKey = activeAccount ? accountStorageKey(activeAccount) : "";
+  const triggerLabel = activeAccount?.name.slice(0, 2).toUpperCase() ?? "AC";
 
   return (
     <DropdownMenu>
@@ -57,16 +58,20 @@ export function ProfileSelector({
         render={
           <Button
             variant="outline"
-            className="h-auto w-full flex-col gap-2 rounded-2xl px-2 py-3"
+            className="size-12 rounded-2xl p-0"
+            title={
+              activeAccount
+                ? `${activeAccount.name}@${activeAccount.host}`
+                : "Account"
+            }
           />
         }
       >
-        <UserCircle2 className="size-7" />
-        <div className="text-center">
-          <p className="max-w-14 truncate text-xs font-medium">
-            {activeAccount?.name ?? "Account"}
-          </p>
-        </div>
+        {activeAccount ? (
+          <span className="text-sm font-semibold">{triggerLabel}</span>
+        ) : (
+          <UserCircle2 className="size-7" />
+        )}
       </DropdownMenuTrigger>
 
       <DropdownMenuContent side="right" align="end" className="w-64">
