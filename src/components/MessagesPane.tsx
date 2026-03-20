@@ -1,8 +1,11 @@
 import type { Message, ServerWithChannels } from "@runelink/sdk";
 import {
+  useCallback,
   type FormEvent,
   type KeyboardEvent,
+  type RefObject,
   useEffect,
+  useLayoutEffect,
   useRef,
   useState,
 } from "react";
@@ -10,10 +13,12 @@ import { Hash, MessagesSquare, SendHorizonal, ServerCrash } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { useMessageScrollStore } from "@/lib/message-scroll-store";
 
 type MessagesPaneProps = {
   selectedServer: ServerWithChannels | null;
   selectedChannel: ServerWithChannels["channels"][number] | undefined;
+  selectedChannelKey: string | null;
   selectedMessages: Message[];
   isSidebarLoading: boolean;
   sidebarError: string | null;
@@ -32,9 +37,21 @@ function formatMessageTimestamp(value: Date): string {
   }).format(value);
 }
 
-function MessageList({ messages }: { messages: Message[] }) {
+function MessageList({
+  messages,
+  scrollContainerRef,
+  onScroll,
+}: {
+  messages: Message[];
+  scrollContainerRef: RefObject<HTMLDivElement | null>;
+  onScroll: () => void;
+}) {
   return (
-    <div className="flex flex-1 flex-col gap-1 overflow-y-auto px-4 py-5 sm:px-6">
+    <div
+      ref={scrollContainerRef}
+      onScroll={onScroll}
+      className="flex flex-1 flex-col gap-1 overflow-y-auto px-4 py-5 sm:px-6"
+    >
       {messages.map((message) => {
         const authorName = message.author?.name ?? "Unknown user";
         const authorHost = message.author?.host ?? "remote";
@@ -75,6 +92,7 @@ function MessageList({ messages }: { messages: Message[] }) {
 export function MessagesPane({
   selectedServer,
   selectedChannel,
+  selectedChannelKey,
   selectedMessages,
   isSidebarLoading,
   sidebarError,
@@ -87,9 +105,61 @@ export function MessagesPane({
   const [isSending, setIsSending] = useState(false);
   const [sendError, setSendError] = useState<string | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const scrollContainerRef = useRef<HTMLDivElement | null>(null);
+  const hasRestoredScrollRef = useRef(false);
+  const previousChannelKeyRef = useRef<string | null>(null);
+  const previousMessageCountRef = useRef(0);
+  const wasAtBottomRef = useRef(true);
+  const lastKnownScrollTopRef = useRef(0);
+  const scrollByChannelKey = useMessageScrollStore(
+    (state) => state.scrollByChannelKey
+  );
+  const setScrollTop = useMessageScrollStore((state) => state.setScrollTop);
 
   const canCompose = !!selectedServer && !!selectedChannel && !sidebarError;
   const isSendDisabled = !canCompose || isSending || draft.trim().length === 0;
+
+  const isAtBottom = useCallback((element: HTMLDivElement): boolean => {
+    const threshold = 32;
+    return (
+      element.scrollHeight - element.clientHeight - element.scrollTop <=
+      threshold
+    );
+  }, []);
+
+  const scrollToBottom = useCallback(() => {
+    const element = scrollContainerRef.current;
+    if (!element) {
+      return;
+    }
+
+    element.scrollTop = element.scrollHeight;
+  }, []);
+
+  const saveScrollPosition = useCallback(
+    (channelKey: string | null, scrollTop?: number) => {
+      if (!channelKey) {
+        return;
+      }
+
+      const nextScrollTop = scrollTop ?? scrollContainerRef.current?.scrollTop;
+      if (nextScrollTop == null) {
+        return;
+      }
+
+      lastKnownScrollTopRef.current = nextScrollTop;
+      setScrollTop(channelKey, nextScrollTop);
+    },
+    [setScrollTop]
+  );
+
+  const saveCurrentScrollPosition = useCallback(() => {
+    if (!selectedChannelKey) {
+      return;
+    }
+
+    saveScrollPosition(selectedChannelKey);
+  }, [saveScrollPosition, selectedChannelKey]);
 
   useEffect(() => {
     if (!sendError) {
@@ -112,6 +182,107 @@ export function MessagesPane({
 
     textareaRef.current?.focus();
   }, [canCompose, isSending, selectedChannel?.id, selectedServer?.server.id]);
+
+  useLayoutEffect(() => {
+    if (previousChannelKeyRef.current === selectedChannelKey) {
+      return;
+    }
+
+    previousChannelKeyRef.current = selectedChannelKey;
+    hasRestoredScrollRef.current = false;
+    previousMessageCountRef.current = selectedMessages.length;
+    wasAtBottomRef.current = true;
+  }, [selectedChannelKey, selectedMessages.length]);
+
+  useLayoutEffect(() => {
+    return () => {
+      saveScrollPosition(
+        previousChannelKeyRef.current,
+        lastKnownScrollTopRef.current
+      );
+    };
+  }, [saveScrollPosition, selectedChannelKey]);
+
+  useLayoutEffect(() => {
+    if (
+      !selectedChannelKey ||
+      isMessagesLoading ||
+      hasRestoredScrollRef.current
+    ) {
+      return;
+    }
+
+    const element = scrollContainerRef.current;
+    if (!element) {
+      return;
+    }
+
+    const savedScrollState = scrollByChannelKey[selectedChannelKey];
+    if (savedScrollState) {
+      element.scrollTop = savedScrollState.scrollTop;
+    } else {
+      scrollToBottom();
+    }
+
+    lastKnownScrollTopRef.current = element.scrollTop;
+    wasAtBottomRef.current = isAtBottom(element);
+    saveCurrentScrollPosition();
+    hasRestoredScrollRef.current = true;
+  }, [
+    isAtBottom,
+    isMessagesLoading,
+    saveCurrentScrollPosition,
+    scrollToBottom,
+    scrollByChannelKey,
+    selectedChannelKey,
+    selectedMessages.length,
+  ]);
+
+  useLayoutEffect(() => {
+    if (!selectedChannelKey || !hasRestoredScrollRef.current) {
+      previousMessageCountRef.current = selectedMessages.length;
+      return;
+    }
+
+    const element = scrollContainerRef.current;
+    if (!element) {
+      previousMessageCountRef.current = selectedMessages.length;
+      return;
+    }
+
+    const previousMessageCount = previousMessageCountRef.current;
+    const nextMessageCount = selectedMessages.length;
+
+    if (nextMessageCount > previousMessageCount && wasAtBottomRef.current) {
+      scrollToBottom();
+    }
+
+    lastKnownScrollTopRef.current = element.scrollTop;
+    wasAtBottomRef.current = isAtBottom(element);
+    saveCurrentScrollPosition();
+    previousMessageCountRef.current = nextMessageCount;
+  }, [
+    isAtBottom,
+    saveCurrentScrollPosition,
+    scrollToBottom,
+    selectedChannelKey,
+    selectedMessages,
+  ]);
+
+  function handleMessagesScroll() {
+    if (!selectedChannelKey) {
+      return;
+    }
+
+    const element = scrollContainerRef.current;
+    if (!element) {
+      return;
+    }
+
+    lastKnownScrollTopRef.current = element.scrollTop;
+    wasAtBottomRef.current = isAtBottom(element);
+    saveCurrentScrollPosition();
+  }
 
   async function handleSubmit() {
     const nextBody = draft.trim();
@@ -265,7 +436,11 @@ export function MessagesPane({
             </div>
           </div>
         ) : (
-          <MessageList messages={selectedMessages} />
+          <MessageList
+            messages={selectedMessages}
+            scrollContainerRef={scrollContainerRef}
+            onScroll={handleMessagesScroll}
+          />
         )}
 
         {canCompose ? (

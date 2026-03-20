@@ -11,6 +11,7 @@ import {
   getActiveAccountAuth,
   useAuthStore,
 } from "@/lib/auth-store";
+import { handleRunelinkUpdate } from "@/lib/runelink-updates";
 
 export type AccountConnectionStatus =
   | "disconnected"
@@ -32,6 +33,7 @@ let currentConnection: RunelinkConnection | null = null;
 let currentConnectionKey: string | null = null;
 let currentStatusCleanup: (() => void) | null = null;
 let currentErrorCleanup: (() => void) | null = null;
+let currentUpdateCleanup: (() => void) | null = null;
 let lifecycleInitialized = false;
 let syncGeneration = 0;
 
@@ -102,8 +104,10 @@ export async function requestRunelink(message: WsRequest): Promise<WsReply> {
 function teardownConnection(): void {
   currentStatusCleanup?.();
   currentErrorCleanup?.();
+  currentUpdateCleanup?.();
   currentStatusCleanup = null;
   currentErrorCleanup = null;
+  currentUpdateCleanup = null;
   if (currentConnection) {
     currentConnection.disconnect();
     currentConnection = null;
@@ -221,6 +225,14 @@ async function syncConnectionToActiveAccount(): Promise<void> {
     useRunelinkConnectionStore.setState({
       lastError: error.message,
     });
+  });
+
+  currentUpdateCleanup = connection.onUpdate((update) => {
+    if (connection !== currentConnection) {
+      return;
+    }
+
+    handleRunelinkUpdate(update);
   });
 
   try {

@@ -382,6 +382,7 @@ export function App() {
           <MessagesPane
             selectedServer={selectedServer}
             selectedChannel={selectedChannel}
+            selectedChannelKey={selectedChannelKey}
             selectedMessages={selectedMessages}
             isSidebarLoading={isSidebarLoading}
             sidebarError={sidebarError}
