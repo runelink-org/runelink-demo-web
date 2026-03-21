@@ -26,7 +26,7 @@
     "baseUrl": ".",
     "paths": {
       "@/*": ["./src/*"],
-      "@runelink/sdk": ["../runelink-sdk-js/src/index.ts"]
+      "@runelink/sdk": ["./vendor/runelink-sdk-js/src/index.ts"]
     }
   },
   "include": ["src"]
