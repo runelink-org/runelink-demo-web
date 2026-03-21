@@ -1,5 +1,5 @@
 import type { Channel, ServerWithChannels } from "@runelink/sdk";
-import { Hash, Layers3, LoaderCircle, Plus, Trash2 } from "lucide-react";
+import { Hash, Info, Layers3, LoaderCircle, Plus, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { ProfileSelector } from "@/components/ProfileSelector";
 import {
@@ -68,6 +68,16 @@ function getServerMonogram(title: string): string {
     .map((word) => word[0])
     .join("")
     .toUpperCase();
+}
+
+function formatServerTimestamp(value: Date): string {
+  return new Intl.DateTimeFormat(undefined, {
+    month: "numeric",
+    day: "numeric",
+    year: "2-digit",
+    hour: "numeric",
+    minute: "2-digit",
+  }).format(value);
 }
 
 export function Sidebar({
@@ -181,7 +191,7 @@ export function Sidebar({
   }
 
   return (
-    <aside className="flex h-screen shrink-0 border-r border-sidebar-border bg-sidebar/95 backdrop-blur">
+    <aside className="relative z-20 flex h-screen shrink-0 border-r border-sidebar-border bg-sidebar/95 backdrop-blur">
       <div className="flex w-20 flex-col items-center gap-4 border-r border-sidebar-border/80 px-3 py-4">
         <div className="flex flex-col items-center gap-2 text-center">
           <img
@@ -246,9 +256,43 @@ export function Sidebar({
           <p className="text-xs font-semibold tracking-[0.2em] text-sidebar-foreground/55 uppercase">
             Server
           </p>
-          <h2 className="mt-2 truncate text-lg font-semibold text-sidebar-foreground">
-            {selectedServer?.server.title ?? "Choose a server"}
-          </h2>
+          <div className="mt-2 flex min-w-0 items-center gap-2">
+            <h2 className="min-w-0 truncate text-lg font-semibold text-sidebar-foreground">
+              {selectedServer?.server.title ?? "Choose a server"}
+            </h2>
+            {selectedServer ? (
+              <div className="group/server-info relative shrink-0">
+                <button
+                  type="button"
+                  className="flex size-5 items-center justify-center text-sidebar-foreground/45 transition hover:text-sidebar-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+                  aria-label="Show server details"
+                >
+                  <Info className="size-3.5" />
+                </button>
+                <div className="pointer-events-none absolute top-8 left-0 z-50 w-64 rounded-2xl border border-sidebar-border/80 bg-sidebar p-3 text-left opacity-0 shadow-lg shadow-black/8 transition duration-150 group-hover/server-info:pointer-events-auto group-hover/server-info:opacity-100 group-focus-within/server-info:pointer-events-auto group-focus-within/server-info:opacity-100">
+                  <p className="truncate text-sm font-semibold text-sidebar-foreground">
+                    {selectedServer.server.title}
+                  </p>
+                  <div className="mt-2 space-y-1.5 text-xs text-sidebar-foreground/65">
+                    <p>
+                      Host:{" "}
+                      <span className="text-sidebar-foreground/90">
+                        @{selectedServer.server.host}
+                      </span>
+                    </p>
+                    <p>
+                      Created:{" "}
+                      <span className="text-sidebar-foreground/90">
+                        {formatServerTimestamp(
+                          selectedServer.server.created_at
+                        )}
+                      </span>
+                    </p>
+                  </div>
+                </div>
+              </div>
+            ) : null}
+          </div>
           <p className="mt-1 line-clamp-2 text-sm text-sidebar-foreground/70">
             {selectedServer?.server.description ??
               (error
@@ -345,9 +389,7 @@ export function Sidebar({
                         variant="ghost"
                         className={cn(
                           "size-8 shrink-0 rounded-xl text-sidebar-foreground/55 transition",
-                          isSelected
-                            ? "opacity-100"
-                            : "opacity-0 group-hover:opacity-100",
+                          "opacity-0 group-hover:opacity-100",
                           "hover:bg-background/70 hover:text-destructive"
                         )}
                         onClick={() => {

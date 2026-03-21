@@ -29,11 +29,50 @@ type MessagesPaneProps = {
 };
 
 function formatMessageTimestamp(value: Date): string {
-  return new Intl.DateTimeFormat(undefined, {
+  const now = new Date();
+  const startOfToday = new Date(
+    now.getFullYear(),
+    now.getMonth(),
+    now.getDate()
+  );
+  const startOfTargetDay = new Date(
+    value.getFullYear(),
+    value.getMonth(),
+    value.getDate()
+  );
+  const dayDifference = Math.round(
+    (startOfToday.getTime() - startOfTargetDay.getTime()) / 86400000
+  );
+
+  const timeLabel = new Intl.DateTimeFormat(undefined, {
     hour: "numeric",
     minute: "2-digit",
-    month: "short",
+  }).format(value);
+
+  if (dayDifference === 0) {
+    return timeLabel;
+  }
+
+  if (dayDifference === 1) {
+    return `Yesterday at ${timeLabel}`;
+  }
+
+  return new Intl.DateTimeFormat(undefined, {
+    month: "numeric",
     day: "numeric",
+    year: "2-digit",
+    hour: "numeric",
+    minute: "2-digit",
+  }).format(value);
+}
+
+function formatFullTimestamp(value: Date): string {
+  return new Intl.DateTimeFormat(undefined, {
+    month: "numeric",
+    day: "numeric",
+    year: "2-digit",
+    hour: "numeric",
+    minute: "2-digit",
   }).format(value);
 }
 
@@ -54,7 +93,6 @@ function MessageList({
     >
       {messages.map((message) => {
         const authorName = message.author?.name ?? "Unknown user";
-        const authorHost = message.author?.host ?? "remote";
 
         return (
           <article
@@ -62,16 +100,36 @@ function MessageList({
             className="group rounded-2xl border border-transparent px-3 py-3 transition hover:border-border/70 hover:bg-background/80"
           >
             <div className="flex items-start gap-3">
-              <div className="flex size-10 shrink-0 items-center justify-center rounded-2xl bg-primary/10 text-sm font-semibold text-primary">
-                {authorName.slice(0, 2).toUpperCase()}
+              <div className="group/avatar relative shrink-0">
+                <div className="flex size-10 items-center justify-center rounded-2xl bg-primary/10 text-sm font-semibold text-primary">
+                  {authorName.slice(0, 2).toUpperCase()}
+                </div>
+                {message.author ? (
+                  <div className="pointer-events-none absolute bottom-full left-9 mb-1 z-10 w-56 rounded-2xl border border-border/70 bg-background p-3 text-left opacity-0 shadow-lg transition duration-150 group-hover/avatar:pointer-events-auto group-hover/avatar:opacity-100">
+                    <p className="truncate text-sm font-semibold text-foreground">
+                      {message.author.name}
+                    </p>
+                    <div className="mt-2 space-y-1.5 text-xs text-muted-foreground">
+                      <p>
+                        Host:{" "}
+                        <span className="text-foreground/90">
+                          @{message.author.host}
+                        </span>
+                      </p>
+                      <p>
+                        Joined:{" "}
+                        <span className="text-foreground/90">
+                          {formatFullTimestamp(message.author.created_at)}
+                        </span>
+                      </p>
+                    </div>
+                  </div>
+                ) : null}
               </div>
               <div className="min-w-0 flex-1">
                 <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
                   <span className="font-medium text-foreground">
                     {authorName}
-                  </span>
-                  <span className="text-xs text-muted-foreground">
-                    @{authorHost}
                   </span>
                   <span className="text-xs text-muted-foreground">
                     {formatMessageTimestamp(message.created_at)}
