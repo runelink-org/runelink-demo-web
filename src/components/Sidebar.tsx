@@ -1,9 +1,22 @@
 import type { Channel, ServerWithChannels } from "@runelink/sdk";
-import { Hash, Layers3, LoaderCircle } from "lucide-react";
+import { Hash, Layers3, LoaderCircle, Plus, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { ProfileSelector } from "@/components/ProfileSelector";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
+import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 
 type SidebarProps = {
@@ -16,6 +29,8 @@ type SidebarProps = {
   onSelectAccount: () => void;
   onSelectServer: (serverId: string) => void;
   onSelectChannel: (serverId: string, channel: Channel) => void;
+  onCreateChannel: (title: string, description: string) => Promise<void>;
+  onDeleteChannel: (channel: Channel) => Promise<void>;
 };
 
 const CHANNEL_PANEL_WIDTH_KEY = "runelink.demo.channels-sidebar-width";
@@ -65,10 +80,21 @@ export function Sidebar({
   onSelectAccount,
   onSelectServer,
   onSelectChannel,
+  onCreateChannel,
+  onDeleteChannel,
 }: SidebarProps) {
   const [channelPanelWidth, setChannelPanelWidth] = useState<number>(() =>
     loadStoredChannelPanelWidth()
   );
+  const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
+  const [createTitle, setCreateTitle] = useState("");
+  const [createDescription, setCreateDescription] = useState("");
+  const [createError, setCreateError] = useState<string | null>(null);
+  const [isCreatingChannel, setIsCreatingChannel] = useState(false);
+  const [channelPendingDelete, setChannelPendingDelete] =
+    useState<Channel | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [isDeletingChannel, setIsDeletingChannel] = useState(false);
 
   const selectedServer = selectedServerId
     ? (servers.find((server) => server.server.id === selectedServerId) ?? null)
@@ -104,6 +130,54 @@ export function Sidebar({
 
     window.addEventListener("pointermove", handlePointerMove);
     window.addEventListener("pointerup", handlePointerUp);
+  }
+
+  async function handleCreateChannelSubmit(
+    event: React.FormEvent<HTMLFormElement>
+  ) {
+    event.preventDefault();
+
+    const nextTitle = createTitle.trim();
+    if (!nextTitle) {
+      setCreateError("Channel name is required.");
+      return;
+    }
+
+    setIsCreatingChannel(true);
+    setCreateError(null);
+
+    try {
+      await onCreateChannel(nextTitle, createDescription);
+      setCreateTitle("");
+      setCreateDescription("");
+      setIsCreateDialogOpen(false);
+    } catch (error) {
+      setCreateError(
+        error instanceof Error ? error.message : "Failed to create channel"
+      );
+    } finally {
+      setIsCreatingChannel(false);
+    }
+  }
+
+  async function handleDeleteChannelConfirm() {
+    if (!channelPendingDelete) {
+      return;
+    }
+
+    setIsDeletingChannel(true);
+    setDeleteError(null);
+
+    try {
+      await onDeleteChannel(channelPendingDelete);
+      setChannelPendingDelete(null);
+    } catch (error) {
+      setDeleteError(
+        error instanceof Error ? error.message : "Failed to delete channel"
+      );
+    } finally {
+      setIsDeletingChannel(false);
+    }
   }
 
   return (
@@ -185,9 +259,27 @@ export function Sidebar({
 
         <div className="flex min-h-0 flex-1 flex-col px-3 py-3">
           <div className="mb-2 px-2">
-            <p className="text-xs font-semibold tracking-[0.2em] text-sidebar-foreground/55 uppercase">
-              Channels
-            </p>
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-xs font-semibold tracking-[0.2em] text-sidebar-foreground/55 uppercase">
+                Channels
+              </p>
+              <Button
+                type="button"
+                size="icon"
+                variant="ghost"
+                className="size-7 rounded-xl text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground"
+                onClick={() => {
+                  setCreateError(null);
+                  setCreateTitle("");
+                  setCreateDescription("");
+                  setIsCreateDialogOpen(true);
+                }}
+                disabled={!selectedServer}
+                aria-label="Create channel"
+              >
+                <Plus className="size-4" />
+              </Button>
+            </div>
           </div>
 
           <div className="min-h-0 flex-1 overflow-y-auto">
@@ -213,33 +305,60 @@ export function Sidebar({
                   const isSelected = channel.id === selectedChannelId;
 
                   return (
-                    <Button
+                    <div
                       key={channel.id}
-                      variant="ghost"
                       className={cn(
-                        "h-auto w-full justify-start rounded-2xl px-3 py-3 text-left",
-                        isSelected
-                          ? "bg-primary/12 text-foreground hover:bg-primary/15"
-                          : "text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-foreground"
+                        "group flex items-center gap-2 rounded-2xl pr-2 transition",
+                        isSelected ? "bg-primary/12" : "hover:bg-sidebar-accent"
                       )}
-                      onClick={() =>
-                        onSelectChannel(selectedServer.server.id, channel)
-                      }
                     >
-                      <div className="flex min-w-0 items-start gap-3">
-                        <Hash className="mt-0.5 size-4 shrink-0 text-sidebar-foreground/50" />
-                        <div className="min-w-0">
-                          <p className="truncate text-sm font-medium">
-                            {channel.title}
-                          </p>
-                          {channel.description ? (
-                            <p className="mt-0.5 truncate text-xs text-sidebar-foreground/55">
-                              {channel.description}
+                      <Button
+                        variant="ghost"
+                        className={cn(
+                          "h-auto min-w-0 flex-1 justify-start rounded-2xl px-3 py-3 text-left",
+                          isSelected
+                            ? "text-foreground hover:bg-transparent"
+                            : "text-sidebar-foreground/80 hover:bg-transparent hover:text-sidebar-foreground"
+                        )}
+                        onClick={() =>
+                          onSelectChannel(selectedServer.server.id, channel)
+                        }
+                      >
+                        <div className="flex min-w-0 items-start gap-3">
+                          <Hash className="mt-0.5 size-4 shrink-0 text-sidebar-foreground/50" />
+                          <div className="min-w-0">
+                            <p className="truncate text-sm font-medium">
+                              {channel.title}
                             </p>
-                          ) : null}
+                            {channel.description ? (
+                              <p className="mt-0.5 truncate text-xs text-sidebar-foreground/55">
+                                {channel.description}
+                              </p>
+                            ) : null}
+                          </div>
                         </div>
-                      </div>
-                    </Button>
+                      </Button>
+
+                      <Button
+                        type="button"
+                        size="icon"
+                        variant="ghost"
+                        className={cn(
+                          "size-8 shrink-0 rounded-xl text-sidebar-foreground/55 transition",
+                          isSelected
+                            ? "opacity-100"
+                            : "opacity-0 group-hover:opacity-100",
+                          "hover:bg-background/70 hover:text-destructive"
+                        )}
+                        onClick={() => {
+                          setDeleteError(null);
+                          setChannelPendingDelete(channel);
+                        }}
+                        aria-label={`Delete ${channel.title}`}
+                      >
+                        <Trash2 className="size-4" />
+                      </Button>
+                    </div>
                   );
                 })}
               </div>
@@ -259,6 +378,106 @@ export function Sidebar({
           className="bg-sidebar-border transition group-hover:bg-primary"
         />
       </button>
+
+      <AlertDialog
+        open={isCreateDialogOpen}
+        onOpenChange={(open) => {
+          setIsCreateDialogOpen(open);
+          if (!open) {
+            setCreateError(null);
+          }
+        }}
+      >
+        <AlertDialogContent>
+          <form className="space-y-4" onSubmit={handleCreateChannelSubmit}>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Create channel</AlertDialogTitle>
+              <AlertDialogDescription>
+                Add a text channel to{" "}
+                {selectedServer?.server.title ?? "this server"}.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+
+            <div className="space-y-2">
+              <Label htmlFor="channel-title">Name</Label>
+              <Input
+                id="channel-title"
+                value={createTitle}
+                onChange={(event) => setCreateTitle(event.target.value)}
+                placeholder="general"
+                disabled={isCreatingChannel}
+                autoFocus
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="channel-description">Description</Label>
+              <Textarea
+                id="channel-description"
+                value={createDescription}
+                onChange={(event) => setCreateDescription(event.target.value)}
+                placeholder="What is this channel for?"
+                className="min-h-24 resize-none"
+                disabled={isCreatingChannel}
+              />
+            </div>
+
+            {createError ? (
+              <p className="text-sm text-destructive">{createError}</p>
+            ) : null}
+
+            <AlertDialogFooter>
+              <AlertDialogCancel disabled={isCreatingChannel}>
+                Cancel
+              </AlertDialogCancel>
+              <AlertDialogAction type="submit" disabled={isCreatingChannel}>
+                {isCreatingChannel ? "Creating..." : "Create channel"}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </form>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog
+        open={channelPendingDelete !== null}
+        onOpenChange={(open) => {
+          if (!open && !isDeletingChannel) {
+            setChannelPendingDelete(null);
+            setDeleteError(null);
+          }
+        }}
+      >
+        <AlertDialogContent size="sm">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete channel?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {channelPendingDelete
+                ? `This will remove #${channelPendingDelete.title} from the server.`
+                : "This will remove the selected channel from the server."}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+
+          {deleteError ? (
+            <p className="text-sm text-destructive">{deleteError}</p>
+          ) : null}
+
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isDeletingChannel}>
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              type="button"
+              variant="destructive"
+              disabled={isDeletingChannel}
+              onClick={() => {
+                void handleDeleteChannelConfirm();
+              }}
+            >
+              {isDeletingChannel ? "Deleting..." : "Delete channel"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </aside>
   );
 }

@@ -8,6 +8,7 @@ import {
   getActiveAccountAuth,
   useAuthStore,
 } from "@/lib/auth-store";
+import { useChannelsStore } from "@/lib/channels-store";
 import { useNavigationStore } from "@/lib/navigation-store";
 import {
   initializeRunelinkConnectionStore,
@@ -92,6 +93,8 @@ export function App() {
   const fetchServerWithChannels = useServersStore(
     (state) => state.fetchServerWithChannels
   );
+  const createChannel = useChannelsStore((state) => state.createChannel);
+  const deleteChannel = useChannelsStore((state) => state.deleteChannel);
   const messagesByChannelKey = useMessagesStore(
     (state) => state.messagesByChannelKey
   );
@@ -343,6 +346,35 @@ export function App() {
     );
   }
 
+  async function handleCreateChannel(title: string, description: string) {
+    if (!activeAccount || !selectedServer) {
+      return;
+    }
+
+    const channel = await createChannel(
+      selectedServer.server.id,
+      {
+        title,
+        description: description.trim() || null,
+      },
+      getTargetHost(selectedServer.server.host, activeAccount.host)
+    );
+
+    selectChannel(selectedServer.server.id, channel.id);
+  }
+
+  async function handleDeleteChannel(channel: Channel) {
+    if (!activeAccount || !selectedServer) {
+      return;
+    }
+
+    await deleteChannel(
+      selectedServer.server.id,
+      channel.id,
+      getTargetHost(selectedServer.server.host, activeAccount.host)
+    );
+  }
+
   return (
     <div className="flex h-screen overflow-hidden bg-[radial-gradient(circle_at_top,_color-mix(in_oklab,var(--color-primary)_8%,transparent),transparent_32%),linear-gradient(180deg,color-mix(in_oklab,var(--color-muted)_60%,white),transparent_28%)]">
       <Sidebar
@@ -364,6 +396,8 @@ export function App() {
         }}
         onSelectServer={handleSelectServer}
         onSelectChannel={handleSelectChannel}
+        onCreateChannel={handleCreateChannel}
+        onDeleteChannel={handleDeleteChannel}
       />
 
       <main className="flex min-h-0 min-w-0 flex-1 overflow-hidden">

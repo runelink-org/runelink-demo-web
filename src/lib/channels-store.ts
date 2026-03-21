@@ -7,6 +7,7 @@ import {
   type ServerId,
   type TargetHost,
 } from "@/lib/runelink-store-utils";
+import { useServersStore } from "@/lib/servers-store";
 
 type ChannelsState = {
   channelsByServerId: Record<string, Channel[]>;
@@ -335,6 +336,25 @@ export const useChannelsStore = create<ChannelsState>((set) => ({
           errorByServerId: {
             ...state.errorByServerId,
             [serverId]: null,
+          },
+        };
+      });
+
+      useServersStore.setState((state) => {
+        if (!(serverId in state.serverWithChannelsById)) {
+          return {};
+        }
+
+        return {
+          serverWithChannelsById: {
+            ...state.serverWithChannelsById,
+            [serverId]: {
+              ...state.serverWithChannelsById[serverId],
+              channels: removeChannel(
+                state.serverWithChannelsById[serverId].channels,
+                channelId
+              ),
+            },
           },
         };
       });
