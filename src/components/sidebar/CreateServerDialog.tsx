@@ -43,6 +43,12 @@ export function CreateServerDialog({
     }
 
     setHost(activeHost ?? "");
+  }, [activeHost, open]);
+
+  useEffect(() => {
+    if (!open) {
+      return;
+    }
 
     const frame = window.requestAnimationFrame(() => {
       titleInputRef.current?.focus();
@@ -52,7 +58,7 @@ export function CreateServerDialog({
     return () => {
       window.cancelAnimationFrame(frame);
     };
-  }, [activeHost, open]);
+  }, [host, open]);
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -131,6 +137,7 @@ export function CreateServerDialog({
               onChange={(event) => setTitle(event.target.value)}
               placeholder="Game Night"
               disabled={isCreating}
+              autoFocus
             />
           </div>
 

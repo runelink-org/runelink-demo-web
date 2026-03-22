@@ -5,10 +5,8 @@ import { ProfileSelector } from "@/components/ProfileSelector";
 import { AddServerMenu } from "@/components/sidebar/AddServerMenu";
 import { CreateChannelDialog } from "@/components/sidebar/CreateChannelDialog";
 import { DeleteChannelDialog } from "@/components/sidebar/DeleteChannelDialog";
-import {
-  formatServerTimestamp,
-  getServerMonogram,
-} from "@/components/sidebar/server-display";
+import { ServerRailButton } from "@/components/sidebar/ServerRailButton";
+import { formatServerTimestamp } from "@/components/sidebar/server-display";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
@@ -152,25 +150,12 @@ export function Sidebar({
               const isSelected = server.id === selectedServerId;
 
               return (
-                <button
+                <ServerRailButton
                   key={server.id}
-                  type="button"
-                  className={cn(
-                    "group relative flex size-12 shrink-0 items-center justify-center rounded-2xl border text-sm font-semibold transition",
-                    isSelected
-                      ? "border-primary/30 bg-primary text-primary-foreground shadow-lg shadow-primary/20"
-                      : "border-sidebar-border bg-sidebar-accent text-sidebar-foreground hover:-translate-y-0.5 hover:bg-sidebar-accent/80"
-                  )}
-                  onClick={() => onSelectServer(server.id)}
-                  title={server.title}
-                  aria-pressed={isSelected}
-                >
-                  <span
-                    className="pointer-events-none absolute -left-2 h-6 w-1 rounded-full bg-primary opacity-0 transition group-hover:opacity-60 data-[selected=true]:opacity-100"
-                    data-selected={isSelected}
-                  />
-                  {getServerMonogram(server.title)}
-                </button>
+                  isSelected={isSelected}
+                  server={server}
+                  onSelect={onSelectServer}
+                />
               );
             })
           )}
@@ -298,7 +283,7 @@ export function Sidebar({
                       <Button
                         variant="ghost"
                         className={cn(
-                          "h-auto min-w-0 flex-1 justify-start rounded-2xl px-3 py-3 text-left",
+                          "h-auto min-w-0 flex-1 cursor-pointer justify-start rounded-2xl px-3 py-3 text-left",
                           isSelected
                             ? "text-foreground hover:bg-transparent"
                             : "text-sidebar-foreground/80 hover:bg-transparent hover:text-sidebar-foreground"
