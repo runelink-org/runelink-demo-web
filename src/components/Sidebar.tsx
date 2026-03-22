@@ -1,22 +1,16 @@
-import type { Channel, ServerWithChannels } from "@runelink/sdk";
+import type { Channel, Server, ServerWithChannels } from "@runelink/sdk";
 import { Hash, Info, Layers3, LoaderCircle, Plus, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { ProfileSelector } from "@/components/ProfileSelector";
+import { AddServerMenu } from "@/components/sidebar/AddServerMenu";
+import { CreateChannelDialog } from "@/components/sidebar/CreateChannelDialog";
+import { DeleteChannelDialog } from "@/components/sidebar/DeleteChannelDialog";
 import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
+  formatServerTimestamp,
+  getServerMonogram,
+} from "@/components/sidebar/server-display";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
-import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 
 type SidebarProps = {
@@ -25,10 +19,18 @@ type SidebarProps = {
   selectedChannelId: string | null;
   isLoading: boolean;
   error: string | null;
+  activeHost: string | null;
   onManageAccounts: () => void;
   onSelectAccount: () => void;
   onSelectServer: (serverId: string) => void;
   onSelectChannel: (serverId: string, channel: Channel) => void;
+  onCreateServer: (
+    host: string,
+    title: string,
+    description: string
+  ) => Promise<void>;
+  onSearchServers: (host: string) => Promise<Server[]>;
+  onJoinServer: (serverId: string, serverHost: string) => Promise<void>;
   onCreateChannel: (title: string, description: string) => Promise<void>;
   onDeleteChannel: (channel: Channel) => Promise<void>;
 };
@@ -61,35 +63,20 @@ function loadStoredChannelPanelWidth(): number {
     : DEFAULT_CHANNEL_PANEL_WIDTH;
 }
 
-function getServerMonogram(title: string): string {
-  const words = title.trim().split(/\s+/).filter(Boolean);
-  return words
-    .slice(0, 2)
-    .map((word) => word[0])
-    .join("")
-    .toUpperCase();
-}
-
-function formatServerTimestamp(value: Date): string {
-  return new Intl.DateTimeFormat(undefined, {
-    month: "numeric",
-    day: "numeric",
-    year: "2-digit",
-    hour: "numeric",
-    minute: "2-digit",
-  }).format(value);
-}
-
 export function Sidebar({
   servers,
   selectedServerId,
   selectedChannelId,
   isLoading,
   error,
+  activeHost,
   onManageAccounts,
   onSelectAccount,
   onSelectServer,
   onSelectChannel,
+  onCreateServer,
+  onSearchServers,
+  onJoinServer,
   onCreateChannel,
   onDeleteChannel,
 }: SidebarProps) {
@@ -97,18 +84,13 @@ export function Sidebar({
     loadStoredChannelPanelWidth()
   );
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
-  const [createTitle, setCreateTitle] = useState("");
-  const [createDescription, setCreateDescription] = useState("");
-  const [createError, setCreateError] = useState<string | null>(null);
-  const [isCreatingChannel, setIsCreatingChannel] = useState(false);
   const [channelPendingDelete, setChannelPendingDelete] =
     useState<Channel | null>(null);
-  const [deleteError, setDeleteError] = useState<string | null>(null);
-  const [isDeletingChannel, setIsDeletingChannel] = useState(false);
 
   const selectedServer = selectedServerId
     ? (servers.find((server) => server.server.id === selectedServerId) ?? null)
     : null;
+  const joinedServerIds = new Set(servers.map((server) => server.server.id));
 
   useEffect(() => {
     if (typeof window === "undefined") {
@@ -140,54 +122,6 @@ export function Sidebar({
 
     window.addEventListener("pointermove", handlePointerMove);
     window.addEventListener("pointerup", handlePointerUp);
-  }
-
-  async function handleCreateChannelSubmit(
-    event: React.FormEvent<HTMLFormElement>
-  ) {
-    event.preventDefault();
-
-    const nextTitle = createTitle.trim();
-    if (!nextTitle) {
-      setCreateError("Channel name is required.");
-      return;
-    }
-
-    setIsCreatingChannel(true);
-    setCreateError(null);
-
-    try {
-      await onCreateChannel(nextTitle, createDescription);
-      setCreateTitle("");
-      setCreateDescription("");
-      setIsCreateDialogOpen(false);
-    } catch (error) {
-      setCreateError(
-        error instanceof Error ? error.message : "Failed to create channel"
-      );
-    } finally {
-      setIsCreatingChannel(false);
-    }
-  }
-
-  async function handleDeleteChannelConfirm() {
-    if (!channelPendingDelete) {
-      return;
-    }
-
-    setIsDeletingChannel(true);
-    setDeleteError(null);
-
-    try {
-      await onDeleteChannel(channelPendingDelete);
-      setChannelPendingDelete(null);
-    } catch (error) {
-      setDeleteError(
-        error instanceof Error ? error.message : "Failed to delete channel"
-      );
-    } finally {
-      setIsDeletingChannel(false);
-    }
   }
 
   return (
@@ -240,6 +174,14 @@ export function Sidebar({
               );
             })
           )}
+
+          <AddServerMenu
+            activeHost={activeHost}
+            joinedServerIds={joinedServerIds}
+            onCreateServer={onCreateServer}
+            onSearchServers={onSearchServers}
+            onJoinServer={onJoinServer}
+          />
         </div>
 
         <ProfileSelector
@@ -313,9 +255,6 @@ export function Sidebar({
                 variant="ghost"
                 className="size-7 rounded-xl text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground"
                 onClick={() => {
-                  setCreateError(null);
-                  setCreateTitle("");
-                  setCreateDescription("");
                   setIsCreateDialogOpen(true);
                 }}
                 disabled={!selectedServer}
@@ -393,7 +332,6 @@ export function Sidebar({
                           "hover:bg-background/70 hover:text-destructive"
                         )}
                         onClick={() => {
-                          setDeleteError(null);
                           setChannelPendingDelete(channel);
                         }}
                         aria-label={`Delete ${channel.title}`}
@@ -421,105 +359,22 @@ export function Sidebar({
         />
       </button>
 
-      <AlertDialog
+      <CreateChannelDialog
         open={isCreateDialogOpen}
+        serverTitle={selectedServer?.server.title ?? null}
+        onOpenChange={setIsCreateDialogOpen}
+        onCreateChannel={onCreateChannel}
+      />
+
+      <DeleteChannelDialog
+        channel={channelPendingDelete}
         onOpenChange={(open) => {
-          setIsCreateDialogOpen(open);
           if (!open) {
-            setCreateError(null);
-          }
-        }}
-      >
-        <AlertDialogContent>
-          <form className="space-y-4" onSubmit={handleCreateChannelSubmit}>
-            <AlertDialogHeader>
-              <AlertDialogTitle>Create channel</AlertDialogTitle>
-              <AlertDialogDescription>
-                Add a text channel to{" "}
-                {selectedServer?.server.title ?? "this server"}.
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-
-            <div className="space-y-2">
-              <Label htmlFor="channel-title">Name</Label>
-              <Input
-                id="channel-title"
-                value={createTitle}
-                onChange={(event) => setCreateTitle(event.target.value)}
-                placeholder="general"
-                disabled={isCreatingChannel}
-                autoFocus
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="channel-description">Description</Label>
-              <Textarea
-                id="channel-description"
-                value={createDescription}
-                onChange={(event) => setCreateDescription(event.target.value)}
-                placeholder="What is this channel for?"
-                className="min-h-24 resize-none"
-                disabled={isCreatingChannel}
-              />
-            </div>
-
-            {createError ? (
-              <p className="text-sm text-destructive">{createError}</p>
-            ) : null}
-
-            <AlertDialogFooter>
-              <AlertDialogCancel disabled={isCreatingChannel}>
-                Cancel
-              </AlertDialogCancel>
-              <AlertDialogAction type="submit" disabled={isCreatingChannel}>
-                {isCreatingChannel ? "Creating..." : "Create channel"}
-              </AlertDialogAction>
-            </AlertDialogFooter>
-          </form>
-        </AlertDialogContent>
-      </AlertDialog>
-
-      <AlertDialog
-        open={channelPendingDelete !== null}
-        onOpenChange={(open) => {
-          if (!open && !isDeletingChannel) {
             setChannelPendingDelete(null);
-            setDeleteError(null);
           }
         }}
-      >
-        <AlertDialogContent size="sm">
-          <AlertDialogHeader>
-            <AlertDialogTitle>Delete channel?</AlertDialogTitle>
-            <AlertDialogDescription>
-              {channelPendingDelete
-                ? `This will remove #${channelPendingDelete.title} from the server.`
-                : "This will remove the selected channel from the server."}
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-
-          {deleteError ? (
-            <p className="text-sm text-destructive">{deleteError}</p>
-          ) : null}
-
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={isDeletingChannel}>
-              Cancel
-            </AlertDialogCancel>
-            <AlertDialogAction
-              type="button"
-              variant="destructive"
-              disabled={isDeletingChannel}
-              onClick={() => {
-                void handleDeleteChannelConfirm();
-              }}
-            >
-              {isDeletingChannel ? "Deleting..." : "Delete channel"}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+        onDeleteChannel={onDeleteChannel}
+      />
     </aside>
   );
 }

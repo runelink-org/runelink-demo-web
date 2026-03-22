@@ -87,12 +87,17 @@ export function App() {
   const fetchMembershipsByUser = useMembershipsStore(
     (state) => state.fetchMembershipsByUser
   );
+  const createMembership = useMembershipsStore(
+    (state) => state.createMembership
+  );
   const serverWithChannelsById = useServersStore(
     (state) => state.serverWithChannelsById
   );
+  const fetchServers = useServersStore((state) => state.fetchServers);
   const fetchServerWithChannels = useServersStore(
     (state) => state.fetchServerWithChannels
   );
+  const createServer = useServersStore((state) => state.createServer);
   const createChannel = useChannelsStore((state) => state.createChannel);
   const deleteChannel = useChannelsStore((state) => state.deleteChannel);
   const messagesByChannelKey = useMessagesStore(
@@ -375,6 +380,58 @@ export function App() {
     );
   }
 
+  async function handleCreateServer(
+    host: string,
+    title: string,
+    description: string
+  ) {
+    if (!activeAccount) {
+      return;
+    }
+
+    const server = await createServer(
+      {
+        title,
+        description: description.trim() || null,
+      },
+      getTargetHost(host.trim(), activeAccount.host)
+    );
+
+    await fetchMembershipsByUser(activeAccount);
+    await fetchServerWithChannels(
+      server.id,
+      getTargetHost(host.trim(), activeAccount.host)
+    );
+    selectServer(server.id);
+  }
+
+  async function handleSearchServers(host: string) {
+    if (!activeAccount) {
+      return [];
+    }
+
+    return fetchServers(getTargetHost(host, activeAccount.host));
+  }
+
+  async function handleJoinServer(serverId: string, serverHost: string) {
+    if (!activeAccount) {
+      return;
+    }
+
+    await createMembership(serverId, {
+      user_ref: activeAccount,
+      server_id: serverId,
+      server_host: serverHost,
+      role: "member",
+    });
+    await fetchMembershipsByUser(activeAccount);
+    await fetchServerWithChannels(
+      serverId,
+      getTargetHost(serverHost, activeAccount.host)
+    );
+    selectServer(serverId);
+  }
+
   return (
     <div className="flex h-screen overflow-hidden bg-[radial-gradient(circle_at_top,_color-mix(in_oklab,var(--color-primary)_8%,transparent),transparent_32%),linear-gradient(180deg,color-mix(in_oklab,var(--color-muted)_60%,white),transparent_28%)]">
       <Sidebar
@@ -383,6 +440,7 @@ export function App() {
         selectedChannelId={selectedChannelId}
         isLoading={isSidebarLoading}
         error={sidebarError}
+        activeHost={activeAccount?.host ?? null}
         onManageAccounts={() => {
           setManageOriginAccountKey(activeAccountKey);
           setShouldPrefillAccount(false);
@@ -396,6 +454,9 @@ export function App() {
         }}
         onSelectServer={handleSelectServer}
         onSelectChannel={handleSelectChannel}
+        onCreateServer={handleCreateServer}
+        onSearchServers={handleSearchServers}
+        onJoinServer={handleJoinServer}
         onCreateChannel={handleCreateChannel}
         onDeleteChannel={handleDeleteChannel}
       />
