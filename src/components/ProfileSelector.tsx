@@ -34,6 +34,7 @@ const statusLabels = {
   disconnected: "Offline",
   connecting: "Connecting",
   reconnecting: "Reconnecting",
+  unauthenticated: "Unauthenticated",
   authenticating: "Authenticating",
   connected: "Connected",
 };

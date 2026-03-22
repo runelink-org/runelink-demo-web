@@ -1,10 +1,10 @@
 import { create } from "zustand";
-import { type UserRef } from "@runelink/sdk";
+import { type TokenResponse, type UserRef } from "@runelink/sdk";
 import {
-  loginWithPassword,
-  refreshAccessToken,
-  signupAccount,
-} from "@/lib/auth-client";
+  loginAuthSessionWithConnection,
+  registerAuthSessionStateBridge,
+  signupAuthSessionWithConnection,
+} from "@/lib/auth-session-bridge";
 import {
   accountStorageKey,
   loadBrowserAppConfig,
@@ -39,7 +39,11 @@ type AuthStore = {
   signup: (credentials: AccountCredentials) => Promise<AuthResult>;
   login: (credentials: AccountCredentials) => Promise<AuthResult>;
   logoutActive: () => void;
-  ensureAccessToken: (userRef: UserRef) => Promise<string>;
+  storeAccountToken: (
+    userRef: UserRef,
+    tokenResponse: TokenResponse,
+    clientId: string
+  ) => void;
   clearAccountAuth: (userRef: UserRef, errorMessage?: string) => void;
 };
 
@@ -105,6 +109,32 @@ function buildStoredAuth(
   };
 }
 
+function persistAuthenticatedAccount(
+  state: AuthStore,
+  userRef: UserRef,
+  tokenResponse: TokenResponse,
+  clientId: string
+): Pick<AuthStore, "config" | "authCache" | "authError"> {
+  const nextConfig = {
+    default_account: userRef,
+    accounts: upsertAccount(state.config.accounts, userRef),
+  };
+  const previousAuth = state.authCache.accounts[accountStorageKey(userRef)];
+  const nextAuthCache = storeTokenState(
+    state.authCache,
+    userRef,
+    buildStoredAuth(previousAuth, tokenResponse, clientId)
+  );
+
+  persistState(nextConfig, nextAuthCache);
+
+  return {
+    config: nextConfig,
+    authCache: nextAuthCache,
+    authError: null,
+  };
+}
+
 export function getActiveAccount(state: AuthStore): UserRef | null {
   return state.config.default_account;
 }
@@ -153,16 +183,21 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
   async signup(credentials) {
     try {
       const normalizedAccount = normalizeAccountInput(credentials);
-      await signupAccount({
-        host: normalizedAccount.host,
-        name: normalizedAccount.name,
-        password: credentials.password,
-      });
-      return await get().login({
-        host: normalizedAccount.host,
-        name: normalizedAccount.name,
-        password: credentials.password,
-      });
+      const { tokenResponse, clientId } = await signupAuthSessionWithConnection(
+        normalizedAccount,
+        credentials.password
+      );
+
+      set((state) => ({
+        ...persistAuthenticatedAccount(
+          state,
+          normalizedAccount,
+          tokenResponse,
+          clientId
+        ),
+      }));
+
+      return { success: true };
     } catch (error) {
       const errorMessage =
         error instanceof Error ? error.message : "Unable to create account";
@@ -175,34 +210,20 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
     try {
       const normalizedAccount = normalizeAccountInput(credentials);
       const clientId = crypto.randomUUID();
-      const tokenResponse = await loginWithPassword({
-        host: normalizedAccount.host,
-        username: normalizedAccount.name,
-        password: credentials.password,
-        clientId,
-      });
+      const tokenResponse = await loginAuthSessionWithConnection(
+        normalizedAccount,
+        credentials.password,
+        clientId
+      );
 
-      set((state) => {
-        const nextConfig = {
-          default_account: normalizedAccount,
-          accounts: upsertAccount(state.config.accounts, normalizedAccount),
-        };
-        const previousAuth =
-          state.authCache.accounts[accountStorageKey(normalizedAccount)];
-        const nextAuthCache = storeTokenState(
-          state.authCache,
+      set((state) => ({
+        ...persistAuthenticatedAccount(
+          state,
           normalizedAccount,
-          buildStoredAuth(previousAuth, tokenResponse, clientId)
-        );
-
-        persistState(nextConfig, nextAuthCache);
-
-        return {
-          config: nextConfig,
-          authCache: nextAuthCache,
-          authError: null,
-        };
-      });
+          tokenResponse,
+          clientId
+        ),
+      }));
 
       return { success: true };
     } catch (error) {
@@ -219,59 +240,16 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
     get().clearAccountAuth(activeAccount);
   },
 
-  async ensureAccessToken(userRef) {
+  storeAccountToken(userRef, tokenResponse, clientId) {
     const normalizedAccount = normalizeAccountInput(userRef);
-    const key = accountStorageKey(normalizedAccount);
-    const auth = get().authCache.accounts[key];
-    if (!auth) {
-      throw new Error("No stored session for this account");
-    }
-
-    const nowInSeconds = Math.floor(Date.now() / 1000);
-    if (
-      auth.access_token &&
-      auth.expires_at &&
-      auth.expires_at > nowInSeconds + 60
-    ) {
-      return auth.access_token;
-    }
-
-    if (auth.access_token && !auth.expires_at) {
-      return auth.access_token;
-    }
-
-    try {
-      const tokenResponse = await refreshAccessToken({
-        host: normalizedAccount.host,
-        refreshToken: auth.refresh_token,
-        clientId: auth.client_id,
-        scope: auth.scope,
-      });
-      const nextClientId = auth.client_id ?? crypto.randomUUID();
-
-      set((state) => {
-        const latestAuth = state.authCache.accounts[key];
-        const nextAuthCache = storeTokenState(
-          state.authCache,
-          normalizedAccount,
-          buildStoredAuth(latestAuth, tokenResponse, nextClientId)
-        );
-
-        persistState(state.config, nextAuthCache);
-
-        return {
-          authCache: nextAuthCache,
-          authError: null,
-        };
-      });
-
-      return tokenResponse.access_token;
-    } catch (error) {
-      const errorMessage =
-        error instanceof Error ? error.message : "Unable to refresh session";
-      get().clearAccountAuth(normalizedAccount, errorMessage);
-      throw new Error(errorMessage);
-    }
+    set((state) => ({
+      ...persistAuthenticatedAccount(
+        state,
+        normalizedAccount,
+        tokenResponse,
+        clientId
+      ),
+    }));
   },
 
   clearAccountAuth(userRef, errorMessage) {
@@ -287,3 +265,20 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
     });
   },
 }));
+
+registerAuthSessionStateBridge({
+  getSnapshot() {
+    const state = useAuthStore.getState();
+    return {
+      activeAccount: getActiveAccount(state),
+      activeAuth: getActiveAccountAuth(state),
+      authError: state.authError,
+    };
+  },
+  subscribe(listener) {
+    return useAuthStore.subscribe(listener);
+  },
+  storeAccountToken(userRef, tokenResponse, clientId) {
+    useAuthStore.getState().storeAccountToken(userRef, tokenResponse, clientId);
+  },
+});
