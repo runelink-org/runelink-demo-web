@@ -76,6 +76,37 @@ function formatFullTimestamp(value: Date): string {
   }).format(value);
 }
 
+function formatCompactTimestamp(value: Date): string {
+  return new Intl.DateTimeFormat(undefined, {
+    hour: "numeric",
+    minute: "2-digit",
+  }).format(value);
+}
+
+const COMPACT_MESSAGE_WINDOW_MS = 5 * 60 * 1000;
+
+function shouldCompactMessage(current: Message, previous?: Message): boolean {
+  if (!previous) {
+    return false;
+  }
+
+  if (!current.author || !previous.author) {
+    return false;
+  }
+
+  if (
+    current.author.name !== previous.author.name ||
+    current.author.host !== previous.author.host
+  ) {
+    return false;
+  }
+
+  return (
+    current.created_at.getTime() - previous.created_at.getTime() <=
+    COMPACT_MESSAGE_WINDOW_MS
+  );
+}
+
 function MessageList({
   messages,
   scrollContainerRef,
@@ -91,56 +122,70 @@ function MessageList({
       onScroll={onScroll}
       className="flex flex-1 flex-col gap-1 overflow-y-auto px-4 py-5 sm:px-6"
     >
-      {messages.map((message) => {
+      {messages.map((message, index) => {
         const authorName = message.author?.name ?? "Unknown user";
+        const isCompact = shouldCompactMessage(message, messages[index - 1]);
+        const leadingMessageOffset = !isCompact && index > 0;
 
         return (
-          <article
-            key={message.id}
-            className="group rounded-2xl border border-transparent px-3 py-3 transition hover:border-border/70 hover:bg-background/80"
-          >
-            <div className="flex items-start gap-3">
-              <div className="group/avatar relative shrink-0">
-                <div className="flex size-10 items-center justify-center rounded-2xl bg-primary/10 text-sm font-semibold text-primary">
-                  {authorName.slice(0, 2).toUpperCase()}
-                </div>
-                {message.author ? (
-                  <div className="pointer-events-none absolute bottom-full left-9 mb-1 z-10 w-56 rounded-2xl border border-border/70 bg-background p-3 text-left opacity-0 shadow-lg transition duration-150 group-hover/avatar:pointer-events-auto group-hover/avatar:opacity-100">
-                    <p className="truncate text-sm font-semibold text-foreground">
-                      {message.author.name}
-                    </p>
-                    <div className="mt-2 space-y-1.5 text-xs text-muted-foreground">
-                      <p>
-                        Host:{" "}
-                        <span className="text-foreground/90">
-                          @{message.author.host}
-                        </span>
-                      </p>
-                      <p>
-                        Joined:{" "}
-                        <span className="text-foreground/90">
-                          {formatFullTimestamp(message.author.created_at)}
-                        </span>
-                      </p>
-                    </div>
+          <div key={message.id} className={leadingMessageOffset ? "mt-3" : ""}>
+            <article className="group rounded-2xl border border-transparent px-3 py-1.5 transition hover:border-border/70 hover:bg-background/80">
+              <div className="flex items-start gap-3">
+                {isCompact ? (
+                  <div className="flex w-10 shrink-0 items-center justify-end whitespace-nowrap pt-0.5 text-[10px] leading-6 text-muted-foreground/90 opacity-0 transition group-hover:opacity-100">
+                    {formatCompactTimestamp(message.created_at)}
                   </div>
                 ) : null}
-              </div>
-              <div className="min-w-0 flex-1">
-                <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                  <span className="font-medium text-foreground">
-                    {authorName}
-                  </span>
-                  <span className="text-xs text-muted-foreground">
-                    {formatMessageTimestamp(message.created_at)}
-                  </span>
+                {!isCompact ? (
+                  <div className="group/avatar relative shrink-0">
+                    <div className="flex size-10 items-center justify-center rounded-2xl bg-primary/10 text-sm font-semibold text-primary">
+                      {authorName.slice(0, 2).toUpperCase()}
+                    </div>
+                    {message.author ? (
+                      <div className="pointer-events-none absolute bottom-full left-9 z-10 mb-1 w-56 rounded-2xl border border-border/70 bg-background p-3 text-left opacity-0 shadow-lg transition duration-150 group-hover/avatar:pointer-events-auto group-hover/avatar:opacity-100">
+                        <p className="truncate text-sm font-semibold text-foreground">
+                          {message.author.name}
+                        </p>
+                        <div className="mt-2 space-y-1.5 text-xs text-muted-foreground">
+                          <p>
+                            Host:{" "}
+                            <span className="text-foreground/90">
+                              @{message.author.host}
+                            </span>
+                          </p>
+                          <p>
+                            Joined:{" "}
+                            <span className="text-foreground/90">
+                              {formatFullTimestamp(message.author.created_at)}
+                            </span>
+                          </p>
+                        </div>
+                      </div>
+                    ) : null}
+                  </div>
+                ) : null}
+                <div className="min-w-0 flex-1">
+                  {!isCompact ? (
+                    <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                      <span className="font-medium text-foreground">
+                        {authorName}
+                      </span>
+                      <span className="text-[11px] text-muted-foreground">
+                        {formatMessageTimestamp(message.created_at)}
+                      </span>
+                    </div>
+                  ) : null}
+                  <p
+                    className={`whitespace-pre-wrap text-sm leading-6 text-foreground/90 ${
+                      isCompact ? "" : "mt-1"
+                    }`}
+                  >
+                    {message.body}
+                  </p>
                 </div>
-                <p className="mt-1 whitespace-pre-wrap text-sm leading-6 text-foreground/90">
-                  {message.body}
-                </p>
               </div>
-            </div>
-          </article>
+            </article>
+          </div>
         );
       })}
     </div>
