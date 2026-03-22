@@ -132,7 +132,7 @@ function MessageList({
             <article className="group rounded-2xl border border-transparent px-3 py-1.5 transition hover:border-border/70 hover:bg-background/80">
               <div className="flex items-start gap-3">
                 {isCompact ? (
-                  <div className="flex w-10 shrink-0 items-center justify-end whitespace-nowrap pt-0.5 text-[10px] leading-6 text-muted-foreground/90 opacity-0 transition group-hover:opacity-100">
+                  <div className="flex w-10 shrink-0 cursor-default select-none items-center justify-end self-stretch whitespace-nowrap text-[10px] text-muted-foreground/90 opacity-0 transition group-hover:opacity-100">
                     {formatCompactTimestamp(message.created_at)}
                   </div>
                 ) : null}
@@ -170,7 +170,7 @@ function MessageList({
                       <span className="font-medium text-foreground">
                         {authorName}
                       </span>
-                      <span className="text-[11px] text-muted-foreground">
+                      <span className="cursor-default select-none text-[11px] text-muted-foreground">
                         {formatMessageTimestamp(message.created_at)}
                       </span>
                     </div>
