@@ -33,21 +33,23 @@ type RunelinkConnectionStore = {
   request: (message: WsRequest) => Promise<WsReply>;
 };
 
-let currentConnection: RunelinkConnection | null = null;
-let currentConnectionHost: string | null = null;
-let currentStatusCleanup: (() => void) | null = null;
-let currentErrorCleanup: (() => void) | null = null;
-let currentUpdateCleanup: (() => void) | null = null;
-let currentConnectionAuthenticated = false;
-let lifecycleInitialized = false;
-let syncGeneration = 0;
-let syncInFlight: Promise<void> | null = null;
-let syncQueued = false;
-let replaceInProgress = false;
-let lastActiveSessionKey: string | null = null;
+type RunelinkConnectionRuntime = {
+  currentConnection: RunelinkConnection | null;
+  currentConnectionHost: string | null;
+  currentStatusCleanup: (() => void) | null;
+  currentErrorCleanup: (() => void) | null;
+  currentUpdateCleanup: (() => void) | null;
+  currentConnectionAuthenticated: boolean;
+  lifecycleInitialized: boolean;
+  syncGeneration: number;
+  syncInFlight: Promise<void> | null;
+  syncQueued: boolean;
+  replaceInProgress: boolean;
+  lastActiveSessionKey: string | null;
+};
 
-export const useRunelinkConnectionStore = create<RunelinkConnectionStore>(
-  (set) => ({
+function createRunelinkConnectionStore() {
+  return create<RunelinkConnectionStore>((set) => ({
     initialized: false,
     status: "disconnected",
     lastError: null,
@@ -63,15 +65,56 @@ export const useRunelinkConnectionStore = create<RunelinkConnectionStore>(
     request(message) {
       return requestRunelink(message);
     },
-  })
-);
+  }));
+}
+
+type UseRunelinkConnectionStore = ReturnType<
+  typeof createRunelinkConnectionStore
+>;
+
+declare global {
+  var __runelinkDemoWebConnectionRuntime__:
+    | RunelinkConnectionRuntime
+    | undefined;
+  var __runelinkDemoWebConnectionStore__:
+    | UseRunelinkConnectionStore
+    | undefined;
+}
+
+function getRunelinkConnectionRuntime(): RunelinkConnectionRuntime {
+  globalThis.__runelinkDemoWebConnectionRuntime__ ??= {
+    currentConnection: null,
+    currentConnectionHost: null,
+    currentStatusCleanup: null,
+    currentErrorCleanup: null,
+    currentUpdateCleanup: null,
+    currentConnectionAuthenticated: false,
+    lifecycleInitialized: false,
+    syncGeneration: 0,
+    syncInFlight: null,
+    syncQueued: false,
+    replaceInProgress: false,
+    lastActiveSessionKey: null,
+  };
+  return globalThis.__runelinkDemoWebConnectionRuntime__;
+}
+
+function getRunelinkConnectionStore(): UseRunelinkConnectionStore {
+  globalThis.__runelinkDemoWebConnectionStore__ ??=
+    createRunelinkConnectionStore();
+  return globalThis.__runelinkDemoWebConnectionStore__;
+}
+
+const runtime = getRunelinkConnectionRuntime();
+
+export const useRunelinkConnectionStore = getRunelinkConnectionStore();
 
 function getConnectedAccount(): UserRef | null {
   return useRunelinkConnectionStore.getState().connectedAccount;
 }
 
 function setUnauthenticatedStatus(status: AccountConnectionStatus): void {
-  currentConnectionAuthenticated = false;
+  runtime.currentConnectionAuthenticated = false;
   useRunelinkConnectionStore.setState({
     status,
     connectedAccount: null,
@@ -79,7 +122,7 @@ function setUnauthenticatedStatus(status: AccountConnectionStatus): void {
 }
 
 function setAuthenticatedStatus(userRef: UserRef): void {
-  currentConnectionAuthenticated = true;
+  runtime.currentConnectionAuthenticated = true;
   useRunelinkConnectionStore.setState({
     status: "connected",
     lastError: null,
@@ -88,19 +131,19 @@ function setAuthenticatedStatus(userRef: UserRef): void {
 }
 
 function teardownConnection(): void {
-  currentStatusCleanup?.();
-  currentErrorCleanup?.();
-  currentUpdateCleanup?.();
-  currentStatusCleanup = null;
-  currentErrorCleanup = null;
-  currentUpdateCleanup = null;
-  if (currentConnection) {
-    currentConnection.disconnect();
-    currentConnection = null;
+  runtime.currentStatusCleanup?.();
+  runtime.currentErrorCleanup?.();
+  runtime.currentUpdateCleanup?.();
+  runtime.currentStatusCleanup = null;
+  runtime.currentErrorCleanup = null;
+  runtime.currentUpdateCleanup = null;
+  if (runtime.currentConnection) {
+    runtime.currentConnection.disconnect();
+    runtime.currentConnection = null;
   }
-  currentConnectionHost = null;
-  currentConnectionAuthenticated = false;
-  replaceInProgress = false;
+  runtime.currentConnectionHost = null;
+  runtime.currentConnectionAuthenticated = false;
+  runtime.replaceInProgress = false;
 }
 
 function connectionMatches(userRef: UserRef): boolean {
@@ -136,18 +179,21 @@ async function waitForStatus(
   ) => boolean
 ): Promise<RunelinkConnection> {
   const state = useRunelinkConnectionStore.getState();
-  if (currentConnection && predicate(state.status, state.connectedAccount)) {
-    return currentConnection;
+  if (
+    runtime.currentConnection &&
+    predicate(state.status, state.connectedAccount)
+  ) {
+    return runtime.currentConnection;
   }
 
   return new Promise((resolve, reject) => {
     const unsubscribe = useRunelinkConnectionStore.subscribe((storeState) => {
       if (
-        currentConnection &&
+        runtime.currentConnection &&
         predicate(storeState.status, storeState.connectedAccount)
       ) {
         unsubscribe();
-        resolve(currentConnection);
+        resolve(runtime.currentConnection);
         return;
       }
 
@@ -164,13 +210,13 @@ async function waitForStatus(
 }
 
 function attachConnectionListeners(connection: RunelinkConnection): void {
-  currentStatusCleanup = connection.subscribeStatus((status) => {
-    if (connection !== currentConnection) {
+  runtime.currentStatusCleanup = connection.subscribeStatus((status) => {
+    if (connection !== runtime.currentConnection) {
       return;
     }
 
     if (status === "connected") {
-      if (currentConnectionAuthenticated) {
+      if (runtime.currentConnectionAuthenticated) {
         const connectedAccount = getConnectedAccount();
         if (connectedAccount) {
           useRunelinkConnectionStore.setState({
@@ -183,7 +229,7 @@ function attachConnectionListeners(connection: RunelinkConnection): void {
       }
 
       setUnauthenticatedStatus("unauthenticated");
-      if (!replaceInProgress) {
+      if (!runtime.replaceInProgress) {
         void scheduleSyncConnectionToActiveAccount();
       }
       return;
@@ -192,43 +238,41 @@ function attachConnectionListeners(connection: RunelinkConnection): void {
     setUnauthenticatedStatus(status);
   });
 
-  currentErrorCleanup = connection.onError((error) => {
-    if (connection !== currentConnection) {
+  runtime.currentErrorCleanup = connection.onError((error) => {
+    if (connection !== runtime.currentConnection) {
       return;
     }
-
     useRunelinkConnectionStore.setState({
       lastError: error.message,
     });
   });
 
-  currentUpdateCleanup = connection.onUpdate((update) => {
-    if (connection !== currentConnection) {
+  runtime.currentUpdateCleanup = connection.onUpdate((update) => {
+    if (connection !== runtime.currentConnection) {
       return;
     }
-
     handleRunelinkUpdate(update);
   });
 }
 
 async function replaceConnection(host: string): Promise<RunelinkConnection> {
   teardownConnection();
-  replaceInProgress = true;
+  runtime.replaceInProgress = true;
 
   const connection = new RunelinkConnection(host, {
     autoReconnect: true,
   });
 
-  currentConnection = connection;
-  currentConnectionHost = host;
+  runtime.currentConnection = connection;
+  runtime.currentConnectionHost = host;
   attachConnectionListeners(connection);
 
   try {
     await connection.connect();
-    replaceInProgress = false;
+    runtime.replaceInProgress = false;
   } catch (error) {
-    replaceInProgress = false;
-    if (connection === currentConnection) {
+    runtime.replaceInProgress = false;
+    if (connection === runtime.currentConnection) {
       useRunelinkConnectionStore.setState({
         status: "disconnected",
         lastError: error instanceof Error ? error.message : "Unable to connect",
@@ -247,16 +291,14 @@ async function ensureSocketForHost(
 ): Promise<RunelinkConnection> {
   const forceReplace = options.forceReplace ?? false;
   const state = useRunelinkConnectionStore.getState();
-
   if (
     !forceReplace &&
-    currentConnection &&
-    currentConnectionHost === host &&
+    runtime.currentConnection &&
+    runtime.currentConnectionHost === host &&
     (state.status === "connected" || state.status === "unauthenticated")
   ) {
-    return currentConnection;
+    return runtime.currentConnection;
   }
-
   return replaceConnection(host);
 }
 
@@ -271,7 +313,6 @@ async function authenticateWithAccessToken(
       access_token: accessToken,
     },
   });
-
   if (
     reply.type !== "auth_token_access" ||
     reply.data.type !== "authenticated" ||
@@ -295,11 +336,9 @@ async function authenticateWithRefreshToken(
       scope: auth.scope ?? null,
     },
   });
-
   if (reply.type !== "auth_token") {
     throw new Error(`Unexpected reply type: ${reply.type}`);
   }
-
   const tokenResponse = TokenResponseSchema.parse(reply.data);
   storeAuthSessionToken(userRef, tokenResponse, clientId);
   return tokenResponse.access_token;
@@ -328,13 +367,19 @@ async function authenticateStoredAccount(
       await authenticateWithRefreshToken(connection, userRef, auth);
     }
 
-    if (generation !== syncGeneration || connection !== currentConnection) {
+    if (
+      generation !== runtime.syncGeneration ||
+      connection !== runtime.currentConnection
+    ) {
       return;
     }
 
     setAuthenticatedStatus(userRef);
   } catch (error) {
-    if (generation !== syncGeneration || connection !== currentConnection) {
+    if (
+      generation !== runtime.syncGeneration ||
+      connection !== runtime.currentConnection
+    ) {
       return;
     }
 
@@ -351,24 +396,23 @@ async function authenticateStoredAccount(
 }
 
 function scheduleSyncConnectionToActiveAccount(): Promise<void> {
-  if (syncInFlight) {
-    syncQueued = true;
-    return syncInFlight;
+  if (runtime.syncInFlight) {
+    runtime.syncQueued = true;
+    return runtime.syncInFlight;
   }
 
   const syncPromise = syncConnectionToActiveAccount().finally(() => {
-    if (syncInFlight !== syncPromise) {
+    if (runtime.syncInFlight !== syncPromise) {
       return;
     }
-
-    syncInFlight = null;
-    if (syncQueued) {
-      syncQueued = false;
+    runtime.syncInFlight = null;
+    if (runtime.syncQueued) {
+      runtime.syncQueued = false;
       void scheduleSyncConnectionToActiveAccount();
     }
   });
 
-  syncInFlight = syncPromise;
+  runtime.syncInFlight = syncPromise;
   return syncPromise;
 }
 
@@ -376,8 +420,12 @@ async function waitForAuthenticatedConnection(): Promise<RunelinkConnection> {
   const authState = getAuthSessionSnapshot();
   const activeAccount = authState.activeAccount;
 
-  if (activeAccount && connectionMatches(activeAccount) && currentConnection) {
-    return currentConnection;
+  if (
+    activeAccount &&
+    connectionMatches(activeAccount) &&
+    runtime.currentConnection
+  ) {
+    return runtime.currentConnection;
   }
 
   await scheduleSyncConnectionToActiveAccount();
@@ -386,9 +434,9 @@ async function waitForAuthenticatedConnection(): Promise<RunelinkConnection> {
   if (
     nextActiveAccount &&
     connectionMatches(nextActiveAccount) &&
-    currentConnection
+    runtime.currentConnection
   ) {
-    return currentConnection;
+    return runtime.currentConnection;
   }
 
   return waitForStatus(
@@ -401,7 +449,7 @@ async function waitForAuthenticatedConnection(): Promise<RunelinkConnection> {
 
 export async function requestRunelink(message: WsRequest): Promise<WsReply> {
   const connection = await waitForAuthenticatedConnection();
-  if (connection !== currentConnection) {
+  if (connection !== runtime.currentConnection) {
     throw new Error("RuneLink connection changed before request could be sent");
   }
   return connection.send(message);
@@ -525,7 +573,8 @@ export async function refreshConnectionAuth(
   auth: StoredAccountAuth
 ): Promise<string> {
   const forceReplace =
-    currentConnectionHost !== userRef.host || !connectionMatches(userRef);
+    runtime.currentConnectionHost !== userRef.host ||
+    !connectionMatches(userRef);
   const connection = await ensureSocketForHost(userRef.host, {
     forceReplace,
   });
@@ -557,7 +606,7 @@ export async function refreshConnectionAuth(
 }
 
 async function syncConnectionToActiveAccount(): Promise<void> {
-  const generation = ++syncGeneration;
+  const generation = ++runtime.syncGeneration;
   const authState = getAuthSessionSnapshot();
   const activeAccount = authState.activeAccount;
   const activeAuth = authState.activeAuth;
@@ -575,18 +624,25 @@ async function syncConnectionToActiveAccount(): Promise<void> {
   }
 
   const shouldReplaceConnection =
-    !currentConnection ||
-    currentConnectionHost !== activeAccount.host ||
-    (currentConnectionAuthenticated && !connectionMatches(activeAccount));
+    !runtime.currentConnection ||
+    runtime.currentConnectionHost !== activeAccount.host ||
+    (runtime.currentConnectionAuthenticated &&
+      !connectionMatches(activeAccount));
 
   const connection = await ensureSocketForHost(activeAccount.host, {
     forceReplace: shouldReplaceConnection,
   });
-  if (generation !== syncGeneration || connection !== currentConnection) {
+  if (
+    generation !== runtime.syncGeneration ||
+    connection !== runtime.currentConnection
+  ) {
     return;
   }
 
-  if (connectionMatches(activeAccount) && currentConnectionAuthenticated) {
+  if (
+    connectionMatches(activeAccount) &&
+    runtime.currentConnectionAuthenticated
+  ) {
     if (useRunelinkConnectionStore.getState().status !== "connected") {
       setAuthenticatedStatus(activeAccount);
     }
@@ -602,17 +658,17 @@ async function syncConnectionToActiveAccount(): Promise<void> {
 }
 
 export function initializeRunelinkConnectionStore(): void {
-  if (lifecycleInitialized) return;
-  lifecycleInitialized = true;
-  lastActiveSessionKey = getActiveSessionKey();
+  if (runtime.lifecycleInitialized) return;
+  runtime.lifecycleInitialized = true;
+  runtime.lastActiveSessionKey = getActiveSessionKey();
   void scheduleSyncConnectionToActiveAccount();
   subscribeToAuthSession(() => {
     const nextSessionKey = getActiveSessionKey();
-    if (nextSessionKey === lastActiveSessionKey) {
+    if (nextSessionKey === runtime.lastActiveSessionKey) {
       return;
     }
 
-    lastActiveSessionKey = nextSessionKey;
+    runtime.lastActiveSessionKey = nextSessionKey;
     void scheduleSyncConnectionToActiveAccount();
   });
 }
