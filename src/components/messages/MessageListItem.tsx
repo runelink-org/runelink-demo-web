@@ -24,10 +24,18 @@ export function MessageListItem({
   canDeleteMessage,
   onDeleteMessage,
 }: MessageListItemProps) {
+  const isOneLine = !message.body.includes("\n");
+
   return (
     <div key={message.id} className={leadingMessageOffset ? "mt-3" : ""}>
-      <article className="group relative rounded-2xl border border-transparent px-3 py-1.5 pr-10 transition hover:border-border/70 hover:bg-background/80 focus-within:border-border/70 focus-within:bg-background/80">
-        <div className="absolute top-1.5 right-1.5 z-10 flex h-8 w-8 items-start justify-end">
+      <article className="group relative rounded-2xl border border-transparent px-3 py-1.5 pr-9 transition hover:border-border/70 hover:bg-background/80">
+        <div
+          className={`absolute right-1 z-10 flex w-8 justify-end ${
+            isCompact && isOneLine
+              ? "inset-y-0 items-center"
+              : "top-1.5 h-8 items-start"
+          }`}
+        >
           <MessageActionsMenu
             message={message}
             canDeleteMessage={canDeleteMessage}
@@ -36,7 +44,7 @@ export function MessageListItem({
         </div>
         <div className="flex items-start gap-3">
           {isCompact ? (
-            <div className="flex w-10 shrink-0 cursor-default select-none items-center justify-end self-stretch whitespace-nowrap text-[10px] text-muted-foreground/90 opacity-0 transition group-hover:opacity-100 group-focus-within:opacity-100">
+            <div className="flex w-10 shrink-0 cursor-default select-none items-center justify-end self-stretch whitespace-nowrap text-[10px] text-muted-foreground/90 opacity-0 transition group-hover:opacity-100">
               {compactTimestamp}
             </div>
           ) : null}
