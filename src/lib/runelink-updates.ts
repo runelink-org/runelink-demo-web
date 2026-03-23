@@ -10,6 +10,7 @@ import type {
   WsUpdate,
 } from "@runelink/sdk";
 import { useChannelsStore } from "@/lib/channels-store";
+import { upsertMembership } from "@/lib/membership-utils";
 import { useMembershipsStore } from "@/lib/memberships-store";
 import { useMessagesStore } from "@/lib/messages-store";
 import {
@@ -51,18 +52,6 @@ function removeMember(
 ): ServerMember[] {
   const key = userRefKey(userRef);
   return members.filter((member) => userRefKey(member.user) !== key);
-}
-
-function upsertMembership(
-  memberships: ServerMembership[],
-  nextMembership: ServerMembership
-): ServerMembership[] {
-  return [
-    ...memberships.filter(
-      (membership) => membership.server.id !== nextMembership.server.id
-    ),
-    nextMembership,
-  ];
 }
 
 function removeMembership(

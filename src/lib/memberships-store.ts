@@ -7,6 +7,7 @@ import {
 } from "@runelink/sdk";
 import { create } from "zustand";
 import { debugRunelink } from "@/lib/runelink-debug";
+import { sortMemberships, upsertMembership } from "@/lib/membership-utils";
 import { requestExpected } from "@/lib/runelink-request";
 import {
   bindStoreToActiveAccount,
@@ -74,18 +75,6 @@ function removeMember(
   return members.filter((member) => userRefKey(member.user) !== key);
 }
 
-function upsertMembership(
-  memberships: ServerMembership[],
-  nextMembership: ServerMembership
-): ServerMembership[] {
-  return [
-    ...memberships.filter(
-      (membership) => membership.server.id !== nextMembership.server.id
-    ),
-    nextMembership,
-  ];
-}
-
 function removeMembership(
   memberships: ServerMembership[],
   serverId: ServerId
@@ -138,7 +127,7 @@ export const useMembershipsStore = create<MembershipsState>((set) => ({
       set((state) => ({
         membershipsByUserRefKey: {
           ...state.membershipsByUserRefKey,
-          [userKey]: reply.data,
+          [userKey]: sortMemberships(reply.data),
         },
         isLoadingByUserRefKey: {
           ...state.isLoadingByUserRefKey,

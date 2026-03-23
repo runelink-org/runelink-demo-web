@@ -13,7 +13,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { getServerMonogram, isServerJoined } from "./server-display";
+import { getServerMonogram } from "./server-display";
 
 type JoinServerDialogProps = {
   open: boolean;
@@ -170,7 +170,7 @@ export function JoinServerDialog({
             </p>
             <div className="max-h-72 space-y-2 overflow-y-auto pr-1">
               {results.map((server) => {
-                const isJoined = isServerJoined(joinedServerIds, server);
+                const isJoined = joinedServerIds.has(server.id);
                 const isJoining = joiningServerId === server.id;
 
                 return (

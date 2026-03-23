@@ -458,7 +458,6 @@ export function App() {
       getTargetHost(host.trim(), activeAccount.host)
     );
 
-    await fetchMembershipsByUser(activeAccount);
     await fetchServerWithChannels(
       server.id,
       getTargetHost(host.trim(), activeAccount.host)
@@ -491,7 +490,6 @@ export function App() {
       server_host: serverHost,
       role: "member",
     });
-    await fetchMembershipsByUser(activeAccount);
     await fetchServerWithChannels(
       serverId,
       getTargetHost(serverHost, activeAccount.host)
