@@ -1,4 +1,4 @@
-import type { Channel, ServerWithChannels } from "@runelink/sdk";
+import type { Channel, Message, ServerWithChannels } from "@runelink/sdk";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AuthScreen } from "@/components/AuthScreen";
 import { MessagesPane } from "@/components/MessagesPane";
@@ -122,6 +122,7 @@ export function App() {
     (state) => state.fetchMessagesByChannel
   );
   const createMessage = useMessagesStore((state) => state.createMessage);
+  const deleteMessage = useMessagesStore((state) => state.deleteMessage);
 
   const activeAccountKey = activeAccount
     ? `${activeAccount.name}@${activeAccount.host}`
@@ -350,6 +351,7 @@ export function App() {
     : null;
   const canDeleteSelectedServer =
     activeUser?.role === "admin" || selectedMembership?.role === "admin";
+  const canModerateSelectedMessages = canDeleteSelectedServer;
   const isSelectedServerHydrating = selectedServer
     ? !(selectedServer.server.id in serverWithChannelsById) ||
       pendingServerDetailsRef.current.has(selectedServer.server.id)
@@ -435,6 +437,19 @@ export function App() {
         author: activeAccount,
         body,
       },
+      getTargetHost(selectedServer.server.host, activeAccount.host)
+    );
+  }
+
+  async function handleDeleteMessage(message: Message) {
+    if (!activeAccount || !selectedServer || !selectedChannel) {
+      return;
+    }
+
+    await deleteMessage(
+      selectedServer.server.id,
+      selectedChannel.id,
+      message.id,
       getTargetHost(selectedServer.server.host, activeAccount.host)
     );
   }
@@ -590,7 +605,10 @@ export function App() {
             hydratedServerCount={hydratedServers.length}
             isMessagesLoading={isMessagesLoading}
             messagesError={messagesError}
+            activeAccount={activeAccount}
+            canModerateMessages={canModerateSelectedMessages}
             onSendMessage={handleSendMessage}
+            onDeleteMessage={handleDeleteMessage}
           />
         )}
       </main>

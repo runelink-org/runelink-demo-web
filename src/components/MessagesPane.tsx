@@ -1,4 +1,4 @@
-import type { Message, ServerWithChannels } from "@runelink/sdk";
+import type { Message, ServerWithChannels, UserRef } from "@runelink/sdk";
 import {
   useCallback,
   type FormEvent,
@@ -13,7 +13,10 @@ import { Hash, MessagesSquare, SendHorizonal, ServerCrash } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { sameUserRef } from "@/lib/account-storage";
 import { useMessageScrollStore } from "@/lib/message-scroll-store";
+import { DeleteMessageDialog } from "./messages/DeleteMessageDialog";
+import { MessageListItem } from "./messages/MessageListItem";
 
 type MessagesPaneProps = {
   selectedServer: ServerWithChannels | null;
@@ -25,7 +28,10 @@ type MessagesPaneProps = {
   hydratedServerCount: number;
   isMessagesLoading: boolean;
   messagesError: string | null;
+  activeAccount: UserRef | null;
+  canModerateMessages: boolean;
   onSendMessage: (body: string) => Promise<void>;
+  onDeleteMessage: (message: Message) => Promise<void>;
 };
 
 function formatMessageTimestamp(value: Date): string {
@@ -111,84 +117,69 @@ function MessageList({
   messages,
   scrollContainerRef,
   onScroll,
+  activeAccount,
+  canModerateMessages,
+  onDeleteMessage,
 }: {
   messages: Message[];
   scrollContainerRef: RefObject<HTMLDivElement | null>;
   onScroll: () => void;
+  activeAccount: UserRef | null;
+  canModerateMessages: boolean;
+  onDeleteMessage: (message: Message) => Promise<void>;
 }) {
-  return (
-    <div
-      ref={scrollContainerRef}
-      onScroll={onScroll}
-      className="flex flex-1 flex-col gap-1 overflow-y-auto px-4 py-5 sm:px-6"
-    >
-      {messages.map((message, index) => {
-        const authorName = message.author?.name ?? "Unknown user";
-        const isCompact = shouldCompactMessage(message, messages[index - 1]);
-        const leadingMessageOffset = !isCompact && index > 0;
+  const [messagePendingDelete, setMessagePendingDelete] =
+    useState<Message | null>(null);
 
-        return (
-          <div key={message.id} className={leadingMessageOffset ? "mt-3" : ""}>
-            <article className="group rounded-2xl border border-transparent px-3 py-1.5 transition hover:border-border/70 hover:bg-background/80">
-              <div className="flex items-start gap-3">
-                {isCompact ? (
-                  <div className="flex w-10 shrink-0 cursor-default select-none items-center justify-end self-stretch whitespace-nowrap text-[10px] text-muted-foreground/90 opacity-0 transition group-hover:opacity-100">
-                    {formatCompactTimestamp(message.created_at)}
-                  </div>
-                ) : null}
-                {!isCompact ? (
-                  <div className="group/avatar relative shrink-0">
-                    <div className="flex size-10 items-center justify-center rounded-2xl bg-primary/10 text-sm font-semibold text-primary">
-                      {authorName.slice(0, 2).toUpperCase()}
-                    </div>
-                    {message.author ? (
-                      <div className="pointer-events-none absolute bottom-full left-9 z-10 mb-1 w-56 rounded-2xl border border-border/70 bg-background p-3 text-left opacity-0 shadow-lg transition duration-150 group-hover/avatar:pointer-events-auto group-hover/avatar:opacity-100">
-                        <p className="truncate text-sm font-semibold text-foreground">
-                          {message.author.name}
-                        </p>
-                        <div className="mt-2 space-y-1.5 text-xs text-muted-foreground">
-                          <p>
-                            Host:{" "}
-                            <span className="text-foreground/90">
-                              @{message.author.host}
-                            </span>
-                          </p>
-                          <p>
-                            Joined:{" "}
-                            <span className="text-foreground/90">
-                              {formatFullTimestamp(message.author.created_at)}
-                            </span>
-                          </p>
-                        </div>
-                      </div>
-                    ) : null}
-                  </div>
-                ) : null}
-                <div className="min-w-0 flex-1">
-                  {!isCompact ? (
-                    <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                      <span className="font-medium text-foreground">
-                        {authorName}
-                      </span>
-                      <span className="cursor-default select-none text-[11px] text-muted-foreground">
-                        {formatMessageTimestamp(message.created_at)}
-                      </span>
-                    </div>
-                  ) : null}
-                  <p
-                    className={`whitespace-pre-wrap text-sm leading-6 text-foreground/90 ${
-                      isCompact ? "" : "mt-1"
-                    }`}
-                  >
-                    {message.body}
-                  </p>
-                </div>
-              </div>
-            </article>
-          </div>
-        );
-      })}
-    </div>
+  return (
+    <>
+      <div
+        ref={scrollContainerRef}
+        onScroll={onScroll}
+        className="flex flex-1 flex-col gap-1 overflow-y-auto px-4 py-5 sm:px-6"
+      >
+        {messages.map((message, index) => {
+          const authorName = message.author?.name ?? "Unknown user";
+          const isCompact = shouldCompactMessage(message, messages[index - 1]);
+          const leadingMessageOffset = !isCompact && index > 0;
+          const canDeleteMessage =
+            canModerateMessages ||
+            (!!activeAccount &&
+              !!message.author &&
+              sameUserRef(activeAccount, message.author));
+
+          return (
+            <MessageListItem
+              key={message.id}
+              message={message}
+              authorName={authorName}
+              isCompact={isCompact}
+              leadingMessageOffset={leadingMessageOffset}
+              compactTimestamp={formatCompactTimestamp(message.created_at)}
+              fullTimestamp={formatMessageTimestamp(message.created_at)}
+              authorJoinedAt={
+                message.author
+                  ? formatFullTimestamp(message.author.created_at)
+                  : null
+              }
+              canDeleteMessage={canDeleteMessage}
+              onDeleteMessage={(nextMessage) => {
+                setMessagePendingDelete(nextMessage);
+              }}
+            />
+          );
+        })}
+      </div>
+      <DeleteMessageDialog
+        message={messagePendingDelete}
+        onOpenChange={(open) => {
+          if (!open) {
+            setMessagePendingDelete(null);
+          }
+        }}
+        onDeleteMessage={onDeleteMessage}
+      />
+    </>
   );
 }
 
@@ -202,7 +193,10 @@ export function MessagesPane({
   hydratedServerCount,
   isMessagesLoading,
   messagesError,
+  activeAccount,
+  canModerateMessages,
   onSendMessage,
+  onDeleteMessage,
 }: MessagesPaneProps) {
   const [draft, setDraft] = useState("");
   const [isSending, setIsSending] = useState(false);
@@ -543,6 +537,9 @@ export function MessagesPane({
             messages={selectedMessages}
             scrollContainerRef={scrollContainerRef}
             onScroll={handleMessagesScroll}
+            activeAccount={activeAccount}
+            canModerateMessages={canModerateMessages}
+            onDeleteMessage={onDeleteMessage}
           />
         )}
 
