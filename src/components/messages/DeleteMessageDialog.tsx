@@ -75,6 +75,7 @@ export function DeleteMessageDialog({
           <AlertDialogAction
             type="button"
             variant="destructive"
+            autoFocus
             disabled={isDeleting}
             onClick={() => {
               void handleConfirm();
