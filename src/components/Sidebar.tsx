@@ -2,11 +2,9 @@ import type { Channel, Server, ServerWithChannels } from "@runelink/sdk";
 import {
   Copy,
   Ellipsis,
-  Hash,
   Layers3,
   LoaderCircle,
   LogOut,
-  Plus,
   Trash2,
 } from "lucide-react";
 import { useEffect, useState } from "react";
@@ -14,12 +12,12 @@ import { toast } from "sonner";
 import { ProfileSelector } from "@/components/ProfileSelector";
 import { AddServerMenu } from "@/components/sidebar/AddServerMenu";
 import { CreateChannelDialog } from "@/components/sidebar/CreateChannelDialog";
+import { ChannelSection } from "@/components/sidebar/ChannelSection";
 import { DeleteChannelDialog } from "@/components/sidebar/DeleteChannelDialog";
 import { DeleteServerDialog } from "@/components/sidebar/DeleteServerDialog";
 import { LeaveServerDialog } from "@/components/sidebar/LeaveServerDialog";
 import { ServerRailButton } from "@/components/sidebar/ServerRailButton";
 import { formatServerTimestamp } from "@/components/sidebar/server-display";
-import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -28,7 +26,6 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Separator } from "@/components/ui/separator";
-import { cn } from "@/lib/utils";
 
 type SidebarProps = {
   servers: ServerWithChannels[];
@@ -240,7 +237,7 @@ export function Sidebar({
                   render={
                     <button
                       type="button"
-                      className="flex size-7 items-center justify-center rounded-full text-sidebar-foreground/45 transition hover:bg-sidebar-accent hover:text-sidebar-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+                      className="flex size-8 items-center justify-center rounded-xl text-sidebar-foreground/55 transition hover:bg-background/70 hover:text-sidebar-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
                       aria-label="Open server menu"
                     />
                   }
@@ -311,119 +308,29 @@ export function Sidebar({
             ) : null}
           </div>
           <p className="mt-1 line-clamp-2 text-sm text-sidebar-foreground/70">
-            {selectedServer?.server.description ??
-              (error
+            {selectedServer
+              ? (selectedServer.server.description ?? "")
+              : error
                 ? "RuneLink could not load your available servers."
-                : "Select a server on the left to browse its channels.")}
+                : "Select a server on the left to browse its channels."}
           </p>
         </div>
 
-        <div className="flex min-h-0 flex-1 flex-col px-3 py-3">
-          <div className="mb-2 px-2">
-            <div className="flex items-center justify-between gap-2">
-              <p className="text-xs font-semibold tracking-[0.2em] text-sidebar-foreground/55 uppercase">
-                Channels
-              </p>
-              <Button
-                type="button"
-                size="icon"
-                variant="ghost"
-                className="size-7 rounded-xl text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground"
-                onClick={() => {
-                  setIsCreateDialogOpen(true);
-                }}
-                disabled={!selectedServer}
-                aria-label="Create channel"
-              >
-                <Plus className="size-4" />
-              </Button>
-            </div>
-          </div>
-
-          <div className="min-h-0 flex-1 overflow-y-auto">
-            {error ? (
-              <div className="rounded-2xl border border-destructive/15 bg-destructive/5 px-4 py-3 text-sm text-sidebar-foreground/80">
-                {error}
-              </div>
-            ) : isLoading ? (
-              <div className="rounded-2xl border border-sidebar-border/70 bg-sidebar-accent/70 px-4 py-3 text-sm text-sidebar-foreground/70">
-                Loading servers and channels...
-              </div>
-            ) : !selectedServer ? (
-              <div className="rounded-2xl border border-dashed border-sidebar-border bg-sidebar-accent/50 px-4 py-3 text-sm text-sidebar-foreground/70">
-                Pick a server to see its channels.
-              </div>
-            ) : isSelectedServerHydrating ? (
-              <div className="rounded-2xl border border-sidebar-border/70 bg-sidebar-accent/70 px-4 py-3 text-sm text-sidebar-foreground/70">
-                Loading channels...
-              </div>
-            ) : selectedServer.channels.length === 0 ? (
-              <div className="rounded-2xl border border-dashed border-sidebar-border bg-sidebar-accent/50 px-4 py-3 text-sm text-sidebar-foreground/70">
-                This server does not have any channels yet.
-              </div>
-            ) : (
-              <div className="space-y-1">
-                {selectedServer.channels.map((channel) => {
-                  const isSelected = channel.id === selectedChannelId;
-
-                  return (
-                    <div
-                      key={channel.id}
-                      className={cn(
-                        "group flex items-center gap-2 rounded-2xl pr-2 transition",
-                        isSelected ? "bg-primary/12" : "hover:bg-sidebar-accent"
-                      )}
-                    >
-                      <Button
-                        variant="ghost"
-                        className={cn(
-                          "h-auto min-w-0 flex-1 cursor-pointer justify-start rounded-2xl px-3 py-3 text-left",
-                          isSelected
-                            ? "text-foreground hover:bg-transparent"
-                            : "text-sidebar-foreground/80 hover:bg-transparent hover:text-sidebar-foreground"
-                        )}
-                        onClick={() =>
-                          onSelectChannel(selectedServer.server.id, channel)
-                        }
-                      >
-                        <div className="flex min-w-0 items-start gap-3">
-                          <Hash className="mt-0.5 size-4 shrink-0 text-sidebar-foreground/50" />
-                          <div className="min-w-0">
-                            <p className="truncate text-sm font-medium">
-                              {channel.title}
-                            </p>
-                            {channel.description ? (
-                              <p className="mt-0.5 truncate text-xs text-sidebar-foreground/55">
-                                {channel.description}
-                              </p>
-                            ) : null}
-                          </div>
-                        </div>
-                      </Button>
-
-                      <Button
-                        type="button"
-                        size="icon"
-                        variant="ghost"
-                        className={cn(
-                          "size-8 shrink-0 rounded-xl text-sidebar-foreground/55 transition",
-                          "opacity-0 group-hover:opacity-100",
-                          "hover:bg-background/70 hover:text-destructive"
-                        )}
-                        onClick={() => {
-                          setChannelPendingDelete(channel);
-                        }}
-                        aria-label={`Delete ${channel.title}`}
-                      >
-                        <Trash2 className="size-4" />
-                      </Button>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-        </div>
+        <ChannelSection
+          selectedServer={selectedServer}
+          selectedChannelId={selectedChannelId}
+          isLoading={isLoading}
+          error={error}
+          isSelectedServerHydrating={isSelectedServerHydrating}
+          canDeleteSelectedServer={canDeleteSelectedServer}
+          onOpenCreateChannel={() => {
+            setIsCreateDialogOpen(true);
+          }}
+          onSelectChannel={onSelectChannel}
+          onDeleteChannel={(channel) => {
+            setChannelPendingDelete(channel);
+          }}
+        />
       </div>
 
       <button

@@ -1,0 +1,103 @@
+import type { Channel } from "@runelink/sdk";
+import { Copy, Ellipsis, Trash2 } from "lucide-react";
+import { toast } from "sonner";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { cn } from "@/lib/utils";
+import { formatServerTimestamp } from "./server-display";
+
+type ChannelActionsMenuProps = {
+  channel: Channel;
+  canDeleteChannel: boolean;
+  onDeleteChannel: (channel: Channel) => void;
+};
+
+export function ChannelActionsMenu({
+  channel,
+  canDeleteChannel,
+  onDeleteChannel,
+}: ChannelActionsMenuProps) {
+  async function handleCopyChannelId(channelId: string) {
+    if (typeof navigator === "undefined" || !navigator.clipboard) {
+      toast.error("Clipboard is not available.");
+      return;
+    }
+
+    try {
+      await navigator.clipboard.writeText(channelId);
+      toast.success(`Copied channel ID: ${channelId}`);
+    } catch {
+      toast.error("Failed to copy channel ID.");
+    }
+  }
+
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger
+        render={
+          <button
+            type="button"
+            className={cn(
+              "flex size-8 shrink-0 items-center justify-center rounded-xl text-sidebar-foreground/55 transition",
+              "opacity-0 group-hover:opacity-100",
+              "hover:bg-background/70 hover:text-sidebar-foreground focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+            )}
+            aria-label={`Open ${channel.title} menu`}
+          />
+        }
+      >
+        <Ellipsis className="size-4" />
+      </DropdownMenuTrigger>
+      <DropdownMenuContent
+        align="end"
+        side="bottom"
+        sideOffset={8}
+        className="w-64"
+      >
+        <div className="px-3 py-2 text-left">
+          <p className="truncate text-sm font-semibold text-sidebar-foreground">
+            {channel.title}
+          </p>
+          <div className="mt-2 space-y-1 text-xs text-sidebar-foreground/65">
+            <p>
+              Created:{" "}
+              <span className="text-sidebar-foreground/90">
+                {formatServerTimestamp(channel.created_at)}
+              </span>
+            </p>
+          </div>
+        </div>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem
+          className="cursor-pointer gap-3 rounded-xl px-3 py-2"
+          onClick={() => {
+            void handleCopyChannelId(channel.id);
+          }}
+        >
+          <Copy className="size-4" />
+          <span className="font-medium">Copy channel ID</span>
+        </DropdownMenuItem>
+        <DropdownMenuItem
+          variant="destructive"
+          disabled={!canDeleteChannel}
+          className="cursor-pointer gap-3 rounded-xl px-3 py-2"
+          onClick={() => {
+            if (!canDeleteChannel) {
+              return;
+            }
+
+            onDeleteChannel(channel);
+          }}
+        >
+          <Trash2 className="size-4" />
+          <span className="font-medium">Delete channel</span>
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
