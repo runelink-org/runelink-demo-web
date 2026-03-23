@@ -5,6 +5,8 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 type ChannelListItemProps = {
+  host: string;
+  serverId: string;
   channel: Channel;
   isSelected: boolean;
   canDeleteChannel: boolean;
@@ -13,6 +15,8 @@ type ChannelListItemProps = {
 };
 
 export function ChannelListItem({
+  host,
+  serverId,
   channel,
   isSelected,
   canDeleteChannel,
@@ -47,6 +51,8 @@ export function ChannelListItem({
       </Button>
 
       <ChannelActionsMenu
+        host={host}
+        serverId={serverId}
         channel={channel}
         canDeleteChannel={canDeleteChannel}
         onDeleteChannel={onDeleteChannel}

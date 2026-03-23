@@ -83,6 +83,8 @@ export function ChannelSection({
             {selectedServer.channels.map((channel) => (
               <ChannelListItem
                 key={channel.id}
+                host={selectedServer.server.host}
+                serverId={selectedServer.server.id}
                 channel={channel}
                 isSelected={channel.id === selectedChannelId}
                 canDeleteChannel={canDeleteSelectedServer}

@@ -8,6 +8,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { formatServerCliPath } from "@/lib/cli-path";
 import { formatServerTimestamp } from "./server-display";
 
 type ServerActionsMenuProps = {
@@ -34,6 +35,20 @@ export function ServerActionsMenu({
       toast.success(`Copied server ID: ${serverId}`);
     } catch {
       toast.error("Failed to copy server ID.");
+    }
+  }
+
+  async function handleCopyServerCliPath(host: string, serverId: string) {
+    if (typeof navigator === "undefined" || !navigator.clipboard) {
+      toast.error("Clipboard is not available.");
+      return;
+    }
+
+    try {
+      await navigator.clipboard.writeText(formatServerCliPath(host, serverId));
+      toast.success("Copied CLI path.");
+    } catch {
+      toast.error("Failed to copy CLI path.");
     }
   }
 
@@ -79,6 +94,15 @@ export function ServerActionsMenu({
         >
           <Copy className="size-4" />
           <span className="font-medium">Copy server ID</span>
+        </DropdownMenuItem>
+        <DropdownMenuItem
+          className="cursor-pointer gap-3 rounded-xl px-3 py-2"
+          onClick={() => {
+            void handleCopyServerCliPath(server.host, server.id);
+          }}
+        >
+          <Copy className="size-4" />
+          <span className="font-medium">Copy path for CLI</span>
         </DropdownMenuItem>
         <DropdownMenuItem
           variant="destructive"

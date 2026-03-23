@@ -7,15 +7,22 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { formatMessageCliPath } from "@/lib/cli-path";
 import { cn } from "@/lib/utils";
 
 type MessageActionsMenuProps = {
+  host: string;
+  serverId: string;
+  channelId: string;
   message: Message;
   canDeleteMessage: boolean;
   onDeleteMessage: (message: Message) => void;
 };
 
 export function MessageActionsMenu({
+  host,
+  serverId,
+  channelId,
   message,
   canDeleteMessage,
   onDeleteMessage,
@@ -77,6 +84,18 @@ export function MessageActionsMenu({
         >
           <Copy className="size-4" />
           <span className="font-medium">Copy message ID</span>
+        </DropdownMenuItem>
+        <DropdownMenuItem
+          className="cursor-pointer gap-3 rounded-xl px-3 py-2"
+          onClick={() => {
+            void copyToClipboard(
+              formatMessageCliPath(host, serverId, channelId, message.id),
+              "Copied CLI path."
+            );
+          }}
+        >
+          <Copy className="size-4" />
+          <span className="font-medium">Copy path for CLI</span>
         </DropdownMenuItem>
         <DropdownMenuItem
           variant="destructive"

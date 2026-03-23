@@ -2,6 +2,9 @@ import type { Message } from "@runelink/sdk";
 import { MessageActionsMenu } from "./MessageActionsMenu";
 
 type MessageListItemProps = {
+  host: string;
+  serverId: string;
+  channelId: string;
   message: Message;
   authorName: string;
   isCompact: boolean;
@@ -14,6 +17,9 @@ type MessageListItemProps = {
 };
 
 export function MessageListItem({
+  host,
+  serverId,
+  channelId,
   message,
   authorName,
   isCompact,
@@ -37,6 +43,9 @@ export function MessageListItem({
           }`}
         >
           <MessageActionsMenu
+            host={host}
+            serverId={serverId}
+            channelId={channelId}
             message={message}
             canDeleteMessage={canDeleteMessage}
             onDeleteMessage={onDeleteMessage}

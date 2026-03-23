@@ -8,16 +8,21 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { formatChannelCliPath } from "@/lib/cli-path";
 import { cn } from "@/lib/utils";
 import { formatServerTimestamp } from "./server-display";
 
 type ChannelActionsMenuProps = {
+  host: string;
+  serverId: string;
   channel: Channel;
   canDeleteChannel: boolean;
   onDeleteChannel: (channel: Channel) => void;
 };
 
 export function ChannelActionsMenu({
+  host,
+  serverId,
   channel,
   canDeleteChannel,
   onDeleteChannel,
@@ -33,6 +38,26 @@ export function ChannelActionsMenu({
       toast.success(`Copied channel ID: ${channelId}`);
     } catch {
       toast.error("Failed to copy channel ID.");
+    }
+  }
+
+  async function handleCopyChannelCliPath(
+    host: string,
+    serverId: string,
+    channelId: string
+  ) {
+    if (typeof navigator === "undefined" || !navigator.clipboard) {
+      toast.error("Clipboard is not available.");
+      return;
+    }
+
+    try {
+      await navigator.clipboard.writeText(
+        formatChannelCliPath(host, serverId, channelId)
+      );
+      toast.success("Copied CLI path.");
+    } catch {
+      toast.error("Failed to copy CLI path.");
     }
   }
 
@@ -81,6 +106,15 @@ export function ChannelActionsMenu({
         >
           <Copy className="size-4" />
           <span className="font-medium">Copy channel ID</span>
+        </DropdownMenuItem>
+        <DropdownMenuItem
+          className="cursor-pointer gap-3 rounded-xl px-3 py-2"
+          onClick={() => {
+            void handleCopyChannelCliPath(host, serverId, channel.id);
+          }}
+        >
+          <Copy className="size-4" />
+          <span className="font-medium">Copy path for CLI</span>
         </DropdownMenuItem>
         <DropdownMenuItem
           variant="destructive"
