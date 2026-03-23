@@ -1,5 +1,6 @@
 import type { Server } from "@runelink/sdk";
 import { useState } from "react";
+import { toast } from "sonner";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -35,8 +36,10 @@ export function DeleteServerDialog({
 
     try {
       await onDeleteServer(server.id, server.host);
+      toast.success(`Deleted server: ${server.title}`);
       onOpenChange(false);
     } catch (nextError) {
+      toast.error("Failed to delete server.");
       setError(
         nextError instanceof Error
           ? nextError.message

@@ -1,5 +1,6 @@
 import type { Server } from "@runelink/sdk";
 import { useState } from "react";
+import { toast } from "sonner";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -35,8 +36,10 @@ export function LeaveServerDialog({
 
     try {
       await onLeaveServer(server.id, server.host);
+      toast.success(`Left server: ${server.title}`);
       onOpenChange(false);
     } catch (nextError) {
+      toast.error("Failed to leave server.");
       setError(
         nextError instanceof Error
           ? nextError.message

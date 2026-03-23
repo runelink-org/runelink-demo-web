@@ -1,5 +1,6 @@
 import type { Channel } from "@runelink/sdk";
 import { useState } from "react";
+import { toast } from "sonner";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -35,8 +36,10 @@ export function DeleteChannelDialog({
 
     try {
       await onDeleteChannel(channel);
+      toast.success(`Deleted channel: ${channel.title}`);
       onOpenChange(false);
     } catch (nextError) {
+      toast.error("Failed to delete channel.");
       setError(
         nextError instanceof Error
           ? nextError.message
