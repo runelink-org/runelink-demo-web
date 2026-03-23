@@ -13,6 +13,7 @@ import { useChannelsStore } from "@/lib/channels-store";
 import { upsertMembership } from "@/lib/membership-utils";
 import { useMembershipsStore } from "@/lib/memberships-store";
 import { useMessagesStore } from "@/lib/messages-store";
+import { useNavigationStore } from "@/lib/navigation-store";
 import {
   serverChannelKey,
   serverUserKey,
@@ -330,6 +331,119 @@ function handleServerDeleted(serverId: string): void {
   if (!isLoadedServer(serverId)) {
     return;
   }
+
+  useMembershipsStore.setState((state) => {
+    const nextMembershipsByUserRefKey = Object.fromEntries(
+      Object.entries(state.membershipsByUserRefKey).map(
+        ([userKey, memberships]) => [
+          userKey,
+          removeMembership(memberships, serverId),
+        ]
+      )
+    );
+
+    const nextMembersByServerId = { ...state.membersByServerId };
+    const nextMemberByServerAndUserKey = Object.fromEntries(
+      Object.entries(state.memberByServerAndUserKey).filter(
+        ([key]) => !key.startsWith(`${serverId}:`)
+      )
+    );
+
+    delete nextMembersByServerId[serverId];
+
+    return {
+      membershipsByUserRefKey: nextMembershipsByUserRefKey,
+      membersByServerId: nextMembersByServerId,
+      memberByServerAndUserKey: nextMemberByServerAndUserKey,
+    };
+  });
+
+  useChannelsStore.setState((state) => {
+    const nextChannelById = { ...state.channelById };
+    const nextIsLoadingByServerId = { ...state.isLoadingByServerId };
+    const nextErrorByServerId = { ...state.errorByServerId };
+
+    for (const channel of state.channelsByServerId[serverId] ?? []) {
+      delete nextChannelById[channel.id];
+    }
+
+    delete nextIsLoadingByServerId[serverId];
+    delete nextErrorByServerId[serverId];
+
+    return {
+      channelsByServerId: Object.fromEntries(
+        Object.entries(state.channelsByServerId).filter(
+          ([key]) => key !== serverId
+        )
+      ),
+      channelById: nextChannelById,
+      isLoadingByServerId: nextIsLoadingByServerId,
+      errorByServerId: nextErrorByServerId,
+    };
+  });
+
+  useMessagesStore.setState((state) => {
+    const deletedChannelIds = new Set(
+      (useChannelsStore.getState().channelsByServerId[serverId] ?? []).map(
+        (channel) => channel.id
+      )
+    );
+    const nextMessageById = { ...state.messageById };
+    const nextIsLoadingByServerId = { ...state.isLoadingByServerId };
+    const nextErrorByServerId = { ...state.errorByServerId };
+    const nextIsLoadingByChannelKey = { ...state.isLoadingByChannelKey };
+    const nextErrorByChannelKey = { ...state.errorByChannelKey };
+
+    for (const channelKey of Object.keys(state.messagesByChannelKey)) {
+      if (!channelKey.startsWith(`${serverId}:`)) {
+        continue;
+      }
+
+      for (const message of state.messagesByChannelKey[channelKey] ?? []) {
+        delete nextMessageById[message.id];
+      }
+
+      delete nextIsLoadingByChannelKey[channelKey];
+      delete nextErrorByChannelKey[channelKey];
+    }
+
+    delete nextIsLoadingByServerId[serverId];
+    delete nextErrorByServerId[serverId];
+
+    return {
+      allMessages: state.allMessages.filter((message) => {
+        return !deletedChannelIds.has(message.channel_id);
+      }),
+      messagesByServerId: Object.fromEntries(
+        Object.entries(state.messagesByServerId).filter(
+          ([key]) => key !== serverId
+        )
+      ),
+      messagesByChannelKey: Object.fromEntries(
+        Object.entries(state.messagesByChannelKey).filter(
+          ([key]) => !key.startsWith(`${serverId}:`)
+        )
+      ),
+      messageById: nextMessageById,
+      isLoadingByServerId: nextIsLoadingByServerId,
+      isLoadingByChannelKey: nextIsLoadingByChannelKey,
+      errorByServerId: nextErrorByServerId,
+      errorByChannelKey: nextErrorByChannelKey,
+    };
+  });
+
+  useNavigationStore.setState((state) => {
+    const nextSelectedChannelIdByServerId = {
+      ...state.selectedChannelIdByServerId,
+    };
+    delete nextSelectedChannelIdByServerId[serverId];
+
+    return {
+      selectedServerId:
+        state.selectedServerId === serverId ? null : state.selectedServerId,
+      selectedChannelIdByServerId: nextSelectedChannelIdByServerId,
+    };
+  });
 
   useServersStore.setState((state) => {
     const nextServerById = { ...state.serverById };
