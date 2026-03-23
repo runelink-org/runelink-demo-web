@@ -17,6 +17,7 @@ type SidebarProps = {
   selectedChannelId: string | null;
   isLoading: boolean;
   error: string | null;
+  isSelectedServerHydrating: boolean;
   activeHost: string | null;
   onManageAccounts: () => void;
   onSelectAccount: () => void;
@@ -67,6 +68,7 @@ export function Sidebar({
   selectedChannelId,
   isLoading,
   error,
+  isSelectedServerHydrating,
   activeHost,
   onManageAccounts,
   onSelectAccount,
@@ -262,6 +264,10 @@ export function Sidebar({
             ) : !selectedServer ? (
               <div className="rounded-2xl border border-dashed border-sidebar-border bg-sidebar-accent/50 px-4 py-3 text-sm text-sidebar-foreground/70">
                 Pick a server to see its channels.
+              </div>
+            ) : isSelectedServerHydrating ? (
+              <div className="rounded-2xl border border-sidebar-border/70 bg-sidebar-accent/70 px-4 py-3 text-sm text-sidebar-foreground/70">
+                Loading channels...
               </div>
             ) : selectedServer.channels.length === 0 ? (
               <div className="rounded-2xl border border-dashed border-sidebar-border bg-sidebar-accent/50 px-4 py-3 text-sm text-sidebar-foreground/70">

@@ -6,6 +6,7 @@ import {
   type UserRef,
 } from "@runelink/sdk";
 import { create } from "zustand";
+import { debugRunelink } from "@/lib/runelink-debug";
 import { requestExpected } from "@/lib/runelink-request";
 import {
   bindStoreToActiveAccount,
@@ -145,6 +146,11 @@ export const useMembershipsStore = create<MembershipsState>((set) => ({
         },
         error: null,
       }));
+
+      debugRunelink("fetched memberships by user", {
+        userRef,
+        serverIds: reply.data.map((membership) => membership.server.id),
+      });
 
       return reply.data;
     } catch (error) {
@@ -312,6 +318,11 @@ export const useMembershipsStore = create<MembershipsState>((set) => ({
         },
         error: null,
       }));
+
+      debugRunelink("created membership", {
+        serverId,
+        user: reply.data.user,
+      });
 
       return reply.data;
     } catch (error) {

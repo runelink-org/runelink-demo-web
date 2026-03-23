@@ -17,6 +17,7 @@ import {
   serverUserKey,
   userRefKey,
 } from "@/lib/runelink-store-utils";
+import { debugRunelink } from "@/lib/runelink-debug";
 import { useServersStore } from "@/lib/servers-store";
 import { useUsersStore } from "@/lib/users-store";
 
@@ -148,10 +149,9 @@ function shouldApplyMembershipUpdate(
 ): boolean {
   const state = useMembershipsStore.getState();
   const userKey = userRefKey(membership.user);
-  const memberships = state.membershipsByUserRefKey[userKey] ?? [];
 
   return (
-    memberships.some((item) => item.server.id === membership.server.id) ||
+    userKey in state.membershipsByUserRefKey ||
     membership.server.id in state.membersByServerId ||
     serverUserKey(membership.server.id, membership.user) in
       state.memberByServerAndUserKey
@@ -197,8 +197,17 @@ function handleUserDeleted(userRef: UserRef): void {
 
 function handleMembershipUpsert(membership: FullServerMembership): void {
   if (!shouldApplyMembershipUpdate(membership)) {
+    debugRunelink("skip membership_upserted", {
+      serverId: membership.server.id,
+      user: membership.user,
+    });
     return;
   }
+
+  debugRunelink("apply membership_upserted", {
+    serverId: membership.server.id,
+    user: membership.user,
+  });
 
   const member = toServerMember(membership);
   const membershipEntry = toServerMembership(membership, membership.user);
@@ -253,8 +262,17 @@ function handleMembershipDeleted(serverId: string, userRef: UserRef): void {
   const hasMember = memberKey in state.memberByServerAndUserKey;
 
   if (!hasMembership && !hasMembers && !hasMember) {
+    debugRunelink("skip membership_deleted", {
+      serverId,
+      userRef,
+    });
     return;
   }
+
+  debugRunelink("apply membership_deleted", {
+    serverId,
+    userRef,
+  });
 
   useMembershipsStore.setState((currentState) => {
     const nextState: Partial<typeof currentState> = {};
@@ -506,6 +524,8 @@ function handleMessageDeleted(
 }
 
 export function handleRunelinkUpdate(update: WsUpdate): void {
+  debugRunelink("ws update", update);
+
   switch (update.type) {
     case "user_upserted":
       handleUserUpsert(update.data);

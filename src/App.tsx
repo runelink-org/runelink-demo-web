@@ -1,5 +1,5 @@
 import type { Channel, ServerWithChannels } from "@runelink/sdk";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { AuthScreen } from "@/components/AuthScreen";
 import { MessagesPane } from "@/components/MessagesPane";
 import { Sidebar } from "@/components/Sidebar";
@@ -16,6 +16,7 @@ import {
 } from "@/lib/runelink-connection-store";
 import { useMembershipsStore } from "@/lib/memberships-store";
 import { useMessagesStore } from "@/lib/messages-store";
+import { debugRunelink } from "@/lib/runelink-debug";
 import { serverChannelKey, userRefKey } from "@/lib/runelink-store-utils";
 import { useServersStore } from "@/lib/servers-store";
 
@@ -61,6 +62,7 @@ function getTargetHost(serverHost: string, activeHost: string): string | null {
 }
 
 export function App() {
+  const pendingServerDetailsRef = useRef<Set<string>>(new Set());
   const [isManagingAccounts, setIsManagingAccounts] = useState(false);
   const [manageSessionId, setManageSessionId] = useState(0);
   const [shouldPrefillAccount, setShouldPrefillAccount] = useState(true);
@@ -143,6 +145,10 @@ export function App() {
 
       try {
         const memberships = await fetchMembershipsByUser(account);
+        debugRunelink("sidebar memberships loaded", {
+          user: account,
+          serverIds: memberships.map((membership) => membership.server.id),
+        });
         const fullServers = await Promise.all(
           memberships.map((membership) =>
             fetchServerWithChannels(
@@ -214,7 +220,13 @@ export function App() {
 
   const hydratedServers = useMemo(() => {
     return (activeMemberships ?? [])
-      .map((membership) => serverWithChannelsById[membership.server.id])
+      .map(
+        (membership) =>
+          serverWithChannelsById[membership.server.id] ?? {
+            server: membership.server,
+            channels: [],
+          }
+      )
       .filter((value): value is ServerWithChannels => value !== undefined);
   }, [activeMemberships, serverWithChannelsById]);
 
@@ -227,10 +239,55 @@ export function App() {
     );
   }, [hydratedServers]);
 
+  const missingMembershipServers = useMemo(() => {
+    if (!activeAccount || !activeMemberships) {
+      return [];
+    }
+
+    return activeMemberships.filter(
+      (membership) => !(membership.server.id in serverWithChannelsById)
+    );
+  }, [activeAccount, activeMemberships, serverWithChannelsById]);
+
+  useEffect(() => {
+    if (!activeAccount || connectionStatus !== "connected") {
+      pendingServerDetailsRef.current.clear();
+      return;
+    }
+
+    const membershipsToFetch = missingMembershipServers.filter(
+      (membership) => !pendingServerDetailsRef.current.has(membership.server.id)
+    );
+
+    if (membershipsToFetch.length === 0) {
+      return;
+    }
+
+    for (const membership of membershipsToFetch) {
+      pendingServerDetailsRef.current.add(membership.server.id);
+      void fetchServerWithChannels(
+        membership.server.id,
+        getTargetHost(membership.server.host, activeAccount.host)
+      ).finally(() => {
+        pendingServerDetailsRef.current.delete(membership.server.id);
+      });
+    }
+  }, [
+    activeAccount,
+    connectionStatus,
+    fetchServerWithChannels,
+    missingMembershipServers,
+  ]);
+
   useEffect(() => {
     if (isSidebarLoading) {
       return;
     }
+
+    debugRunelink("hydrate sidebar servers", {
+      selectedServerId,
+      hydratedServerIds: hydratedServers.map((server) => server.server.id),
+    });
 
     const nextSelection = getFallbackSelection(hydratedServers, {
       serverId: selectedServerId,
@@ -265,6 +322,10 @@ export function App() {
   const selectedServer = selectedServerId
     ? (hydratedServerById[selectedServerId] ?? null)
     : null;
+  const isSelectedServerHydrating = selectedServer
+    ? !(selectedServer.server.id in serverWithChannelsById) ||
+      pendingServerDetailsRef.current.has(selectedServer.server.id)
+    : false;
   const selectedChannel = selectedServer?.channels.find(
     (channel) => channel.id === selectedChannelId
   );
@@ -418,6 +479,12 @@ export function App() {
       return;
     }
 
+    debugRunelink("join server start", {
+      serverId,
+      serverHost,
+      activeAccount,
+    });
+
     await createMembership(serverId, {
       user_ref: activeAccount,
       server_id: serverId,
@@ -429,6 +496,11 @@ export function App() {
       serverId,
       getTargetHost(serverHost, activeAccount.host)
     );
+    debugRunelink("join server finished", {
+      serverId,
+      serverHost,
+      activeAccount,
+    });
     selectServer(serverId);
   }
 
@@ -440,6 +512,7 @@ export function App() {
         selectedChannelId={selectedChannelId}
         isLoading={isSidebarLoading}
         error={sidebarError}
+        isSelectedServerHydrating={isSelectedServerHydrating}
         activeHost={activeAccount?.host ?? null}
         onManageAccounts={() => {
           setManageOriginAccountKey(activeAccountKey);
