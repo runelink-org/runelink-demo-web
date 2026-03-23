@@ -19,6 +19,7 @@ import { useMessagesStore } from "@/lib/messages-store";
 import { debugRunelink } from "@/lib/runelink-debug";
 import { serverChannelKey, userRefKey } from "@/lib/runelink-store-utils";
 import { useServersStore } from "@/lib/servers-store";
+import { useUsersStore } from "@/lib/users-store";
 
 function getFallbackSelection(
   servers: ServerWithChannels[],
@@ -92,6 +93,9 @@ export function App() {
   const createMembership = useMembershipsStore(
     (state) => state.createMembership
   );
+  const deleteMembership = useMembershipsStore(
+    (state) => state.deleteMembership
+  );
   const serverWithChannelsById = useServersStore(
     (state) => state.serverWithChannelsById
   );
@@ -100,6 +104,9 @@ export function App() {
     (state) => state.fetchServerWithChannels
   );
   const createServer = useServersStore((state) => state.createServer);
+  const deleteServer = useServersStore((state) => state.deleteServer);
+  const userByRefKey = useUsersStore((state) => state.userByRefKey);
+  const fetchUserByRef = useUsersStore((state) => state.fetchUserByRef);
   const createChannel = useChannelsStore((state) => state.createChannel);
   const deleteChannel = useChannelsStore((state) => state.deleteChannel);
   const messagesByChannelKey = useMessagesStore(
@@ -280,6 +287,17 @@ export function App() {
   ]);
 
   useEffect(() => {
+    if (!activeAccount || connectionStatus !== "connected") {
+      return;
+    }
+    const activeUserKey = userRefKey(activeAccount);
+    if (activeUserKey in userByRefKey) {
+      return;
+    }
+    void fetchUserByRef(activeAccount);
+  }, [activeAccount, connectionStatus, fetchUserByRef, userByRefKey]);
+
+  useEffect(() => {
     if (isSidebarLoading) {
       return;
     }
@@ -322,6 +340,16 @@ export function App() {
   const selectedServer = selectedServerId
     ? (hydratedServerById[selectedServerId] ?? null)
     : null;
+  const activeUser = activeAccount
+    ? (userByRefKey[userRefKey(activeAccount)] ?? null)
+    : null;
+  const selectedMembership = selectedServerId
+    ? (activeMemberships?.find(
+        (membership) => membership.server.id === selectedServerId
+      ) ?? null)
+    : null;
+  const canDeleteSelectedServer =
+    activeUser?.role === "admin" || selectedMembership?.role === "admin";
   const isSelectedServerHydrating = selectedServer
     ? !(selectedServer.server.id in serverWithChannelsById) ||
       pendingServerDetailsRef.current.has(selectedServer.server.id)
@@ -400,7 +428,6 @@ export function App() {
     if (!activeAccount || !selectedServer || !selectedChannel) {
       return;
     }
-
     await createMessage(
       selectedServer.server.id,
       selectedChannel.id,
@@ -416,7 +443,6 @@ export function App() {
     if (!activeAccount || !selectedServer) {
       return;
     }
-
     const channel = await createChannel(
       selectedServer.server.id,
       {
@@ -433,7 +459,6 @@ export function App() {
     if (!activeAccount || !selectedServer) {
       return;
     }
-
     await deleteChannel(
       selectedServer.server.id,
       channel.id,
@@ -446,9 +471,7 @@ export function App() {
     title: string,
     description: string
   ) {
-    if (!activeAccount) {
-      return;
-    }
+    if (!activeAccount) return;
 
     const server = await createServer(
       {
@@ -466,17 +489,12 @@ export function App() {
   }
 
   async function handleSearchServers(host: string) {
-    if (!activeAccount) {
-      return [];
-    }
-
+    if (!activeAccount) return [];
     return fetchServers(getTargetHost(host, activeAccount.host));
   }
 
   async function handleJoinServer(serverId: string, serverHost: string) {
-    if (!activeAccount) {
-      return;
-    }
+    if (!activeAccount) return;
 
     debugRunelink("join server start", {
       serverId,
@@ -500,6 +518,20 @@ export function App() {
       activeAccount,
     });
     selectServer(serverId);
+  }
+
+  async function handleLeaveServer(serverId: string, serverHost: string) {
+    if (!activeAccount) return;
+    await deleteMembership(
+      serverId,
+      activeAccount,
+      getTargetHost(serverHost, activeAccount.host)
+    );
+  }
+
+  async function handleDeleteServer(serverId: string, serverHost: string) {
+    if (!activeAccount) return;
+    await deleteServer(serverId, getTargetHost(serverHost, activeAccount.host));
   }
 
   return (
@@ -528,6 +560,9 @@ export function App() {
         onCreateServer={handleCreateServer}
         onSearchServers={handleSearchServers}
         onJoinServer={handleJoinServer}
+        onLeaveServer={handleLeaveServer}
+        onDeleteServer={handleDeleteServer}
+        canDeleteSelectedServer={canDeleteSelectedServer}
         onCreateChannel={handleCreateChannel}
         onDeleteChannel={handleDeleteChannel}
       />

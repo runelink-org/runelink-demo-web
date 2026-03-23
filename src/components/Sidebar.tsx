@@ -1,13 +1,32 @@
 import type { Channel, Server, ServerWithChannels } from "@runelink/sdk";
-import { Hash, Info, Layers3, LoaderCircle, Plus, Trash2 } from "lucide-react";
+import {
+  Copy,
+  Ellipsis,
+  Hash,
+  Layers3,
+  LoaderCircle,
+  LogOut,
+  Plus,
+  Trash2,
+} from "lucide-react";
 import { useEffect, useState } from "react";
+import { toast } from "sonner";
 import { ProfileSelector } from "@/components/ProfileSelector";
 import { AddServerMenu } from "@/components/sidebar/AddServerMenu";
 import { CreateChannelDialog } from "@/components/sidebar/CreateChannelDialog";
 import { DeleteChannelDialog } from "@/components/sidebar/DeleteChannelDialog";
+import { DeleteServerDialog } from "@/components/sidebar/DeleteServerDialog";
+import { LeaveServerDialog } from "@/components/sidebar/LeaveServerDialog";
 import { ServerRailButton } from "@/components/sidebar/ServerRailButton";
 import { formatServerTimestamp } from "@/components/sidebar/server-display";
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
 
@@ -30,6 +49,9 @@ type SidebarProps = {
   ) => Promise<void>;
   onSearchServers: (host: string) => Promise<Server[]>;
   onJoinServer: (serverId: string, serverHost: string) => Promise<void>;
+  onLeaveServer: (serverId: string, serverHost: string) => Promise<void>;
+  onDeleteServer: (serverId: string, serverHost: string) => Promise<void>;
+  canDeleteSelectedServer: boolean;
   onCreateChannel: (title: string, description: string) => Promise<void>;
   onDeleteChannel: (channel: Channel) => Promise<void>;
 };
@@ -77,6 +99,9 @@ export function Sidebar({
   onCreateServer,
   onSearchServers,
   onJoinServer,
+  onLeaveServer,
+  onDeleteServer,
+  canDeleteSelectedServer,
   onCreateChannel,
   onDeleteChannel,
 }: SidebarProps) {
@@ -86,6 +111,12 @@ export function Sidebar({
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [channelPendingDelete, setChannelPendingDelete] =
     useState<Channel | null>(null);
+  const [serverPendingLeave, setServerPendingLeave] = useState<Server | null>(
+    null
+  );
+  const [serverPendingDelete, setServerPendingDelete] = useState<Server | null>(
+    null
+  );
 
   const selectedServer = selectedServerId
     ? (servers.find((server) => server.server.id === selectedServerId) ?? null)
@@ -122,6 +153,20 @@ export function Sidebar({
 
     window.addEventListener("pointermove", handlePointerMove);
     window.addEventListener("pointerup", handlePointerUp);
+  }
+
+  async function handleCopyServerId(serverId: string) {
+    if (typeof navigator === "undefined" || !navigator.clipboard) {
+      toast.error("Clipboard is not available.");
+      return;
+    }
+
+    try {
+      await navigator.clipboard.writeText(serverId);
+      toast.success(`Copied server ID: ${serverId}`);
+    } catch {
+      toast.error("Failed to copy server ID.");
+    }
   }
 
   return (
@@ -185,41 +230,84 @@ export function Sidebar({
           <p className="text-xs font-semibold tracking-[0.2em] text-sidebar-foreground/55 uppercase">
             Server
           </p>
-          <div className="mt-2 flex min-w-0 items-center gap-2">
-            <h2 className="min-w-0 truncate text-lg font-semibold text-sidebar-foreground">
+          <div className="mt-2 flex min-w-0 items-center justify-between gap-2">
+            <h2 className="min-w-0 flex-1 truncate text-lg font-semibold text-sidebar-foreground">
               {selectedServer?.server.title ?? "Choose a server"}
             </h2>
             {selectedServer ? (
-              <div className="group/server-info relative shrink-0">
-                <button
-                  type="button"
-                  className="flex size-5 items-center justify-center text-sidebar-foreground/45 transition hover:text-sidebar-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
-                  aria-label="Show server details"
+              <DropdownMenu>
+                <DropdownMenuTrigger
+                  render={
+                    <button
+                      type="button"
+                      className="flex size-7 items-center justify-center rounded-full text-sidebar-foreground/45 transition hover:bg-sidebar-accent hover:text-sidebar-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+                      aria-label="Open server menu"
+                    />
+                  }
                 >
-                  <Info className="size-3.5" />
-                </button>
-                <div className="pointer-events-none absolute top-8 left-0 z-50 w-64 rounded-2xl border border-sidebar-border/80 bg-sidebar p-3 text-left opacity-0 shadow-lg shadow-black/8 transition duration-150 group-hover/server-info:pointer-events-auto group-hover/server-info:opacity-100 group-focus-within/server-info:pointer-events-auto group-focus-within/server-info:opacity-100">
-                  <p className="truncate text-sm font-semibold text-sidebar-foreground">
-                    {selectedServer.server.title}
-                  </p>
-                  <div className="mt-2 space-y-1.5 text-xs text-sidebar-foreground/65">
-                    <p>
-                      Host:{" "}
-                      <span className="text-sidebar-foreground/90">
+                  <Ellipsis className="size-4" />
+                </DropdownMenuTrigger>
+                <DropdownMenuContent
+                  align="end"
+                  side="bottom"
+                  sideOffset={8}
+                  className="w-72"
+                >
+                  <div className="px-3 py-2 text-left">
+                    <p className="truncate text-sm font-semibold text-sidebar-foreground">
+                      <span>{selectedServer.server.title}</span>
+                      <span className="text-sidebar-foreground/50">
                         @{selectedServer.server.host}
                       </span>
                     </p>
-                    <p>
-                      Created:{" "}
-                      <span className="text-sidebar-foreground/90">
-                        {formatServerTimestamp(
-                          selectedServer.server.created_at
-                        )}
-                      </span>
-                    </p>
+                    <div className="mt-2 space-y-1 text-xs text-sidebar-foreground/65">
+                      <p>
+                        Created:{" "}
+                        <span className="text-sidebar-foreground/90">
+                          {formatServerTimestamp(
+                            selectedServer.server.created_at
+                          )}
+                        </span>
+                      </p>
+                    </div>
                   </div>
-                </div>
-              </div>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem
+                    className="cursor-pointer gap-3 rounded-xl px-3 py-2"
+                    onClick={() => {
+                      void handleCopyServerId(selectedServer.server.id);
+                    }}
+                  >
+                    <Copy className="size-4" />
+                    <span className="font-medium">Copy server ID</span>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    variant="destructive"
+                    disabled={!canDeleteSelectedServer}
+                    className="cursor-pointer gap-3 rounded-xl px-3 py-2"
+                    onClick={() => {
+                      if (!canDeleteSelectedServer) {
+                        return;
+                      }
+
+                      setServerPendingDelete(selectedServer.server);
+                    }}
+                  >
+                    <Trash2 className="size-4" />
+                    <span className="font-medium">Delete server</span>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    variant="destructive"
+                    className="cursor-pointer gap-3 rounded-xl px-3 py-2"
+                    onClick={() => {
+                      setServerPendingLeave(selectedServer.server);
+                    }}
+                  >
+                    <LogOut className="size-4" />
+                    <span className="font-medium">Leave server</span>
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             ) : null}
           </div>
           <p className="mt-1 line-clamp-2 text-sm text-sidebar-foreground/70">
@@ -365,6 +453,26 @@ export function Sidebar({
           }
         }}
         onDeleteChannel={onDeleteChannel}
+      />
+
+      <LeaveServerDialog
+        server={serverPendingLeave}
+        onOpenChange={(open) => {
+          if (!open) {
+            setServerPendingLeave(null);
+          }
+        }}
+        onLeaveServer={onLeaveServer}
+      />
+
+      <DeleteServerDialog
+        server={serverPendingDelete}
+        onOpenChange={(open) => {
+          if (!open) {
+            setServerPendingDelete(null);
+          }
+        }}
+        onDeleteServer={onDeleteServer}
       />
     </aside>
   );
