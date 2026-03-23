@@ -33,40 +33,22 @@ type AuthSessionActionsBridge = {
   ) => Promise<string>;
 };
 
-type AuthSessionBridgeRuntime = {
-  authSessionStateBridge: AuthSessionStateBridge | null;
-  authSessionActionsBridge: AuthSessionActionsBridge | null;
-};
-
-declare global {
-  var __runelinkDemoWebAuthSessionBridgeRuntime__:
-    | AuthSessionBridgeRuntime
-    | undefined;
-}
-
-function getAuthSessionBridgeRuntime(): AuthSessionBridgeRuntime {
-  globalThis.__runelinkDemoWebAuthSessionBridgeRuntime__ ??= {
-    authSessionStateBridge: null,
-    authSessionActionsBridge: null,
-  };
-
-  return globalThis.__runelinkDemoWebAuthSessionBridgeRuntime__;
-}
+let authSessionStateBridge: AuthSessionStateBridge | null = null;
+let authSessionActionsBridge: AuthSessionActionsBridge | null = null;
 
 export function registerAuthSessionStateBridge(
   bridge: AuthSessionStateBridge
 ): void {
-  getAuthSessionBridgeRuntime().authSessionStateBridge = bridge;
+  authSessionStateBridge = bridge;
 }
 
 export function registerAuthSessionActionsBridge(
   bridge: AuthSessionActionsBridge
 ): void {
-  getAuthSessionBridgeRuntime().authSessionActionsBridge = bridge;
+  authSessionActionsBridge = bridge;
 }
 
 export function getAuthSessionSnapshot(): AuthSessionSnapshot {
-  const { authSessionStateBridge } = getAuthSessionBridgeRuntime();
   if (!authSessionStateBridge) {
     throw new Error("Auth session state bridge is not registered");
   }
@@ -75,7 +57,6 @@ export function getAuthSessionSnapshot(): AuthSessionSnapshot {
 }
 
 export function subscribeToAuthSession(listener: () => void): () => void {
-  const { authSessionStateBridge } = getAuthSessionBridgeRuntime();
   if (!authSessionStateBridge) {
     throw new Error("Auth session state bridge is not registered");
   }
@@ -88,7 +69,6 @@ export function storeAuthSessionToken(
   tokenResponse: TokenResponse,
   clientId: string
 ): void {
-  const { authSessionStateBridge } = getAuthSessionBridgeRuntime();
   if (!authSessionStateBridge) {
     throw new Error("Auth session state bridge is not registered");
   }
@@ -101,7 +81,6 @@ export function loginAuthSessionWithConnection(
   password: string,
   clientId: string
 ): Promise<TokenResponse> {
-  const { authSessionActionsBridge } = getAuthSessionBridgeRuntime();
   if (!authSessionActionsBridge) {
     throw new Error("Auth session actions bridge is not registered");
   }
@@ -117,7 +96,6 @@ export function signupAuthSessionWithConnection(
   userRef: UserRef,
   password: string
 ): Promise<{ tokenResponse: TokenResponse; clientId: string }> {
-  const { authSessionActionsBridge } = getAuthSessionBridgeRuntime();
   if (!authSessionActionsBridge) {
     throw new Error("Auth session actions bridge is not registered");
   }
@@ -132,7 +110,6 @@ export function refreshAuthSessionConnection(
   userRef: UserRef,
   auth: StoredAccountAuth
 ): Promise<string> {
-  const { authSessionActionsBridge } = getAuthSessionBridgeRuntime();
   if (!authSessionActionsBridge) {
     throw new Error("Auth session actions bridge is not registered");
   }
