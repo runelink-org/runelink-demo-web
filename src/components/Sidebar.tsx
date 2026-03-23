@@ -1,6 +1,7 @@
 import type { Channel, Server, ServerWithChannels } from "@runelink/sdk";
 import { Layers3, LoaderCircle } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { flushSync } from "react-dom";
 import { ProfileSelector } from "@/components/ProfileSelector";
 import { AddServerMenu } from "@/components/sidebar/AddServerMenu";
 import { CreateChannelDialog } from "@/components/sidebar/CreateChannelDialog";
@@ -16,6 +17,7 @@ type SidebarProps = {
   servers: ServerWithChannels[];
   selectedServerId: string | null;
   selectedChannelId: string | null;
+  selectedChannelIdByServerId: Record<string, string | null>;
   isLoading: boolean;
   error: string | null;
   isSelectedServerHydrating: boolean;
@@ -42,6 +44,11 @@ const CHANNEL_PANEL_WIDTH_KEY = "runelink.demo.channels-sidebar-width";
 const DEFAULT_CHANNEL_PANEL_WIDTH = 320;
 const MIN_CHANNEL_PANEL_WIDTH = 160;
 const MAX_CHANNEL_PANEL_WIDTH = 420;
+
+type PendingSelection = {
+  serverId: string;
+  channelId: string | null;
+};
 
 function clampChannelPanelWidth(value: number): number {
   return Math.min(
@@ -70,6 +77,7 @@ export function Sidebar({
   servers,
   selectedServerId,
   selectedChannelId,
+  selectedChannelIdByServerId,
   isLoading,
   error,
   isSelectedServerHydrating,
@@ -99,9 +107,22 @@ export function Sidebar({
   const [serverPendingDelete, setServerPendingDelete] = useState<Server | null>(
     null
   );
+  const [pendingSelection, setPendingSelection] =
+    useState<PendingSelection | null>(null);
+  const previousSelectionRef = useRef({
+    serverId: selectedServerId,
+    channelId: selectedChannelId,
+  });
+  const pendingNavigationTimeoutRef = useRef<number | null>(null);
 
-  const selectedServer = selectedServerId
-    ? (servers.find((server) => server.server.id === selectedServerId) ?? null)
+  const effectiveSelectedServerId =
+    pendingSelection?.serverId ?? selectedServerId;
+  const effectiveSelectedChannelId =
+    pendingSelection?.channelId ?? selectedChannelId;
+  const selectedServer = effectiveSelectedServerId
+    ? (servers.find(
+        (server) => server.server.id === effectiveSelectedServerId
+      ) ?? null)
     : null;
   const joinedServerIds = new Set(servers.map((server) => server.server.id));
 
@@ -115,6 +136,52 @@ export function Sidebar({
       String(channelPanelWidth)
     );
   }, [channelPanelWidth]);
+
+  useEffect(() => {
+    return () => {
+      if (pendingNavigationTimeoutRef.current !== null) {
+        window.clearTimeout(pendingNavigationTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!pendingSelection) {
+      previousSelectionRef.current = {
+        serverId: selectedServerId,
+        channelId: selectedChannelId,
+      };
+      return;
+    }
+
+    const selectionChangedExternally =
+      previousSelectionRef.current.serverId !== selectedServerId ||
+      previousSelectionRef.current.channelId !== selectedChannelId;
+    const pendingSelectionCommitted =
+      selectedServerId === pendingSelection.serverId &&
+      (pendingSelection.channelId === null ||
+        selectedChannelId === pendingSelection.channelId);
+
+    if (pendingSelectionCommitted || selectionChangedExternally) {
+      const timeoutId = window.setTimeout(() => {
+        setPendingSelection(null);
+      }, 0);
+
+      previousSelectionRef.current = {
+        serverId: selectedServerId,
+        channelId: selectedChannelId,
+      };
+
+      return () => {
+        window.clearTimeout(timeoutId);
+      };
+    }
+
+    previousSelectionRef.current = {
+      serverId: selectedServerId,
+      channelId: selectedChannelId,
+    };
+  }, [pendingSelection, selectedChannelId, selectedServerId]);
 
   function handleResizeStart(event: React.PointerEvent<HTMLButtonElement>) {
     event.preventDefault();
@@ -135,6 +202,24 @@ export function Sidebar({
 
     window.addEventListener("pointermove", handlePointerMove);
     window.addEventListener("pointerup", handlePointerUp);
+  }
+
+  function scheduleSelectionCommit(
+    nextSelection: PendingSelection,
+    commitSelection: () => void
+  ) {
+    if (pendingNavigationTimeoutRef.current !== null) {
+      window.clearTimeout(pendingNavigationTimeoutRef.current);
+    }
+
+    flushSync(() => {
+      setPendingSelection(nextSelection);
+    });
+
+    pendingNavigationTimeoutRef.current = window.setTimeout(() => {
+      pendingNavigationTimeoutRef.current = null;
+      commitSelection();
+    }, 0);
   }
 
   return (
@@ -162,14 +247,27 @@ export function Sidebar({
             </div>
           ) : (
             servers.map(({ server }) => {
-              const isSelected = server.id === selectedServerId;
+              const isSelected = server.id === effectiveSelectedServerId;
 
               return (
                 <ServerRailButton
                   key={server.id}
                   isSelected={isSelected}
                   server={server}
-                  onSelect={onSelectServer}
+                  onSelect={(nextServerId) => {
+                    const nextChannelId =
+                      selectedChannelIdByServerId[nextServerId] ?? null;
+
+                    scheduleSelectionCommit(
+                      {
+                        serverId: nextServerId,
+                        channelId: nextChannelId,
+                      },
+                      () => {
+                        onSelectServer(nextServerId);
+                      }
+                    );
+                  }}
                 />
               );
             })
@@ -226,7 +324,7 @@ export function Sidebar({
 
         <ChannelSection
           selectedServer={selectedServer}
-          selectedChannelId={selectedChannelId}
+          selectedChannelId={effectiveSelectedChannelId}
           isLoading={isLoading}
           error={error}
           isSelectedServerHydrating={isSelectedServerHydrating}
@@ -235,7 +333,17 @@ export function Sidebar({
           onOpenCreateChannel={() => {
             setIsCreateDialogOpen(true);
           }}
-          onSelectChannel={onSelectChannel}
+          onSelectChannel={(serverId, channel) => {
+            scheduleSelectionCommit(
+              {
+                serverId,
+                channelId: channel.id,
+              },
+              () => {
+                onSelectChannel(serverId, channel);
+              }
+            );
+          }}
           onDeleteChannel={(channel) => {
             setChannelPendingDelete(channel);
           }}

@@ -555,6 +555,7 @@ export function App() {
         servers={hydratedServers}
         selectedServerId={selectedServerId}
         selectedChannelId={selectedChannelId}
+        selectedChannelIdByServerId={selectedChannelIdByServerId}
         isLoading={isSidebarLoading}
         error={sidebarError}
         isSelectedServerHydrating={isSelectedServerHydrating}

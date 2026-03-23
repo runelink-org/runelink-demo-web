@@ -76,7 +76,7 @@ export function ServerRailButton({
         ref={buttonRef}
         type="button"
         className={cn(
-          "group relative flex size-12 shrink-0 cursor-pointer items-center justify-center rounded-2xl border text-sm font-semibold transition",
+          "group relative flex size-12 shrink-0 cursor-pointer items-center justify-center rounded-2xl border text-sm font-semibold",
           isSelected
             ? "border-primary/30 bg-primary text-primary-foreground"
             : "border-sidebar-border bg-sidebar-accent text-sidebar-foreground hover:border-sidebar-foreground/35 hover:bg-sidebar-accent/80"
@@ -92,7 +92,14 @@ export function ServerRailButton({
           className="pointer-events-none absolute -left-2 h-6 w-1 rounded-full bg-primary opacity-0 transition group-hover:opacity-60 data-[selected=true]:opacity-100"
           data-selected={isSelected}
         />
-        {getServerMonogram(server.title)}
+        <span
+          className={cn(
+            "pointer-events-none",
+            isSelected ? "text-primary-foreground" : "text-sidebar-foreground"
+          )}
+        >
+          {getServerMonogram(server.title)}
+        </span>
       </button>
 
       {isTooltipVisible && tooltipPosition && typeof document !== "undefined"
