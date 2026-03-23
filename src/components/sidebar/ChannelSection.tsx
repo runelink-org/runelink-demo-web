@@ -9,6 +9,7 @@ type ChannelSectionProps = {
   isLoading: boolean;
   error: string | null;
   isSelectedServerHydrating: boolean;
+  canCreateChannel: boolean;
   canDeleteSelectedServer: boolean;
   onOpenCreateChannel: () => void;
   onSelectChannel: (serverId: string, channel: Channel) => void;
@@ -21,11 +22,18 @@ export function ChannelSection({
   isLoading,
   error,
   isSelectedServerHydrating,
+  canCreateChannel,
   canDeleteSelectedServer,
   onOpenCreateChannel,
   onSelectChannel,
   onDeleteChannel,
 }: ChannelSectionProps) {
+  const createChannelTooltip = selectedServer
+    ? canCreateChannel
+      ? "Create channel"
+      : "Only server admins can create channels."
+    : "Select a server first.";
+
   return (
     <div className="flex min-h-0 flex-1 flex-col px-3 py-3">
       <div className="mb-2 px-2">
@@ -33,17 +41,19 @@ export function ChannelSection({
           <p className="text-xs font-semibold tracking-[0.2em] text-sidebar-foreground/55 uppercase">
             Channels
           </p>
-          <Button
-            type="button"
-            size="icon"
-            variant="ghost"
-            className="size-7 rounded-xl text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground"
-            onClick={onOpenCreateChannel}
-            disabled={!selectedServer}
-            aria-label="Create channel"
-          >
-            <Plus className="size-4" />
-          </Button>
+          <span className="inline-flex" title={createChannelTooltip}>
+            <Button
+              type="button"
+              size="icon"
+              variant="ghost"
+              className="size-7 rounded-xl text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground"
+              onClick={onOpenCreateChannel}
+              disabled={!selectedServer || !canCreateChannel}
+              aria-label={createChannelTooltip}
+            >
+              <Plus className="size-4" />
+            </Button>
+          </span>
         </div>
       </div>
 

@@ -230,6 +230,7 @@ export function Sidebar({
           isLoading={isLoading}
           error={error}
           isSelectedServerHydrating={isSelectedServerHydrating}
+          canCreateChannel={canDeleteSelectedServer}
           canDeleteSelectedServer={canDeleteSelectedServer}
           onOpenCreateChannel={() => {
             setIsCreateDialogOpen(true);
