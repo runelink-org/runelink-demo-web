@@ -359,6 +359,21 @@ export function App() {
   const selectedChannel = selectedServer?.channels.find(
     (channel) => channel.id === selectedChannelId
   );
+
+  useEffect(() => {
+    if (!selectedServer) {
+      document.title = "RuneLink";
+      return;
+    }
+
+    if (!selectedChannel) {
+      document.title = `RuneLink | ${selectedServer.server.title}`;
+      return;
+    }
+
+    document.title = `RuneLink | #${selectedChannel.title} | ${selectedServer.server.title}`;
+  }, [selectedChannel, selectedServer]);
+
   const selectedChannelKey =
     selectedServerId && selectedChannelId
       ? serverChannelKey(selectedServerId, selectedChannelId)
