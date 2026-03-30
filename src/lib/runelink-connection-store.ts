@@ -46,6 +46,12 @@ let syncQueued = false;
 let replaceInProgress = false;
 let lastActiveSessionKey: string | null = null;
 
+function getTransportSecurityMode(): "secure-only" | "prefer-secure" {
+  return window.location.protocol === "https:"
+    ? "secure-only"
+    : "prefer-secure";
+}
+
 export const useRunelinkConnectionStore = create<RunelinkConnectionStore>(
   (set) => ({
     initialized: false,
@@ -217,6 +223,7 @@ async function replaceConnection(host: string): Promise<RunelinkConnection> {
 
   const connection = new RunelinkConnection(host, {
     autoReconnect: true,
+    transportSecurity: getTransportSecurityMode(),
   });
 
   currentConnection = connection;
