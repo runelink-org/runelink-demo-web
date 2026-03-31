@@ -226,11 +226,18 @@ export function Sidebar({
     <aside className="relative z-20 flex h-dvh w-full shrink-0 border-r border-sidebar-border bg-sidebar/95 backdrop-blur md:w-auto">
       <div className="flex w-20 flex-col items-center gap-4 border-r border-sidebar-border/80 px-3 py-4">
         <div className="flex flex-col items-center gap-2 text-center">
-          <img
-            src="/runelink_logo.jpg"
-            alt="RuneLink"
-            className="size-12 rounded-2xl object-cover shadow-sm"
-          />
+          <>
+            <img
+              src="/logos/runelink_logo_black.svg"
+              alt="RuneLink"
+              className="size-12 drop-shadow-sm dark:hidden"
+            />
+            <img
+              src="/logos/runelink_logo_white.svg"
+              alt="RuneLink"
+              className="hidden size-12 drop-shadow-sm dark:block"
+            />
+          </>
           <p className="text-[11px] font-semibold tracking-[0.18em] text-sidebar-foreground/70 uppercase">
             Rune
           </p>

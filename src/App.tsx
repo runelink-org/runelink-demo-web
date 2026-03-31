@@ -367,11 +367,11 @@ export function App() {
     }
 
     if (!selectedChannel) {
-      document.title = `RuneLink | ${selectedServer.server.title}`;
+      document.title = `${selectedServer.server.title}`;
       return;
     }
 
-    document.title = `RuneLink | #${selectedChannel.title} | ${selectedServer.server.title}`;
+    document.title = `#${selectedChannel.title} | ${selectedServer.server.title}`;
   }, [selectedChannel, selectedServer]);
 
   const selectedChannelKey =

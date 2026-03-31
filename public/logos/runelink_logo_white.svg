@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<svg xmlns="http://www.w3.org/2000/svg"
+     width="700" height="700"
+     viewBox="0 0 700 700"
+     role="img"
+     aria-label="RuneLink logo">
+  <g fill="#ffffff">
+    <path d="M408 263 L250 263 L84 431 L82 580 L122 626 L184 568 L153 529 L157 454 L285 332 L408 334 L440 300 Z"/>
+    <path d="M583 76 L518 133 L549 173 L549 239 L536 257 L422 368 L296 368 L263 404 L294 437 L452 437 L616 273 L618 123 Z"/>
+    <path d="M557 46 L457 44 L324 177 L302 199 L302 227 L372 229 Z"/>
+    <path d="M401 475 L326 473 L143 656 L247 654 L399 502 Z"/>
+  </g>
+</svg>
