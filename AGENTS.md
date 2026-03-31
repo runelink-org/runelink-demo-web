@@ -6,6 +6,7 @@
   1. `pnpm format` - Format code
   2. `pnpm lint` - Lint for potential issues
   3. `pnpm build` - Verify TypeScript compilation and bundling
+- The current Vite build may emit an existing chunk-size warning; treat it as expected and do not call it out in summaries.
 - Validate unknown types with Zod schemas instead of using `as any` or type assertions
 - Use React 19+ event types with proper generics: `React.FormEvent<HTMLFormElement>` instead of bare `React.FormEvent`
 
