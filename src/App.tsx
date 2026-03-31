@@ -432,6 +432,7 @@ export function App() {
       !activeAuth
     );
   }, [activeAccount, activeAuth, isManagingAccounts, switchedToReadyAccount]);
+  const isChannelOpen = !!selectedServer && !!selectedChannel;
 
   function handleSelectServer(serverId: string) {
     selectServer(serverId);
@@ -439,6 +440,14 @@ export function App() {
 
   function handleSelectChannel(serverId: string, channel: Channel) {
     selectChannel(serverId, channel.id);
+  }
+
+  function handleDeselectChannel() {
+    if (!selectedServer) {
+      return;
+    }
+
+    selectChannel(selectedServer.server.id, null);
   }
 
   async function handleSendMessage(body: string) {
@@ -566,39 +575,59 @@ export function App() {
 
   return (
     <div className="flex h-screen overflow-hidden bg-[radial-gradient(circle_at_top,_color-mix(in_oklab,var(--color-primary)_8%,transparent),transparent_32%),linear-gradient(180deg,color-mix(in_oklab,var(--color-muted)_60%,white),transparent_28%)]">
-      <Sidebar
-        servers={hydratedServers}
-        selectedServerId={selectedServerId}
-        selectedChannelId={selectedChannelId}
-        selectedChannelIdByServerId={selectedChannelIdByServerId}
-        isLoading={isSidebarLoading}
-        error={sidebarError}
-        isSelectedServerHydrating={isSelectedServerHydrating}
-        activeHost={activeAccount?.host ?? null}
-        onManageAccounts={() => {
-          setManageOriginAccountKey(activeAccountKey);
-          setShouldPrefillAccount(false);
-          setManageSessionId((value) => value + 1);
-          setIsManagingAccounts(true);
-        }}
-        onSelectAccount={() => {
-          setShouldPrefillAccount(true);
-          setManageSessionId((value) => value + 1);
-          setIsManagingAccounts(true);
-        }}
-        onSelectServer={handleSelectServer}
-        onSelectChannel={handleSelectChannel}
-        onCreateServer={handleCreateServer}
-        onSearchServers={handleSearchServers}
-        onJoinServer={handleJoinServer}
-        onLeaveServer={handleLeaveServer}
-        onDeleteServer={handleDeleteServer}
-        canDeleteSelectedServer={canDeleteSelectedServer}
-        onCreateChannel={handleCreateChannel}
-        onDeleteChannel={handleDeleteChannel}
-      />
+      <div
+        className={[
+          "min-w-0 shrink-0",
+          shouldShowAuthScreen
+            ? "hidden"
+            : isChannelOpen
+              ? "hidden sm:flex"
+              : "flex w-full sm:w-auto",
+        ].join(" ")}
+      >
+        <Sidebar
+          servers={hydratedServers}
+          selectedServerId={selectedServerId}
+          selectedChannelId={selectedChannelId}
+          selectedChannelIdByServerId={selectedChannelIdByServerId}
+          isLoading={isSidebarLoading}
+          error={sidebarError}
+          isSelectedServerHydrating={isSelectedServerHydrating}
+          activeHost={activeAccount?.host ?? null}
+          onManageAccounts={() => {
+            setManageOriginAccountKey(activeAccountKey);
+            setShouldPrefillAccount(false);
+            setManageSessionId((value) => value + 1);
+            setIsManagingAccounts(true);
+          }}
+          onSelectAccount={() => {
+            setShouldPrefillAccount(true);
+            setManageSessionId((value) => value + 1);
+            setIsManagingAccounts(true);
+          }}
+          onSelectServer={handleSelectServer}
+          onSelectChannel={handleSelectChannel}
+          onCreateServer={handleCreateServer}
+          onSearchServers={handleSearchServers}
+          onJoinServer={handleJoinServer}
+          onLeaveServer={handleLeaveServer}
+          onDeleteServer={handleDeleteServer}
+          canDeleteSelectedServer={canDeleteSelectedServer}
+          onCreateChannel={handleCreateChannel}
+          onDeleteChannel={handleDeleteChannel}
+        />
+      </div>
 
-      <main className="flex min-h-0 min-w-0 flex-1 overflow-hidden">
+      <main
+        className={[
+          "min-h-0 min-w-0 overflow-hidden",
+          shouldShowAuthScreen
+            ? "flex flex-1"
+            : isChannelOpen
+              ? "flex flex-1"
+              : "hidden flex-1 sm:flex",
+        ].join(" ")}
+      >
         {shouldShowAuthScreen ? (
           <AuthScreen
             key={`${manageSessionId}:${activeAccount ? `${activeAccount.name}@${activeAccount.host}` : "no-account"}`}
@@ -623,7 +652,10 @@ export function App() {
             messagesError={messagesError}
             activeAccount={activeAccount}
             canModerateMessages={canModerateSelectedMessages}
+            canDeleteChannel={canDeleteSelectedServer}
+            onDeselectChannel={handleDeselectChannel}
             onSendMessage={handleSendMessage}
+            onDeleteChannel={handleDeleteChannel}
             onDeleteMessage={handleDeleteMessage}
           />
         )}

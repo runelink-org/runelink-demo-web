@@ -9,9 +9,10 @@ import {
   useRef,
   useState,
 } from "react";
-import { Hash, MessagesSquare, SendHorizonal, ServerCrash } from "lucide-react";
+import { ArrowLeft, Hash, SendHorizonal, ServerCrash } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { ChannelActionsMenu } from "@/components/sidebar/ChannelActionsMenu";
 import { Textarea } from "@/components/ui/textarea";
 import { sameUserRef } from "@/lib/account-storage";
 import { useMessageScrollStore } from "@/lib/message-scroll-store";
@@ -30,7 +31,12 @@ type MessagesPaneProps = {
   messagesError: string | null;
   activeAccount: UserRef | null;
   canModerateMessages: boolean;
+  canDeleteChannel: boolean;
+  onDeselectChannel: () => void;
   onSendMessage: (body: string) => Promise<void>;
+  onDeleteChannel: (
+    channel: ServerWithChannels["channels"][number]
+  ) => Promise<void>;
   onDeleteMessage: (message: Message) => Promise<void>;
 };
 
@@ -204,7 +210,10 @@ export function MessagesPane({
   messagesError,
   activeAccount,
   canModerateMessages,
+  canDeleteChannel,
+  onDeselectChannel,
   onSendMessage,
+  onDeleteChannel,
   onDeleteMessage,
 }: MessagesPaneProps) {
   const [draft, setDraft] = useState("");
@@ -283,6 +292,13 @@ export function MessagesPane({
 
   useEffect(() => {
     if (!canCompose || isSending) {
+      return;
+    }
+
+    if (
+      typeof window !== "undefined" &&
+      window.matchMedia("(max-width: 639px)").matches
+    ) {
       return;
     }
 
@@ -431,27 +447,43 @@ export function MessagesPane({
       <header className="border-b border-border/70 bg-background/80 px-4 py-4 backdrop-blur sm:px-6">
         {selectedServer && selectedChannel ? (
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div className="min-w-0">
-              <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                <MessagesSquare className="size-4" />
-                <span className="truncate">{selectedServer.server.title}</span>
+            <div className="flex min-w-0 items-start justify-between gap-3">
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-2">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="-ml-2 size-9 shrink-0 rounded-full sm:hidden"
+                    onClick={onDeselectChannel}
+                    aria-label="Back to channels"
+                  >
+                    <ArrowLeft className="size-4" />
+                  </Button>
+                  <Hash className="size-5 shrink-0 text-muted-foreground" />
+                  <h1 className="truncate text-xl font-semibold text-foreground">
+                    {selectedChannel.title}
+                  </h1>
+                </div>
               </div>
-              <div className="mt-1 flex items-center gap-2">
-                <Hash className="size-5 text-muted-foreground" />
-                <h1 className="truncate text-xl font-semibold text-foreground">
-                  {selectedChannel.title}
-                </h1>
+
+              <div className="shrink-0 sm:hidden">
+                <ChannelActionsMenu
+                  host={selectedServer.server.host}
+                  serverId={selectedServer.server.id}
+                  channel={selectedChannel}
+                  canDeleteChannel={canDeleteChannel}
+                  forceVisible
+                  onDeleteChannel={(channel) => {
+                    void onDeleteChannel(channel);
+                  }}
+                />
               </div>
-              {selectedChannel.description ? (
-                <p className="mt-1 text-sm text-muted-foreground">
-                  {selectedChannel.description}
-                </p>
-              ) : null}
             </div>
 
             <Badge
               variant="outline"
-              className="self-start rounded-full px-3 py-1"
+              className="hidden self-start rounded-full px-3 py-1 sm:inline-flex"
             >
               {selectedMessages.length} message
               {selectedMessages.length === 1 ? "" : "s"}

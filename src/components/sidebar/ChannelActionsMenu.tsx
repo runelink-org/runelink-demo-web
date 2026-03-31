@@ -18,6 +18,8 @@ type ChannelActionsMenuProps = {
   channel: Channel;
   canDeleteChannel: boolean;
   onDeleteChannel: (channel: Channel) => void;
+  className?: string;
+  forceVisible?: boolean;
 };
 
 export function ChannelActionsMenu({
@@ -26,6 +28,8 @@ export function ChannelActionsMenu({
   channel,
   canDeleteChannel,
   onDeleteChannel,
+  className,
+  forceVisible = false,
 }: ChannelActionsMenuProps) {
   async function handleCopyChannelId(channelId: string) {
     if (typeof navigator === "undefined" || !navigator.clipboard) {
@@ -69,8 +73,11 @@ export function ChannelActionsMenu({
             type="button"
             className={cn(
               "flex size-8 shrink-0 items-center justify-center rounded-xl text-sidebar-foreground/55 transition",
-              "opacity-0 group-hover:opacity-100",
-              "hover:bg-background/70 hover:text-sidebar-foreground focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+              forceVisible
+                ? "opacity-100"
+                : "opacity-0 group-hover:opacity-100",
+              "hover:bg-background/70 hover:text-sidebar-foreground focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40",
+              className
             )}
             aria-label={`Open ${channel.title} menu`}
           />

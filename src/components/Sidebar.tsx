@@ -223,7 +223,7 @@ export function Sidebar({
   }
 
   return (
-    <aside className="relative z-20 flex h-screen shrink-0 border-r border-sidebar-border bg-sidebar/95 backdrop-blur">
+    <aside className="relative z-20 flex h-screen w-full shrink-0 border-r border-sidebar-border bg-sidebar/95 backdrop-blur md:w-auto">
       <div className="flex w-20 flex-col items-center gap-4 border-r border-sidebar-border/80 px-3 py-4">
         <div className="flex flex-col items-center gap-2 text-center">
           <img
@@ -289,7 +289,7 @@ export function Sidebar({
       </div>
 
       <div
-        className="flex min-w-0 flex-col bg-[linear-gradient(180deg,color-mix(in_oklab,var(--color-sidebar)_96%,white),color-mix(in_oklab,var(--color-sidebar-accent)_85%,white))]"
+        className="flex min-w-0 flex-1 flex-col bg-[linear-gradient(180deg,color-mix(in_oklab,var(--color-sidebar)_96%,white),color-mix(in_oklab,var(--color-sidebar-accent)_85%,white))] md:flex-none"
         style={{ width: `${channelPanelWidth}px` }}
       >
         <div className="border-b border-sidebar-border/80 px-4 py-4">

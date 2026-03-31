@@ -182,7 +182,7 @@ export function AuthScreen({
             <div className="flex items-center justify-between gap-3">
               {canClose ? (
                 <Button type="button" variant="ghost" onClick={onDone}>
-                  Close
+                  Back
                 </Button>
               ) : (
                 <span className="text-muted-foreground text-sm">
