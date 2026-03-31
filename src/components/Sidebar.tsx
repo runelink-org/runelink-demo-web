@@ -223,7 +223,7 @@ export function Sidebar({
   }
 
   return (
-    <aside className="relative z-20 flex h-screen w-full shrink-0 border-r border-sidebar-border bg-sidebar/95 backdrop-blur md:w-auto">
+    <aside className="relative z-20 flex h-dvh w-full shrink-0 border-r border-sidebar-border bg-sidebar/95 backdrop-blur md:w-auto">
       <div className="flex w-20 flex-col items-center gap-4 border-r border-sidebar-border/80 px-3 py-4">
         <div className="flex flex-col items-center gap-2 text-center">
           <img
