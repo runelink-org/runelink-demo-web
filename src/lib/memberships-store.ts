@@ -34,7 +34,7 @@ type MembershipsState = {
     userRef: UserRef,
     targetHost?: TargetHost
   ) => Promise<ServerMember>;
-  createMembership: (
+  upsertMembership: (
     serverId: ServerId,
     newMembership: NewServerMembership
   ) => Promise<FullServerMembership>;
@@ -270,7 +270,7 @@ export const useMembershipsStore = create<MembershipsState>((set) => ({
     }
   },
 
-  async createMembership(serverId, newMembership) {
+  async upsertMembership(serverId, newMembership) {
     set({ error: null });
 
     try {

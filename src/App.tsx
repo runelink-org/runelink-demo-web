@@ -106,8 +106,8 @@ export function App() {
   const fetchMembersByServer = useMembershipsStore(
     (state) => state.fetchMembersByServer
   );
-  const createMembership = useMembershipsStore(
-    (state) => state.createMembership
+  const upsertMembership = useMembershipsStore(
+    (state) => state.upsertMembership
   );
   const deleteMembership = useMembershipsStore(
     (state) => state.deleteMembership
@@ -636,7 +636,7 @@ export function App() {
       activeAccount,
     });
 
-    await createMembership(serverId, {
+    await upsertMembership(serverId, {
       user_ref: activeAccount,
       server_id: serverId,
       server_host: serverHost,
@@ -666,36 +666,6 @@ export function App() {
   async function handleDeleteServer(serverId: string, serverHost: string) {
     if (!activeAccount) return;
     await deleteServer(serverId, getTargetHost(serverHost, activeAccount.host));
-  }
-
-  async function handleKickServerMember(
-    serverId: string,
-    serverHost: string,
-    member: { name: string; host: string }
-  ) {
-    if (!activeAccount) return;
-
-    await deleteMembership(
-      serverId,
-      member,
-      getTargetHost(serverHost, activeAccount.host)
-    );
-  }
-
-  async function handleUpdateServerMemberRole(
-    serverId: string,
-    serverHost: string,
-    member: { name: string; host: string },
-    role: "member" | "admin"
-  ) {
-    if (!activeAccount) return;
-
-    await createMembership(serverId, {
-      user_ref: member,
-      server_id: serverId,
-      server_host: serverHost,
-      role,
-    });
   }
 
   return (
@@ -775,29 +745,6 @@ export function App() {
             members={serverSettingsMembers}
             isLoadingMembers={isLoadingServerSettingsMembers}
             membersError={serverSettingsMembersError}
-            onKickMember={(member) => {
-              if (!serverSettingsServer) {
-                return;
-              }
-
-              void handleKickServerMember(
-                serverSettingsServer.server.id,
-                serverSettingsServer.server.host,
-                member.user
-              );
-            }}
-            onUpdateMemberRole={(member, role) => {
-              if (!serverSettingsServer) {
-                return;
-              }
-
-              void handleUpdateServerMemberRole(
-                serverSettingsServer.server.id,
-                serverSettingsServer.server.host,
-                member.user,
-                role
-              );
-            }}
             onDone={handleCloseServerSettings}
           />
         ) : (
