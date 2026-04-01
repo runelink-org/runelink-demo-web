@@ -33,6 +33,7 @@ type SidebarProps = {
   ) => Promise<void>;
   onSearchServers: (host: string) => Promise<Server[]>;
   onJoinServer: (serverId: string, serverHost: string) => Promise<void>;
+  onOpenServerSettings: (server: Server) => void;
   onLeaveServer: (serverId: string, serverHost: string) => Promise<void>;
   onDeleteServer: (serverId: string, serverHost: string) => Promise<void>;
   canDeleteSelectedServer: boolean;
@@ -89,6 +90,7 @@ export function Sidebar({
   onCreateServer,
   onSearchServers,
   onJoinServer,
+  onOpenServerSettings,
   onLeaveServer,
   onDeleteServer,
   canDeleteSelectedServer,
@@ -311,6 +313,7 @@ export function Sidebar({
               <ServerActionsMenu
                 server={selectedServer.server}
                 canDeleteServer={canDeleteSelectedServer}
+                onOpenServerSettings={onOpenServerSettings}
                 onDeleteServer={(server) => {
                   setServerPendingDelete(server);
                 }}

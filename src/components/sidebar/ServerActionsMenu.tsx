@@ -1,5 +1,5 @@
 import type { Server } from "@runelink/sdk";
-import { Copy, Ellipsis, LogOut, Trash2 } from "lucide-react";
+import { Cog, Copy, Ellipsis, LogOut, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import {
   DropdownMenu,
@@ -14,6 +14,7 @@ import { formatServerTimestamp } from "./server-display";
 type ServerActionsMenuProps = {
   server: Server;
   canDeleteServer: boolean;
+  onOpenServerSettings: (server: Server) => void;
   onDeleteServer: (server: Server) => void;
   onLeaveServer: (server: Server) => void;
 };
@@ -21,6 +22,7 @@ type ServerActionsMenuProps = {
 export function ServerActionsMenu({
   server,
   canDeleteServer,
+  onOpenServerSettings,
   onDeleteServer,
   onLeaveServer,
 }: ServerActionsMenuProps) {
@@ -86,6 +88,15 @@ export function ServerActionsMenu({
           </div>
         </div>
         <DropdownMenuSeparator />
+        <DropdownMenuItem
+          className="cursor-pointer gap-3 rounded-xl px-3 py-2"
+          onClick={() => {
+            onOpenServerSettings(server);
+          }}
+        >
+          <Cog className="size-4" />
+          <span className="font-medium">Settings</span>
+        </DropdownMenuItem>
         <DropdownMenuItem
           className="cursor-pointer gap-3 rounded-xl px-3 py-2"
           onClick={() => {

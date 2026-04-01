@@ -2,6 +2,7 @@ import type { Channel, Message, ServerWithChannels } from "@runelink/sdk";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AuthScreen } from "@/components/AuthScreen";
 import { MessagesPane } from "@/components/MessagesPane";
+import { ServerSettingsPage } from "@/components/server-settings/ServerSettingsPage";
 import { Sidebar } from "@/components/Sidebar";
 import {
   getActiveAccount,
@@ -70,6 +71,12 @@ export function App() {
   const [manageOriginAccountKey, setManageOriginAccountKey] = useState<
     string | null
   >(null);
+  const [serverSettingsServerId, setServerSettingsServerId] = useState<
+    string | null
+  >(null);
+  const [serverSettingsError, setServerSettingsError] = useState<string | null>(
+    null
+  );
   const [isSidebarLoading, setIsSidebarLoading] = useState(false);
   const [sidebarError, setSidebarError] = useState<string | null>(null);
 
@@ -89,6 +96,15 @@ export function App() {
   );
   const fetchMembershipsByUser = useMembershipsStore(
     (state) => state.fetchMembershipsByUser
+  );
+  const membersByServerId = useMembershipsStore(
+    (state) => state.membersByServerId
+  );
+  const isLoadingMembersByServerId = useMembershipsStore(
+    (state) => state.isLoadingByServerId
+  );
+  const fetchMembersByServer = useMembershipsStore(
+    (state) => state.fetchMembersByServer
   );
   const createMembership = useMembershipsStore(
     (state) => state.createMembership
@@ -359,8 +375,29 @@ export function App() {
   const selectedChannel = selectedServer?.channels.find(
     (channel) => channel.id === selectedChannelId
   );
+  const serverSettingsServer = serverSettingsServerId
+    ? (hydratedServerById[serverSettingsServerId] ?? null)
+    : null;
+  const serverSettingsMembers = serverSettingsServerId
+    ? (membersByServerId[serverSettingsServerId] ?? [])
+    : [];
+  const isServerSettingsOpen = !!serverSettingsServerId;
+  const isLoadingServerSettingsMembers = serverSettingsServerId
+    ? (isLoadingMembersByServerId[serverSettingsServerId] ?? false)
+    : false;
+  const serverSettingsMembersError =
+    isServerSettingsOpen &&
+    !isLoadingServerSettingsMembers &&
+    !serverSettingsServer
+      ? "Failed to load the selected server."
+      : serverSettingsError;
 
   useEffect(() => {
+    if (isServerSettingsOpen && serverSettingsServer) {
+      document.title = `${serverSettingsServer.server.title} Settings | RuneLink`;
+      return;
+    }
+
     if (!selectedServer) {
       document.title = "RuneLink";
       return;
@@ -372,7 +409,50 @@ export function App() {
     }
 
     document.title = `#${selectedChannel.title} | ${selectedServer.server.title}`;
-  }, [selectedChannel, selectedServer]);
+  }, [
+    isServerSettingsOpen,
+    selectedChannel,
+    selectedServer,
+    serverSettingsServer,
+  ]);
+
+  useEffect(() => {
+    if (!serverSettingsServerId) {
+      return;
+    }
+
+    const server = hydratedServerById[serverSettingsServerId] ?? null;
+    if (!server) {
+      setServerSettingsServerId(null);
+      return;
+    }
+
+    if (!activeAccount || connectionStatus !== "connected") {
+      return;
+    }
+
+    if (serverSettingsServerId in membersByServerId) {
+      setServerSettingsError(null);
+      return;
+    }
+
+    setServerSettingsError(null);
+    void fetchMembersByServer(
+      serverSettingsServerId,
+      getTargetHost(server.server.host, activeAccount.host)
+    ).catch((error) => {
+      setServerSettingsError(
+        error instanceof Error ? error.message : "Failed to load server members"
+      );
+    });
+  }, [
+    activeAccount,
+    connectionStatus,
+    fetchMembersByServer,
+    hydratedServerById,
+    membersByServerId,
+    serverSettingsServerId,
+  ]);
 
   const selectedChannelKey =
     selectedServerId && selectedChannelId
@@ -435,10 +515,14 @@ export function App() {
   const isChannelOpen = !!selectedServer && !!selectedChannel;
 
   function handleSelectServer(serverId: string) {
+    setServerSettingsError(null);
+    setServerSettingsServerId(null);
     selectServer(serverId);
   }
 
   function handleSelectChannel(serverId: string, channel: Channel) {
+    setServerSettingsError(null);
+    setServerSettingsServerId(null);
     selectChannel(serverId, channel.id);
   }
 
@@ -448,6 +532,17 @@ export function App() {
     }
 
     selectChannel(selectedServer.server.id, null);
+  }
+
+  function handleOpenServerSettings(serverId: string) {
+    setServerSettingsError(null);
+    setServerSettingsServerId(serverId);
+    selectServer(serverId);
+  }
+
+  function handleCloseServerSettings() {
+    setServerSettingsError(null);
+    setServerSettingsServerId(null);
   }
 
   async function handleSendMessage(body: string) {
@@ -580,9 +675,11 @@ export function App() {
           "min-w-0 shrink-0",
           shouldShowAuthScreen
             ? "hidden"
-            : isChannelOpen
-              ? "hidden sm:flex"
-              : "flex w-full sm:w-auto",
+            : isServerSettingsOpen
+              ? "hidden"
+              : isChannelOpen
+                ? "hidden sm:flex"
+                : "flex w-full sm:w-auto",
         ].join(" ")}
       >
         <Sidebar
@@ -610,6 +707,9 @@ export function App() {
           onCreateServer={handleCreateServer}
           onSearchServers={handleSearchServers}
           onJoinServer={handleJoinServer}
+          onOpenServerSettings={(server) => {
+            handleOpenServerSettings(server.id);
+          }}
           onLeaveServer={handleLeaveServer}
           onDeleteServer={handleDeleteServer}
           canDeleteSelectedServer={canDeleteSelectedServer}
@@ -623,7 +723,7 @@ export function App() {
           "min-h-0 min-w-0 overflow-hidden",
           shouldShowAuthScreen
             ? "flex flex-1"
-            : isChannelOpen
+            : isChannelOpen || isServerSettingsOpen
               ? "flex flex-1"
               : "hidden flex-1 sm:flex",
         ].join(" ")}
@@ -638,6 +738,14 @@ export function App() {
               setManageOriginAccountKey(null);
               setShouldPrefillAccount(true);
             }}
+          />
+        ) : isServerSettingsOpen ? (
+          <ServerSettingsPage
+            server={serverSettingsServer}
+            members={serverSettingsMembers}
+            isLoadingMembers={isLoadingServerSettingsMembers}
+            membersError={serverSettingsMembersError}
+            onDone={handleCloseServerSettings}
           />
         ) : (
           <MessagesPane
