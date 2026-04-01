@@ -9,6 +9,7 @@ import type {
   UserRef,
   WsUpdate,
 } from "@runelink/sdk";
+import { getActiveAccount, useAuthStore } from "@/lib/auth-store";
 import { useChannelsStore } from "@/lib/channels-store";
 import { upsertMembership } from "@/lib/membership-utils";
 import { useMembershipsStore } from "@/lib/memberships-store";
@@ -192,6 +193,10 @@ function removeServerMembershipState(serverId: string): void {
       )
     ),
     membersByServerId: omitRecordKey(state.membersByServerId, serverId),
+    hasFetchedMembersByServerId: omitRecordKey(
+      state.hasFetchedMembersByServerId,
+      serverId
+    ),
     memberByServerAndUserKey: filterRecord(
       state.memberByServerAndUserKey,
       (key) => !key.startsWith(`${serverId}:`)
@@ -278,6 +283,16 @@ function removeServerStoreState(serverId: string): void {
       serverId
     ),
   }));
+}
+
+function removeLoadedServerState(serverId: string): void {
+  const deletedChannelIds = getKnownChannelIdsForServer(serverId);
+
+  removeServerMembershipState(serverId);
+  removeServerMessageState(serverId, deletedChannelIds);
+  removeServerChannelState(serverId);
+  removeServerNavigationState(serverId);
+  removeServerStoreState(serverId);
 }
 
 function removeChannelMessageState(serverId: string, channelId: string): void {
@@ -469,6 +484,7 @@ function handleMembershipUpsert(membership: FullServerMembership): void {
 
 function handleMembershipDeleted(serverId: string, userRef: UserRef): void {
   const state = useMembershipsStore.getState();
+  const activeAccount = getActiveAccount(useAuthStore.getState());
   const userKey = userRefKey(userRef);
   const memberKey = serverUserKey(serverId, userRef);
   const hasMembership = (state.membershipsByUserRefKey[userKey] ?? []).some(
@@ -476,12 +492,23 @@ function handleMembershipDeleted(serverId: string, userRef: UserRef): void {
   );
   const hasMembers = serverId in state.membersByServerId;
   const hasMember = memberKey in state.memberByServerAndUserKey;
+  const isActiveAccountMembership =
+    activeAccount !== null && userRefKey(activeAccount) === userKey;
 
   if (!hasMembership && !hasMembers && !hasMember) {
     debugRunelink("skip membership_deleted", {
       serverId,
       userRef,
     });
+    return;
+  }
+
+  if (isActiveAccountMembership) {
+    debugRunelink("remove server state for active account membership_deleted", {
+      serverId,
+      userRef,
+    });
+    removeLoadedServerState(serverId);
     return;
   }
 
@@ -558,13 +585,7 @@ function handleServerDeleted(serverId: string): void {
     return;
   }
 
-  const deletedChannelIds = getKnownChannelIdsForServer(serverId);
-
-  removeServerMembershipState(serverId);
-  removeServerMessageState(serverId, deletedChannelIds);
-  removeServerChannelState(serverId);
-  removeServerNavigationState(serverId);
-  removeServerStoreState(serverId);
+  removeLoadedServerState(serverId);
 }
 
 function handleChannelUpsert(channel: Channel): void {

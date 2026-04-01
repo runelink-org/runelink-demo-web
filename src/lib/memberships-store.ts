@@ -20,6 +20,7 @@ import {
 type MembershipsState = {
   membershipsByUserRefKey: Record<string, ServerMembership[]>;
   membersByServerId: Record<string, ServerMember[]>;
+  hasFetchedMembersByServerId: Record<string, boolean>;
   memberByServerAndUserKey: Record<string, ServerMember>;
   isLoadingByUserRefKey: Record<string, boolean>;
   isLoadingByServerId: Record<string, boolean>;
@@ -49,6 +50,7 @@ type MembershipsState = {
 const initialState = {
   membershipsByUserRefKey: {},
   membersByServerId: {},
+  hasFetchedMembersByServerId: {},
   memberByServerAndUserKey: {},
   isLoadingByUserRefKey: {},
   isLoadingByServerId: {},
@@ -185,6 +187,10 @@ export const useMembershipsStore = create<MembershipsState>((set) => ({
         membersByServerId: {
           ...state.membersByServerId,
           [serverId]: reply.data,
+        },
+        hasFetchedMembersByServerId: {
+          ...state.hasFetchedMembersByServerId,
+          [serverId]: true,
         },
         memberByServerAndUserKey: {
           ...state.memberByServerAndUserKey,

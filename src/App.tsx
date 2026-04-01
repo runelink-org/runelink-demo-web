@@ -100,6 +100,9 @@ export function App() {
   const membersByServerId = useMembershipsStore(
     (state) => state.membersByServerId
   );
+  const hasFetchedMembersByServerId = useMembershipsStore(
+    (state) => state.hasFetchedMembersByServerId
+  );
   const isLoadingMembersByServerId = useMembershipsStore(
     (state) => state.isLoadingByServerId
   );
@@ -431,7 +434,7 @@ export function App() {
       return;
     }
 
-    if (serverSettingsServerId in membersByServerId) {
+    if (hasFetchedMembersByServerId[serverSettingsServerId]) {
       setServerSettingsError(null);
       return;
     }
@@ -450,7 +453,7 @@ export function App() {
     connectionStatus,
     fetchMembersByServer,
     hydratedServerById,
-    membersByServerId,
+    hasFetchedMembersByServerId,
     serverSettingsServerId,
   ]);
 
