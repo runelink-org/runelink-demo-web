@@ -81,7 +81,19 @@ export function MemberActionsMenu({
         server_host: serverHost,
         role,
       });
+      toast.success(
+        role === "admin"
+          ? `Promoted ${member.user.name} to admin.`
+          : `Removed admin from ${member.user.name}.`
+      );
       setIsConfirmingSelfDemotion(false);
+    } catch (error) {
+      toast.error(
+        role === "admin"
+          ? `Failed to promote ${member.user.name} to admin.`
+          : `Failed to remove admin from ${member.user.name}.`
+      );
+      throw error;
     } finally {
       setIsUpdatingRole(false);
     }
@@ -92,11 +104,17 @@ export function MemberActionsMenu({
       return;
     }
 
-    await deleteMembership(
-      serverId,
-      member.user,
-      getTargetHost(serverHost, activeAccount.host)
-    );
+    try {
+      await deleteMembership(
+        serverId,
+        member.user,
+        getTargetHost(serverHost, activeAccount.host)
+      );
+      toast.success(`Kicked ${member.user.name} from the server.`);
+    } catch (error) {
+      toast.error(`Failed to kick ${member.user.name}.`);
+      throw error;
+    }
   }
 
   const isActiveAccount =
@@ -134,11 +152,11 @@ export function MemberActionsMenu({
             <span className="font-medium">Copy user ID</span>
           </DropdownMenuItem>
           {canManageMemberRoles ? (
-          <DropdownMenuItem
-            variant={member.role === "admin" ? "destructive" : "default"}
-            className="cursor-pointer gap-3 rounded-xl px-3 py-2"
-            onClick={() => {
-              if (isSelfDemotion) {
+            <DropdownMenuItem
+              variant={member.role === "admin" ? "destructive" : "default"}
+              className="cursor-pointer gap-3 rounded-xl px-3 py-2"
+              onClick={() => {
+                if (isSelfDemotion) {
                   setIsConfirmingSelfDemotion(true);
                   return;
                 }

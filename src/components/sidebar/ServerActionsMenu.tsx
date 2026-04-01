@@ -1,5 +1,5 @@
 import type { Server } from "@runelink/sdk";
-import { Cog, Copy, Ellipsis, LogOut, Trash2 } from "lucide-react";
+import { Cog, Copy, Ellipsis, LogOut } from "lucide-react";
 import { toast } from "sonner";
 import {
   DropdownMenu,
@@ -11,17 +11,13 @@ import { formatServerCliPath } from "@/lib/cli-path";
 
 type ServerActionsMenuProps = {
   server: Server;
-  canDeleteServer: boolean;
   onOpenServerSettings: (server: Server) => void;
-  onDeleteServer: (server: Server) => void;
   onLeaveServer: (server: Server) => void;
 };
 
 export function ServerActionsMenu({
   server,
-  canDeleteServer,
   onOpenServerSettings,
-  onDeleteServer,
   onLeaveServer,
 }: ServerActionsMenuProps) {
   async function handleCopyServerId(serverId: string) {
@@ -97,21 +93,6 @@ export function ServerActionsMenu({
         >
           <Copy className="size-4" />
           <span className="font-medium">Copy path for CLI</span>
-        </DropdownMenuItem>
-        <DropdownMenuItem
-          variant="destructive"
-          disabled={!canDeleteServer}
-          className="cursor-pointer gap-3 rounded-xl px-3 py-2"
-          onClick={() => {
-            if (!canDeleteServer) {
-              return;
-            }
-
-            onDeleteServer(server);
-          }}
-        >
-          <Trash2 className="size-4" />
-          <span className="font-medium">Delete server</span>
         </DropdownMenuItem>
         <DropdownMenuItem
           variant="destructive"

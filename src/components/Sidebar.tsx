@@ -312,11 +312,7 @@ export function Sidebar({
             {selectedServer ? (
               <ServerActionsMenu
                 server={selectedServer.server}
-                canDeleteServer={canDeleteSelectedServer}
                 onOpenServerSettings={onOpenServerSettings}
-                onDeleteServer={(server) => {
-                  setServerPendingDelete(server);
-                }}
                 onLeaveServer={(server) => {
                   setServerPendingLeave(server);
                 }}

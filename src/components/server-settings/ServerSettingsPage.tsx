@@ -1,10 +1,14 @@
 import type { ServerMember, ServerWithChannels } from "@runelink/sdk";
-import { ArrowLeft, Users } from "lucide-react";
-import { useMemo } from "react";
+import { ArrowLeft, LogOut, Trash2, Users } from "lucide-react";
+import { useMemo, useState } from "react";
+import { DeleteServerDialog } from "@/components/sidebar/DeleteServerDialog";
+import { LeaveServerDialog } from "@/components/sidebar/LeaveServerDialog";
 import { Button } from "@/components/ui/button";
 import { ServerMembersTable } from "@/components/server-settings/ServerMembersTable";
 import { getActiveAccount, useAuthStore } from "@/lib/auth-store";
+import { useMembershipsStore } from "@/lib/memberships-store";
 import { userRefKey } from "@/lib/runelink-store-utils";
+import { useServersStore } from "@/lib/servers-store";
 import { useUsersStore } from "@/lib/users-store";
 
 type ServerSettingsPageProps = {
@@ -14,6 +18,10 @@ type ServerSettingsPageProps = {
   membersError: string | null;
   onDone: () => void;
 };
+
+function getTargetHost(serverHost: string, activeHost: string): string | null {
+  return serverHost === activeHost ? null : serverHost;
+}
 
 function formatServerTimestamp(value: Date): string {
   return new Intl.DateTimeFormat(undefined, {
@@ -32,7 +40,13 @@ export function ServerSettingsPage({
   membersError,
   onDone,
 }: ServerSettingsPageProps) {
+  const [isLeaveDialogOpen, setIsLeaveDialogOpen] = useState(false);
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const activeAccount = useAuthStore(getActiveAccount);
+  const deleteMembership = useMembershipsStore(
+    (state) => state.deleteMembership
+  );
+  const deleteServer = useServersStore((state) => state.deleteServer);
   const activeUser = useUsersStore((state) =>
     activeAccount
       ? (state.userByRefKey[userRefKey(activeAccount)] ?? null)
@@ -64,6 +78,28 @@ export function ServerSettingsPage({
   }, [activeAccount, members]);
   const canModerateMembers =
     activeUser?.role === "admin" || activeServerMember?.role === "admin";
+
+  async function handleLeaveServer(serverId: string, serverHost: string) {
+    if (!activeAccount) {
+      return;
+    }
+
+    await deleteMembership(
+      serverId,
+      activeAccount,
+      getTargetHost(serverHost, activeAccount.host)
+    );
+    onDone();
+  }
+
+  async function handleDeleteServer(serverId: string, serverHost: string) {
+    if (!activeAccount) {
+      return;
+    }
+
+    await deleteServer(serverId, getTargetHost(serverHost, activeAccount.host));
+    onDone();
+  }
 
   return (
     <section className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
@@ -191,6 +227,61 @@ export function ServerSettingsPage({
                 />
               </div>
             </section>
+
+            <section>
+              <div>
+                <h2 className="text-base font-semibold text-destructive">
+                  Danger zone
+                </h2>
+              </div>
+
+              <div className="mt-5 overflow-hidden rounded-2xl border border-destructive/20 bg-destructive/5">
+                <div className="grid gap-0 divide-y divide-destructive/15">
+                  <div className="flex items-center justify-between gap-4 px-4 py-4 sm:px-5">
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium text-destructive">
+                        Leave server
+                      </p>
+                    </div>
+                    <Button
+                      type="button"
+                      variant="destructive"
+                      className="shrink-0"
+                      onClick={() => {
+                        setIsLeaveDialogOpen(true);
+                      }}
+                    >
+                      <LogOut className="size-4" />
+                      Leave server
+                    </Button>
+                  </div>
+
+                  <div className="flex items-center justify-between gap-4 px-4 py-4 sm:px-5">
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium text-destructive">
+                        Delete server
+                      </p>
+                    </div>
+                    <Button
+                      type="button"
+                      variant="destructive"
+                      className="shrink-0"
+                      disabled={!canModerateMembers}
+                      onClick={() => {
+                        if (!canModerateMembers) {
+                          return;
+                        }
+
+                        setIsDeleteDialogOpen(true);
+                      }}
+                    >
+                      <Trash2 className="size-4" />
+                      Delete server
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            </section>
           </div>
         ) : (
           <div className="flex h-full items-center justify-center">
@@ -202,6 +293,22 @@ export function ServerSettingsPage({
             </div>
           </div>
         )}
+
+        <LeaveServerDialog
+          server={isLeaveDialogOpen && server ? server.server : null}
+          onOpenChange={(open) => {
+            setIsLeaveDialogOpen(open);
+          }}
+          onLeaveServer={handleLeaveServer}
+        />
+
+        <DeleteServerDialog
+          server={isDeleteDialogOpen && server ? server.server : null}
+          onOpenChange={(open) => {
+            setIsDeleteDialogOpen(open);
+          }}
+          onDeleteServer={handleDeleteServer}
+        />
       </div>
     </section>
   );
