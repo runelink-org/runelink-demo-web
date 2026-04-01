@@ -5,12 +5,10 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { formatChannelCliPath } from "@/lib/cli-path";
 import { cn } from "@/lib/utils";
-import { formatServerTimestamp } from "./server-display";
 
 type ChannelActionsMenuProps = {
   host: string;
@@ -91,20 +89,6 @@ export function ChannelActionsMenu({
         sideOffset={8}
         className="w-64"
       >
-        <div className="px-3 py-2 text-left">
-          <p className="truncate text-sm font-semibold text-sidebar-foreground">
-            {channel.title}
-          </p>
-          <div className="mt-2 space-y-1 text-xs text-sidebar-foreground/65">
-            <p>
-              Created:{" "}
-              <span className="text-sidebar-foreground/90">
-                {formatServerTimestamp(channel.created_at)}
-              </span>
-            </p>
-          </div>
-        </div>
-        <DropdownMenuSeparator />
         <DropdownMenuItem
           className="cursor-pointer gap-3 rounded-xl px-3 py-2"
           onClick={() => {

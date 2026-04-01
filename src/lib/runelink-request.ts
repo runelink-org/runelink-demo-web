@@ -31,7 +31,7 @@ type ExpectedReplyTypeByRequestType = {
   memberships_get_by_user: "memberships_get_by_user";
   memberships_get_members_by_server: "memberships_get_members_by_server";
   memberships_get_by_user_and_server: "memberships_get_by_user_and_server";
-  memberships_create: "memberships_create";
+  memberships_upsert: "memberships_upsert";
   memberships_delete: "memberships_delete";
   servers_create: "servers_create";
   servers_get_all: "servers_get_all";
@@ -70,7 +70,7 @@ const expectedReplyTypeByRequestType = {
   memberships_get_by_user: "memberships_get_by_user",
   memberships_get_members_by_server: "memberships_get_members_by_server",
   memberships_get_by_user_and_server: "memberships_get_by_user_and_server",
-  memberships_create: "memberships_create",
+  memberships_upsert: "memberships_upsert",
   memberships_delete: "memberships_delete",
   servers_create: "servers_create",
   servers_get_all: "servers_get_all",

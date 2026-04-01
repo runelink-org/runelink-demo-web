@@ -5,11 +5,9 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { formatServerCliPath } from "@/lib/cli-path";
-import { formatServerTimestamp } from "./server-display";
 
 type ServerActionsMenuProps = {
   server: Server;
@@ -73,21 +71,6 @@ export function ServerActionsMenu({
         sideOffset={8}
         className="w-72"
       >
-        <div className="px-3 py-2 text-left">
-          <p className="truncate text-sm font-semibold text-sidebar-foreground">
-            <span>{server.title}</span>
-            <span className="text-sidebar-foreground/50">@{server.host}</span>
-          </p>
-          <div className="mt-2 space-y-1 text-xs text-sidebar-foreground/65">
-            <p>
-              Created:{" "}
-              <span className="text-sidebar-foreground/90">
-                {formatServerTimestamp(server.created_at)}
-              </span>
-            </p>
-          </div>
-        </div>
-        <DropdownMenuSeparator />
         <DropdownMenuItem
           className="cursor-pointer gap-3 rounded-xl px-3 py-2"
           onClick={() => {

@@ -274,8 +274,8 @@ export const useMembershipsStore = create<MembershipsState>((set) => ({
     set({ error: null });
 
     try {
-      const reply = await requestExpected("memberships_create", {
-        type: "memberships_create",
+      const reply = await requestExpected("memberships_upsert", {
+        type: "memberships_upsert",
         data: {
           server_id: serverId,
           new_membership: newMembership,

@@ -1,8 +1,28 @@
-import type { ServerMember, ServerWithChannels } from "@runelink/sdk";
-import { ArrowLeft, CircleDashed, Users } from "lucide-react";
+import type {
+  ServerMember,
+  ServerRole,
+  ServerWithChannels,
+} from "@runelink/sdk";
+import {
+  ArrowLeft,
+  CircleDashed,
+  Copy,
+  Ellipsis,
+  Shield,
+  ShieldOff,
+  Trash2,
+  Users,
+} from "lucide-react";
 import { useMemo } from "react";
+import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import {
   Table,
   TableBody,
@@ -11,13 +31,26 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { getActiveAccount, useAuthStore } from "@/lib/auth-store";
+import { userRefKey } from "@/lib/runelink-store-utils";
+import { useUsersStore } from "@/lib/users-store";
 
 type ServerSettingsPageProps = {
   server: ServerWithChannels | null;
   members: ServerMember[];
   isLoadingMembers: boolean;
   membersError: string | null;
+  onKickMember: (member: ServerMember) => void;
+  onUpdateMemberRole: (member: ServerMember, role: ServerRole) => void;
   onDone: () => void;
+};
+
+type MemberActionsMenuProps = {
+  member: ServerMember;
+  canKickMembers: boolean;
+  canManageMemberRoles: boolean;
+  onKickMember: (member: ServerMember) => void;
+  onUpdateMemberRole: (member: ServerMember, role: ServerRole) => void;
 };
 
 function formatServerTimestamp(value: Date): string {
@@ -34,13 +67,113 @@ function formatRoleLabel(role: ServerMember["role"]): string {
   return role === "admin" ? "Admin" : "Member";
 }
 
+function formatUserId(user: { name: string; host: string }): string {
+  return `${user.name}@${user.host}`;
+}
+
+function MemberActionsMenu({
+  member,
+  canKickMembers,
+  canManageMemberRoles,
+  onKickMember,
+  onUpdateMemberRole,
+}: MemberActionsMenuProps) {
+  async function handleCopyUserId() {
+    if (typeof navigator === "undefined" || !navigator.clipboard) {
+      toast.error("Clipboard is not available.");
+      return;
+    }
+
+    const userId = formatUserId(member.user);
+
+    try {
+      await navigator.clipboard.writeText(userId);
+      toast.success(`Copied user ID: ${userId}`);
+    } catch {
+      toast.error("Failed to copy user ID.");
+    }
+  }
+
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger
+        render={
+          <button
+            type="button"
+            className="flex size-8 shrink-0 items-center justify-center rounded-xl text-muted-foreground/55 transition hover:bg-background hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+            aria-label={`Open ${member.user.name} menu`}
+          />
+        }
+      >
+        <Ellipsis className="size-4" />
+      </DropdownMenuTrigger>
+      <DropdownMenuContent
+        align="end"
+        side="bottom"
+        sideOffset={8}
+        className="w-56"
+      >
+        <DropdownMenuItem
+          className="cursor-pointer gap-3 rounded-xl px-3 py-2"
+          onClick={() => {
+            void handleCopyUserId();
+          }}
+        >
+          <Copy className="size-4" />
+          <span className="font-medium">Copy user ID</span>
+        </DropdownMenuItem>
+        {canManageMemberRoles ? (
+          <DropdownMenuItem
+            className="cursor-pointer gap-3 rounded-xl px-3 py-2"
+            onClick={() => {
+              onUpdateMemberRole(
+                member,
+                member.role === "admin" ? "member" : "admin"
+              );
+            }}
+          >
+            {member.role === "admin" ? (
+              <ShieldOff className="size-4" />
+            ) : (
+              <Shield className="size-4" />
+            )}
+            <span className="font-medium">
+              {member.role === "admin" ? "Remove admin" : "Promote to admin"}
+            </span>
+          </DropdownMenuItem>
+        ) : null}
+        {canKickMembers ? (
+          <DropdownMenuItem
+            variant="destructive"
+            className="cursor-pointer gap-3 rounded-xl px-3 py-2"
+            onClick={() => {
+              onKickMember(member);
+            }}
+          >
+            <Trash2 className="size-4" />
+            <span className="font-medium">Kick member</span>
+          </DropdownMenuItem>
+        ) : null}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
 export function ServerSettingsPage({
   server,
   members,
   isLoadingMembers,
   membersError,
+  onKickMember,
+  onUpdateMemberRole,
   onDone,
 }: ServerSettingsPageProps) {
+  const activeAccount = useAuthStore(getActiveAccount);
+  const activeUser = useUsersStore((state) =>
+    activeAccount
+      ? (state.userByRefKey[userRefKey(activeAccount)] ?? null)
+      : null
+  );
   const sortedMembers = useMemo(() => {
     return [...members].sort((left, right) => {
       if (left.role !== right.role) {
@@ -52,6 +185,21 @@ export function ServerSettingsPage({
       });
     });
   }, [members]);
+  const activeServerMember = useMemo(() => {
+    if (!activeAccount) {
+      return null;
+    }
+
+    return (
+      members.find(
+        (member) =>
+          member.user.name === activeAccount.name &&
+          member.user.host === activeAccount.host
+      ) ?? null
+    );
+  }, [activeAccount, members]);
+  const canModerateMembers =
+    activeUser?.role === "admin" || activeServerMember?.role === "admin";
 
   return (
     <section className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
@@ -189,6 +337,7 @@ export function ServerSettingsPage({
                           <TableHead>Role</TableHead>
                           <TableHead>Status</TableHead>
                           <TableHead className="text-right">Joined</TableHead>
+                          <TableHead className="w-0 pr-3" />
                         </TableRow>
                       </TableHeader>
                       <TableBody>
@@ -197,9 +346,14 @@ export function ServerSettingsPage({
                             .slice(0, 2)
                             .toUpperCase();
 
+                          const isActiveAccount =
+                            activeAccount?.name === member.user.name &&
+                            activeAccount.host === member.user.host;
+
                           return (
                             <TableRow
-                              key={`${member.user.name}@${member.user.host}`}
+                              key={formatUserId(member.user)}
+                              className="group"
                             >
                               <TableCell>
                                 <div className="flex min-w-0 items-center gap-3">
@@ -236,6 +390,19 @@ export function ServerSettingsPage({
                               </TableCell>
                               <TableCell className="text-right text-sm text-muted-foreground">
                                 {formatServerTimestamp(member.joined_at)}
+                              </TableCell>
+                              <TableCell className="w-0 pr-3 text-right">
+                                <MemberActionsMenu
+                                  member={member}
+                                  canKickMembers={
+                                    canModerateMembers && !isActiveAccount
+                                  }
+                                  canManageMemberRoles={
+                                    canModerateMembers && !isActiveAccount
+                                  }
+                                  onKickMember={onKickMember}
+                                  onUpdateMemberRole={onUpdateMemberRole}
+                                />
                               </TableCell>
                             </TableRow>
                           );
