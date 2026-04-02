@@ -105,6 +105,7 @@ export function ServerMembersTable({
                     <div className="min-w-0">
                       <p className="truncate font-medium text-foreground">
                         {member.user.name}
+                        {isActiveAccount ? " (you)" : ""}
                       </p>
                       <p className="text-muted-foreground truncate text-xs">
                         @{member.user.host}
