@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { LockKeyhole, Sparkles } from "lucide-react";
+import { MAX_USERNAME_LENGTH } from "@runelink/sdk";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -16,6 +17,7 @@ import {
   FieldLabel,
 } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
+import { normalizeHostDraft } from "@/lib/account-storage";
 import { cn } from "@/lib/utils";
 import { getActiveAccount, useAuthStore } from "@/lib/auth-store";
 
@@ -26,6 +28,16 @@ type AuthScreenProps = {
   prefillAccount: boolean;
   onDone: () => void;
 };
+
+function normalizeUsernameDraft(input: string): string {
+  return input
+    .toLowerCase()
+    .replace(/[\s_.-]+/g, "-")
+    .replace(/[^a-z0-9-]/g, "")
+    .replace(/^-+/g, "")
+    .replace(/-+/g, "-")
+    .slice(0, MAX_USERNAME_LENGTH);
+}
 
 export function AuthScreen({
   canClose,
@@ -134,7 +146,9 @@ export function AuthScreen({
                     autoComplete="url"
                     placeholder="runelink.chat"
                     value={host}
-                    onChange={(event) => setHost(event.target.value)}
+                    onChange={(event) =>
+                      setHost(normalizeHostDraft(event.target.value))
+                    }
                     required
                   />
                 </FieldContent>
@@ -147,8 +161,11 @@ export function AuthScreen({
                     id="auth-name"
                     autoComplete="username"
                     placeholder="enter your username"
+                    maxLength={MAX_USERNAME_LENGTH}
                     value={name}
-                    onChange={(event) => setName(event.target.value)}
+                    onChange={(event) =>
+                      setName(normalizeUsernameDraft(event.target.value))
+                    }
                     required
                   />
                 </FieldContent>

@@ -1,4 +1,10 @@
-import { UserRefSchema, type UserRef } from "@runelink/sdk";
+import {
+  UserRefSchema,
+  normalizeHostInput,
+  validateHost,
+  validateUsername,
+  type UserRef,
+} from "@runelink/sdk";
 import { z } from "zod";
 
 const APP_CONFIG_STORAGE_KEY = "runelink.demo.app-config";
@@ -60,10 +66,7 @@ function saveStoredJson<T>(key: string, value: T): void {
 }
 
 export function normalizeHost(host: string): string {
-  return host
-    .trim()
-    .replace(/^https?:\/\//, "")
-    .replace(/\/$/, "");
+  return validateHost(host);
 }
 
 export function normalizeAccountInput(input: {
@@ -71,9 +74,13 @@ export function normalizeAccountInput(input: {
   host: string;
 }): UserRef {
   return UserRefSchema.parse({
-    name: input.name.trim(),
+    name: validateUsername(input.name),
     host: normalizeHost(input.host),
   });
+}
+
+export function normalizeHostDraft(host: string): string {
+  return normalizeHostInput(host);
 }
 
 export function accountStorageKey(userRef: UserRef): string {
