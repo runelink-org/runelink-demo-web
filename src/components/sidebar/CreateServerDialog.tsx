@@ -113,7 +113,7 @@ export function CreateServerDialog({
           <AlertDialogHeader>
             <AlertDialogTitle>Create server</AlertDialogTitle>
             <AlertDialogDescription>
-              Start a new server that other people can join from your host.
+              Start a new server that other users can join.
             </AlertDialogDescription>
           </AlertDialogHeader>
 

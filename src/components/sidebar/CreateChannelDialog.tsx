@@ -11,7 +11,6 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 
 type CreateChannelDialogProps = {
   open: boolean;
@@ -27,14 +26,12 @@ export function CreateChannelDialog({
   onCreateChannel,
 }: CreateChannelDialogProps) {
   const [title, setTitle] = useState("");
-  const [description, setDescription] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [isCreating, setIsCreating] = useState(false);
 
   useEffect(() => {
     if (!open) {
       setTitle("");
-      setDescription("");
       setError(null);
     }
   }, [open]);
@@ -52,6 +49,7 @@ export function CreateChannelDialog({
     setError(null);
 
     try {
+      const description = "";
       await onCreateChannel(nextTitle, description);
       onOpenChange(false);
     } catch (nextError) {
@@ -93,18 +91,6 @@ export function CreateChannelDialog({
               placeholder="general"
               disabled={isCreating}
               autoFocus
-            />
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="channel-description">Description</Label>
-            <Textarea
-              id="channel-description"
-              value={description}
-              onChange={(event) => setDescription(event.target.value)}
-              placeholder="What is this channel for?"
-              className="min-h-24 resize-none"
-              disabled={isCreating}
             />
           </div>
 

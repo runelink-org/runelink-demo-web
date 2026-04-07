@@ -133,7 +133,8 @@ export function JoinServerDialog({
           <AlertDialogHeader>
             <AlertDialogTitle>Join server</AlertDialogTitle>
             <AlertDialogDescription>
-              Search a host for available servers, then join the one you want.
+              Enter a host to view its public servers, then join the one you
+              want.
             </AlertDialogDescription>
           </AlertDialogHeader>
 

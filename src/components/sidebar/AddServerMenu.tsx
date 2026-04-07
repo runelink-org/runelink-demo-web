@@ -128,7 +128,7 @@ export function AddServerMenu({
             <div className="flex flex-col">
               <span className="font-medium">Create server</span>
               <span className="text-xs text-muted-foreground">
-                Start a new space on your host.
+                Start a new server.
               </span>
             </div>
           </DropdownMenuItem>
@@ -143,7 +143,7 @@ export function AddServerMenu({
             <div className="flex flex-col">
               <span className="font-medium">Join server</span>
               <span className="text-xs text-muted-foreground">
-                Look up servers by host name.
+                Look up existing servers.
               </span>
             </div>
           </DropdownMenuItem>
