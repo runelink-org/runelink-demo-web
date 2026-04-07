@@ -58,7 +58,7 @@ export function CreateServerDialog({
     return () => {
       window.cancelAnimationFrame(frame);
     };
-  }, [host, open]);
+  }, [open]);
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -123,7 +123,7 @@ export function CreateServerDialog({
               id="server-host"
               value={host}
               onChange={(event) => setHost(event.target.value)}
-              placeholder="example.com"
+              placeholder="runelink.chat"
               disabled={isCreating}
             />
           </div>
