@@ -26,16 +26,18 @@ export function ChannelListItem({
   return (
     <div
       className={cn(
-        "group flex items-center gap-2 rounded-2xl pr-2 transition",
-        isSelected ? "bg-primary/12" : "hover:bg-sidebar-accent"
+        "group relative rounded-2xl border transition-colors",
+        isSelected
+          ? "border-sidebar-border/70 bg-primary/12 shadow-sm dark:border-sidebar-border dark:bg-sidebar-accent/80"
+          : "border-transparent hover:bg-sidebar-accent/70"
       )}
     >
       <Button
         variant="ghost"
         className={cn(
-          "h-auto min-w-0 flex-1 cursor-pointer justify-start rounded-2xl px-3 py-3 text-left",
+          "h-auto w-full min-w-0 cursor-pointer justify-start rounded-2xl px-3 py-3 pr-12 text-left",
           isSelected
-            ? "text-foreground hover:bg-transparent"
+            ? "text-foreground hover:bg-transparent dark:text-sidebar-foreground"
             : "text-sidebar-foreground/80 hover:bg-transparent hover:text-sidebar-foreground"
         )}
         onClick={() => {
@@ -43,7 +45,14 @@ export function ChannelListItem({
         }}
       >
         <div className="flex min-w-0 items-start gap-3">
-          <Hash className="mt-0.5 size-4 shrink-0 text-sidebar-foreground/50" />
+          <Hash
+            className={cn(
+              "mt-0.5 size-4 shrink-0",
+              isSelected
+                ? "text-primary/75 dark:text-sidebar-foreground/80"
+                : "text-sidebar-foreground/50"
+            )}
+          />
           <div className="min-w-0">
             <p className="truncate text-sm font-medium">{channel.title}</p>
           </div>
@@ -55,6 +64,7 @@ export function ChannelListItem({
         serverId={serverId}
         channel={channel}
         canDeleteChannel={canDeleteChannel}
+        className="absolute top-1/2 right-2 -translate-y-1/2"
         onDeleteChannel={onDeleteChannel}
       />
     </div>

@@ -96,6 +96,13 @@ function formatCompactTimestamp(value: Date): string {
 }
 
 const COMPACT_MESSAGE_WINDOW_MS = 5 * 60 * 1000;
+const DEFAULT_COMPOSER_HEIGHT = 48;
+const MIN_COMPOSER_HEIGHT = 48;
+const MAX_COMPOSER_HEIGHT = 220;
+
+function clampComposerHeight(value: number): number {
+  return Math.min(MAX_COMPOSER_HEIGHT, Math.max(MIN_COMPOSER_HEIGHT, value));
+}
 
 function shouldCompactMessage(current: Message, previous?: Message): boolean {
   if (!previous) {
@@ -219,6 +226,7 @@ export function MessagesPane({
   const [draft, setDraft] = useState("");
   const [isSending, setIsSending] = useState(false);
   const [sendError, setSendError] = useState<string | null>(null);
+  const [composerHeight, setComposerHeight] = useState(DEFAULT_COMPOSER_HEIGHT);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const scrollContainerRef = useRef<HTMLDivElement | null>(null);
   const hasRestoredScrollRef = useRef(false);
@@ -442,6 +450,29 @@ export function MessagesPane({
     void handleSubmit();
   }
 
+  function handleComposerResizeStart(
+    event: React.PointerEvent<HTMLButtonElement>
+  ) {
+    event.preventDefault();
+
+    const startY = event.clientY;
+    const startHeight = composerHeight;
+
+    function handlePointerMove(pointerEvent: PointerEvent) {
+      setComposerHeight(
+        clampComposerHeight(startHeight - (pointerEvent.clientY - startY))
+      );
+    }
+
+    function handlePointerUp() {
+      window.removeEventListener("pointermove", handlePointerMove);
+      window.removeEventListener("pointerup", handlePointerUp);
+    }
+
+    window.addEventListener("pointermove", handlePointerMove);
+    window.addEventListener("pointerup", handlePointerUp);
+  }
+
   return (
     <section className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
       <header className="border-b border-border/70 bg-background/80 px-4 py-4 backdrop-blur sm:px-6">
@@ -501,7 +532,7 @@ export function MessagesPane({
         )}
       </header>
 
-      <div className="relative flex min-h-0 flex-1 flex-col bg-[linear-gradient(180deg,color-mix(in_oklab,var(--color-background)_92%,transparent),color-mix(in_oklab,var(--color-muted)_35%,white))]">
+      <div className="relative flex min-h-0 flex-1 flex-col bg-background">
         {sidebarError ? (
           <div className="flex flex-1 items-center justify-center px-6">
             <div className="max-w-md rounded-3xl border border-destructive/20 bg-destructive/5 p-6 text-center">
@@ -588,9 +619,17 @@ export function MessagesPane({
         )}
 
         {canCompose ? (
-          <div className="border-t border-border/70 bg-background/85 px-4 py-4 backdrop-blur sm:px-6">
+          <div className="border-t border-border/70 bg-background px-4 py-2 sm:px-6">
+            <button
+              type="button"
+              className="group mb-1 flex h-2 w-full cursor-row-resize items-start justify-center"
+              onPointerDown={handleComposerResizeStart}
+              aria-label="Resize message input"
+            >
+              <span className="h-1.5 w-10 rounded-full bg-border/80 transition-colors group-hover:bg-muted-foreground/50" />
+            </button>
             <form
-              className="rounded-3xl border border-border/70 bg-background/95 p-3 shadow-sm"
+              className="flex items-end gap-3 rounded-3xl bg-muted/55 px-4 py-3 transition-colors focus-within:bg-muted/70"
               onSubmit={handleFormSubmit}
             >
               <Textarea
@@ -603,18 +642,19 @@ export function MessagesPane({
                   void handleKeyDown(event);
                 }}
                 placeholder={`Message #${selectedChannel.title}`}
-                className="min-h-20 resize-none border-0 bg-transparent px-1 py-1 shadow-none focus-visible:ring-0"
+                className="min-h-12 resize-none border-0 bg-transparent px-0 py-0.5 text-sm shadow-none focus-visible:ring-0 dark:bg-transparent"
+                style={{ height: `${composerHeight}px` }}
                 disabled={isSending}
               />
-              <div className="mt-3 flex items-center justify-between gap-3">
-                <p className="text-xs text-muted-foreground">
-                  Enter to send, Shift+Enter for a new line.
-                </p>
-                <Button type="submit" size="sm" disabled={isSendDisabled}>
-                  <SendHorizonal className="size-4" />
-                  {isSending ? "Sending..." : "Send"}
-                </Button>
-              </div>
+              <Button
+                type="submit"
+                size="icon"
+                className="mb-0.5 size-10 rounded-2xl sm:hidden"
+                disabled={isSendDisabled}
+                aria-label={isSending ? "Sending message" : "Send message"}
+              >
+                <SendHorizonal className="size-4" />
+              </Button>
             </form>
           </div>
         ) : null}

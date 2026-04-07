@@ -301,7 +301,7 @@ export function Sidebar({
       </div>
 
       <div
-        className="flex min-w-0 flex-1 flex-col bg-[linear-gradient(180deg,color-mix(in_oklab,var(--color-sidebar)_96%,white),color-mix(in_oklab,var(--color-sidebar-accent)_85%,white))] md:flex-none"
+        className="flex min-w-0 flex-1 flex-col bg-sidebar md:flex-none"
         style={{ width: `${channelPanelWidth}px` }}
       >
         <div className="border-b border-sidebar-border/80 px-4 py-4">

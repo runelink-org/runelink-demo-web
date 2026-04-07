@@ -70,11 +70,11 @@ export function ChannelActionsMenu({
           <button
             type="button"
             className={cn(
-              "flex size-8 shrink-0 items-center justify-center rounded-xl text-sidebar-foreground/55 transition",
+              "flex size-8 shrink-0 cursor-pointer items-center justify-center rounded-xl text-sidebar-foreground/55 transition",
               forceVisible
                 ? "opacity-100"
                 : "opacity-0 group-hover:opacity-100",
-              "hover:bg-background/70 hover:text-sidebar-foreground focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40",
+              "hover:bg-sidebar-accent hover:text-sidebar-foreground focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40",
               className
             )}
             aria-label={`Open ${channel.title} menu`}

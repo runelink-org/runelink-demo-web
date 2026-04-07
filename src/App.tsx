@@ -672,7 +672,7 @@ export function App() {
   }
 
   return (
-    <div className="flex h-dvh overflow-hidden bg-[radial-gradient(circle_at_top,_color-mix(in_oklab,var(--color-primary)_8%,transparent),transparent_32%),linear-gradient(180deg,color-mix(in_oklab,var(--color-muted)_60%,white),transparent_28%)]">
+    <div className="flex h-dvh overflow-hidden bg-background">
       <div
         className={[
           "min-w-0 shrink-0",

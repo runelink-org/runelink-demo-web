@@ -179,7 +179,7 @@ export function JoinServerDialog({
                     key={server.id}
                     className="flex items-start gap-3 rounded-2xl border border-border/70 bg-muted/30 p-3"
                   >
-                    <div className="flex size-10 shrink-0 items-center justify-center rounded-2xl bg-sidebar-accent text-sm font-semibold text-sidebar-foreground">
+                    <div className="flex size-10 shrink-0 items-center justify-center rounded-2xl border border-border/70 bg-background/80 text-sm font-semibold text-foreground shadow-sm">
                       {getServerMonogram(server.title)}
                     </div>
                     <div className="min-w-0 flex-1">

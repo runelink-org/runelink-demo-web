@@ -117,7 +117,7 @@ export function ServerRailSettingsMenu() {
             <DropdownMenuSeparator />
 
             <DropdownMenuCheckboxItem
-              className="gap-3 rounded-xl px-3 py-2"
+              className="cursor-pointer gap-3 rounded-xl px-3 py-2"
               checked={isFollowingSystem}
               onCheckedChange={(checked) => {
                 setSelectedTheme(checked ? "system" : effectiveTheme);
@@ -128,7 +128,7 @@ export function ServerRailSettingsMenu() {
             </DropdownMenuCheckboxItem>
 
             <DropdownMenuCheckboxItem
-              className="gap-3 rounded-xl px-3 py-2"
+              className="cursor-pointer gap-3 rounded-xl px-3 py-2"
               checked={effectiveTheme === "dark"}
               disabled={isFollowingSystem}
               onCheckedChange={(checked) => {

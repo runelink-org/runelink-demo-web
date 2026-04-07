@@ -54,7 +54,7 @@ export function ServerActionsMenu({
         render={
           <button
             type="button"
-            className="flex size-8 items-center justify-center rounded-xl text-sidebar-foreground/55 transition hover:bg-background/70 hover:text-sidebar-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+            className="flex size-8 cursor-pointer items-center justify-center rounded-xl text-sidebar-foreground/55 transition hover:bg-sidebar-accent hover:text-sidebar-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
             aria-label="Open server menu"
           />
         }

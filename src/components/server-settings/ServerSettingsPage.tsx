@@ -125,7 +125,7 @@ export function ServerSettingsPage({
         </div>
       </header>
 
-      <div className="min-h-0 flex-1 overflow-y-auto bg-[linear-gradient(180deg,color-mix(in_oklab,var(--color-background)_92%,transparent),color-mix(in_oklab,var(--color-muted)_35%,white))] px-4 py-5 sm:px-6">
+      <div className="min-h-0 flex-1 overflow-y-auto bg-background px-4 py-5 sm:px-6">
         {server ? (
           <div className="mx-auto flex w-full max-w-6xl flex-col gap-6">
             <section>
