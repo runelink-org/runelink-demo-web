@@ -4,6 +4,9 @@ import { Toaster } from "sonner";
 
 import "./index.css";
 import App from "./App.tsx";
+import { initializeThemeStore } from "@/lib/theme";
+
+initializeThemeStore();
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>

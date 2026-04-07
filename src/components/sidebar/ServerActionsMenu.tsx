@@ -74,7 +74,7 @@ export function ServerActionsMenu({
           }}
         >
           <Cog className="size-4" />
-          <span className="font-medium">Settings</span>
+          <span className="font-medium">Server Settings</span>
         </DropdownMenuItem>
         <DropdownMenuItem
           className="cursor-pointer gap-3 rounded-xl px-3 py-2"

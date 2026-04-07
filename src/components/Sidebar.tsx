@@ -9,6 +9,7 @@ import { ChannelSection } from "@/components/sidebar/ChannelSection";
 import { DeleteChannelDialog } from "@/components/sidebar/DeleteChannelDialog";
 import { DeleteServerDialog } from "@/components/sidebar/DeleteServerDialog";
 import { LeaveServerDialog } from "@/components/sidebar/LeaveServerDialog";
+import { ServerRailSettingsMenu } from "@/components/sidebar/ServerRailSettingsMenu";
 import { ServerActionsMenu } from "@/components/sidebar/ServerActionsMenu";
 import { ServerRailButton } from "@/components/sidebar/ServerRailButton";
 import { Separator } from "@/components/ui/separator";
@@ -290,6 +291,8 @@ export function Sidebar({
             onJoinServer={onJoinServer}
           />
         </div>
+
+        <ServerRailSettingsMenu />
 
         <ProfileSelector
           onManageAccounts={onManageAccounts}
