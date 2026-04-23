@@ -54,6 +54,13 @@ export function ServerRailButton({
   }, [isTooltipVisible]);
 
   function showTooltip() {
+    if (
+      typeof window !== "undefined" &&
+      !window.matchMedia("(hover: hover) and (pointer: fine)").matches
+    ) {
+      return;
+    }
+
     const rect = buttonRef.current?.getBoundingClientRect();
     if (!rect) {
       return;
