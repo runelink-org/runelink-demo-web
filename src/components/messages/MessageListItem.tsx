@@ -59,11 +59,11 @@ export function MessageListItem({
           ) : null}
           {!isCompact ? (
             <div className="group/avatar relative shrink-0">
-              <div className="flex size-10 items-center justify-center rounded-2xl bg-primary/10 text-sm font-semibold text-primary">
+              <div className="flex size-10 cursor-default select-none items-center justify-center rounded-2xl bg-primary/10 text-sm font-semibold text-primary">
                 {authorName.slice(0, 2).toUpperCase()}
               </div>
               {message.author ? (
-                <div className="pointer-events-none absolute bottom-full left-9 z-10 mb-1 w-56 rounded-2xl border border-border/70 bg-background p-3 text-left opacity-0 shadow-lg transition duration-150 group-hover/avatar:pointer-events-auto group-hover/avatar:opacity-100">
+                <div className="pointer-events-none invisible absolute bottom-full left-9 z-10 mb-1 w-56 rounded-2xl border border-border/70 bg-background p-3 text-left opacity-0 shadow-lg transition duration-150 group-hover/avatar:pointer-events-auto group-hover/avatar:visible group-hover/avatar:opacity-100">
                   <p className="truncate text-sm font-semibold text-foreground">
                     {message.author.name}
                   </p>
