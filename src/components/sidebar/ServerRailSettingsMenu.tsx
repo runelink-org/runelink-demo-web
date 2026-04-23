@@ -130,7 +130,6 @@ export function ServerRailSettingsMenu() {
             <DropdownMenuCheckboxItem
               className="cursor-pointer gap-3 rounded-xl px-3 py-2"
               checked={effectiveTheme === "dark"}
-              disabled={isFollowingSystem}
               onCheckedChange={(checked) => {
                 setSelectedTheme(checked ? "dark" : "light");
               }}
