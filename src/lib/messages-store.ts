@@ -423,16 +423,10 @@ export const useMessagesStore = create<MessagesState>((set) => ({
         };
       });
     } catch (error) {
-      const message =
-        error instanceof Error ? error.message : "Failed to delete message";
       set((state) => ({
         isLoadingByChannelKey: {
           ...state.isLoadingByChannelKey,
           [channelKey]: false,
-        },
-        errorByChannelKey: {
-          ...state.errorByChannelKey,
-          [channelKey]: message,
         },
       }));
       throw error;
