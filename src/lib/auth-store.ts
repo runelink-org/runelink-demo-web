@@ -39,6 +39,7 @@ type AuthStore = {
   signup: (credentials: AccountCredentials) => Promise<AuthResult>;
   login: (credentials: AccountCredentials) => Promise<AuthResult>;
   logoutActive: () => void;
+  removeAccount: (userRef: UserRef) => void;
   storeAccountToken: (
     userRef: UserRef,
     tokenResponse: TokenResponse,
@@ -240,6 +241,28 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
     get().clearAccountAuth(activeAccount);
   },
 
+  removeAccount(userRef) {
+    set((state) => {
+      const accounts = state.config.accounts.filter(
+        (account) => !sameUserRef(account, userRef)
+      );
+      const nextConfig = {
+        default_account: sameUserRef(state.config.default_account, userRef)
+          ? (accounts[0] ?? null)
+          : state.config.default_account,
+        accounts,
+      };
+      const nextAuthCache = clearTokenState(state.authCache, userRef);
+
+      persistState(nextConfig, nextAuthCache);
+      return {
+        config: nextConfig,
+        authCache: nextAuthCache,
+        authError: null,
+      };
+    });
+  },
+
   storeAccountToken(userRef, tokenResponse, clientId) {
     const normalizedAccount = normalizeAccountInput(userRef);
     set((state) => ({
@@ -280,5 +303,8 @@ registerAuthSessionStateBridge({
   },
   storeAccountToken(userRef, tokenResponse, clientId) {
     useAuthStore.getState().storeAccountToken(userRef, tokenResponse, clientId);
+  },
+  clearAccountAuth(userRef, errorMessage) {
+    useAuthStore.getState().clearAccountAuth(userRef, errorMessage);
   },
 });

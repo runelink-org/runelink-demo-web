@@ -677,7 +677,7 @@ export function App() {
         className={[
           "min-w-0 shrink-0",
           shouldShowAuthScreen
-            ? "hidden"
+            ? "flex w-auto"
             : isServerSettingsOpen
               ? "hidden"
               : isChannelOpen
@@ -694,6 +694,7 @@ export function App() {
           error={sidebarError}
           isSelectedServerHydrating={isSelectedServerHydrating}
           activeHost={activeAccount?.host ?? null}
+          accountRailOnly={shouldShowAuthScreen}
           onManageAccounts={() => {
             setManageOriginAccountKey(activeAccountKey);
             setShouldPrefillAccount(false);

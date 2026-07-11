@@ -23,6 +23,7 @@ type SidebarProps = {
   error: string | null;
   isSelectedServerHydrating: boolean;
   activeHost: string | null;
+  accountRailOnly?: boolean;
   onManageAccounts: () => void;
   onSelectAccount: () => void;
   onSelectServer: (serverId: string) => void;
@@ -84,6 +85,7 @@ export function Sidebar({
   error,
   isSelectedServerHydrating,
   activeHost,
+  accountRailOnly = false,
   onManageAccounts,
   onSelectAccount,
   onSelectServer,
@@ -226,7 +228,12 @@ export function Sidebar({
   }
 
   return (
-    <aside className="relative z-20 flex h-dvh w-full shrink-0 border-r border-sidebar-border bg-sidebar/95 backdrop-blur md:w-auto">
+    <aside
+      className={[
+        "relative z-20 flex h-dvh shrink-0 border-r border-sidebar-border bg-sidebar/95 backdrop-blur",
+        accountRailOnly ? "w-20" : "w-full md:w-auto",
+      ].join(" ")}
+    >
       <div className="flex w-20 flex-col items-center gap-4 border-r border-sidebar-border/80 px-3 py-4">
         <div className="flex flex-col items-center gap-2 text-center">
           <>
@@ -247,7 +254,7 @@ export function Sidebar({
         </div>
 
         <div className="flex min-h-0 flex-1 flex-col items-center gap-3 overflow-y-auto pb-1">
-          {isLoading ? (
+          {accountRailOnly ? null : isLoading ? (
             <div className="flex size-12 items-center justify-center rounded-2xl border border-sidebar-border bg-sidebar-accent text-sidebar-foreground/70">
               <LoaderCircle className="size-4 animate-spin" />
             </div>
@@ -283,16 +290,18 @@ export function Sidebar({
             })
           )}
 
-          <AddServerMenu
-            activeHost={activeHost}
-            joinedServerIds={joinedServerIds}
-            onCreateServer={onCreateServer}
-            onSearchServers={onSearchServers}
-            onJoinServer={onJoinServer}
-          />
+          {accountRailOnly ? null : (
+            <AddServerMenu
+              activeHost={activeHost}
+              joinedServerIds={joinedServerIds}
+              onCreateServer={onCreateServer}
+              onSearchServers={onSearchServers}
+              onJoinServer={onJoinServer}
+            />
+          )}
         </div>
 
-        <ServerRailSettingsMenu />
+        {accountRailOnly ? null : <ServerRailSettingsMenu />}
 
         <ProfileSelector
           onManageAccounts={onManageAccounts}
@@ -300,76 +309,80 @@ export function Sidebar({
         />
       </div>
 
-      <div
-        className="flex min-w-0 flex-1 flex-col bg-sidebar md:flex-none"
-        style={{ width: `${channelPanelWidth}px` }}
-      >
-        <div className="border-b border-sidebar-border/80 px-4 py-4">
-          <p className="text-xs font-semibold tracking-[0.2em] text-sidebar-foreground/55 uppercase">
-            Server
-          </p>
-          <div className="mt-2 flex min-w-0 items-center justify-between gap-2">
-            <h2 className="min-w-0 flex-1 truncate text-lg font-semibold text-sidebar-foreground">
-              {selectedServer?.server.title ?? "Choose a server"}
-            </h2>
-            {selectedServer ? (
-              <ServerActionsMenu
-                server={selectedServer.server}
-                onOpenServerSettings={onOpenServerSettings}
-                onLeaveServer={(server) => {
-                  setServerPendingLeave(server);
-                }}
-              />
-            ) : null}
+      {accountRailOnly ? null : (
+        <div
+          className="flex min-w-0 flex-1 flex-col bg-sidebar md:flex-none"
+          style={{ width: `${channelPanelWidth}px` }}
+        >
+          <div className="border-b border-sidebar-border/80 px-4 py-4">
+            <p className="text-xs font-semibold tracking-[0.2em] text-sidebar-foreground/55 uppercase">
+              Server
+            </p>
+            <div className="mt-2 flex min-w-0 items-center justify-between gap-2">
+              <h2 className="min-w-0 flex-1 truncate text-lg font-semibold text-sidebar-foreground">
+                {selectedServer?.server.title ?? "Choose a server"}
+              </h2>
+              {selectedServer ? (
+                <ServerActionsMenu
+                  server={selectedServer.server}
+                  onOpenServerSettings={onOpenServerSettings}
+                  onLeaveServer={(server) => {
+                    setServerPendingLeave(server);
+                  }}
+                />
+              ) : null}
+            </div>
+            <p className="mt-1 line-clamp-2 text-sm text-sidebar-foreground/70">
+              {selectedServer
+                ? (selectedServer.server.description ?? "")
+                : error
+                  ? "RuneLink could not load your available servers."
+                  : "Select a server on the left to browse its channels."}
+            </p>
           </div>
-          <p className="mt-1 line-clamp-2 text-sm text-sidebar-foreground/70">
-            {selectedServer
-              ? (selectedServer.server.description ?? "")
-              : error
-                ? "RuneLink could not load your available servers."
-                : "Select a server on the left to browse its channels."}
-          </p>
+
+          <ChannelSection
+            selectedServer={selectedServer}
+            selectedChannelId={effectiveSelectedChannelId}
+            isLoading={isLoading}
+            error={error}
+            isSelectedServerHydrating={isSelectedServerHydrating}
+            canCreateChannel={canDeleteSelectedServer}
+            canDeleteSelectedServer={canDeleteSelectedServer}
+            onOpenCreateChannel={() => {
+              setIsCreateDialogOpen(true);
+            }}
+            onSelectChannel={(serverId, channel) => {
+              scheduleSelectionCommit(
+                {
+                  serverId,
+                  channelId: channel.id,
+                },
+                () => {
+                  onSelectChannel(serverId, channel);
+                }
+              );
+            }}
+            onDeleteChannel={(channel) => {
+              setChannelPendingDelete(channel);
+            }}
+          />
         </div>
+      )}
 
-        <ChannelSection
-          selectedServer={selectedServer}
-          selectedChannelId={effectiveSelectedChannelId}
-          isLoading={isLoading}
-          error={error}
-          isSelectedServerHydrating={isSelectedServerHydrating}
-          canCreateChannel={canDeleteSelectedServer}
-          canDeleteSelectedServer={canDeleteSelectedServer}
-          onOpenCreateChannel={() => {
-            setIsCreateDialogOpen(true);
-          }}
-          onSelectChannel={(serverId, channel) => {
-            scheduleSelectionCommit(
-              {
-                serverId,
-                channelId: channel.id,
-              },
-              () => {
-                onSelectChannel(serverId, channel);
-              }
-            );
-          }}
-          onDeleteChannel={(channel) => {
-            setChannelPendingDelete(channel);
-          }}
-        />
-      </div>
-
-      <button
-        type="button"
-        className="group relative hidden w-3 shrink-0 cursor-col-resize items-stretch justify-center bg-sidebar/40 transition hover:bg-sidebar-accent/60 md:flex"
-        aria-label="Resize channels sidebar"
-        onPointerDown={handleResizeStart}
-      >
-        <Separator
-          orientation="vertical"
-          className="bg-sidebar-border transition group-hover:bg-primary"
-        />
-      </button>
+      {accountRailOnly ? null : (
+        <button
+          type="button"
+          className="group relative hidden w-3 shrink-0 cursor-col-resize items-stretch justify-center bg-sidebar/40 transition hover:bg-sidebar-accent/60 md:flex"
+          aria-label="Resize channels sidebar"
+          onPointerDown={handleResizeStart}
+        >
+          <Separator
+            orientation="vertical"
+            className="bg-sidebar-border transition group-hover:bg-primary"
+          />
+        </button>
+      )}
 
       <CreateChannelDialog
         open={isCreateDialogOpen}

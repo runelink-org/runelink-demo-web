@@ -9,6 +9,7 @@ import {
 import { create } from "zustand";
 import { sameUserRef, type StoredAccountAuth } from "@/lib/account-storage";
 import {
+  clearAuthSessionAccount,
   getAuthSessionSnapshot,
   registerAuthSessionActionsBridge,
   storeAuthSessionToken,
@@ -330,7 +331,15 @@ async function authenticateStoredAccount(
       auth.access_token &&
       (!auth.expires_at || auth.expires_at > nowInSeconds + 60)
     ) {
-      await authenticateWithAccessToken(connection, userRef, auth.access_token);
+      try {
+        await authenticateWithAccessToken(
+          connection,
+          userRef,
+          auth.access_token
+        );
+      } catch {
+        await authenticateWithRefreshToken(connection, userRef, auth);
+      }
     } else {
       await authenticateWithRefreshToken(connection, userRef, auth);
     }
@@ -345,13 +354,15 @@ async function authenticateStoredAccount(
       return;
     }
 
+    const errorMessage =
+      error instanceof Error
+        ? error.message
+        : "Unable to authenticate websocket";
+    clearAuthSessionAccount(userRef, errorMessage);
     connection.disconnect();
     useRunelinkConnectionStore.setState({
       status: "disconnected",
-      lastError:
-        error instanceof Error
-          ? error.message
-          : "Unable to authenticate websocket",
+      lastError: errorMessage,
       connectedAccount: null,
     });
   }

@@ -15,6 +15,7 @@ type AuthSessionStateBridge = {
     tokenResponse: TokenResponse,
     clientId: string
   ) => void;
+  clearAccountAuth: (userRef: UserRef, errorMessage?: string) => void;
 };
 
 type AuthSessionActionsBridge = {
@@ -74,6 +75,17 @@ export function storeAuthSessionToken(
   }
 
   authSessionStateBridge.storeAccountToken(userRef, tokenResponse, clientId);
+}
+
+export function clearAuthSessionAccount(
+  userRef: UserRef,
+  errorMessage?: string
+): void {
+  if (!authSessionStateBridge) {
+    throw new Error("Auth session state bridge is not registered");
+  }
+
+  authSessionStateBridge.clearAccountAuth(userRef, errorMessage);
 }
 
 export function loginAuthSessionWithConnection(

@@ -1,10 +1,14 @@
 import {
   CheckCircle2,
   CircleDashed,
+  LoaderCircle,
   LogOut,
+  MoreHorizontal,
   Plus,
+  Trash2,
   UserCircle2,
 } from "lucide-react";
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -17,7 +21,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { accountStorageKey } from "@/lib/account-storage";
+import { accountStorageKey, sameUserRef } from "@/lib/account-storage";
 import {
   getActiveAccount,
   getActiveAccountAuth,
@@ -43,11 +47,14 @@ export function ProfileSelector({
   onManageAccounts,
   onSelectAccount,
 }: ProfileSelectorProps) {
+  const [openActionsKey, setOpenActionsKey] = useState<string | null>(null);
   const accounts = useAuthStore((state) => state.config.accounts);
+  const accountAuthByKey = useAuthStore((state) => state.authCache.accounts);
   const activeAccount = useAuthStore(getActiveAccount);
   const activeAuth = useAuthStore(getActiveAccountAuth);
   const openAccount = useAuthStore((state) => state.openAccount);
   const logoutActive = useAuthStore((state) => state.logoutActive);
+  const removeAccount = useAuthStore((state) => state.removeAccount);
   const connectionStatus = useRunelinkConnectionStore((state) => state.status);
 
   const activeKey = activeAccount ? accountStorageKey(activeAccount) : "";
@@ -86,7 +93,7 @@ export function ProfileSelector({
           {activeAccount ? (
             <DropdownMenuItem disabled>
               {activeAuth ? <CheckCircle2 /> : <CircleDashed />}
-              {activeAuth ? statusLabels[connectionStatus] : "Stored account"}
+              {activeAuth ? statusLabels[connectionStatus] : "Login required"}
             </DropdownMenuItem>
           ) : null}
         </DropdownMenuGroup>
@@ -97,22 +104,88 @@ export function ProfileSelector({
           <DropdownMenuRadioGroup value={activeKey}>
             {accounts.map((account) => {
               const key = accountStorageKey(account);
+              const storedAuth = accountAuthByKey[key];
+              const isActive = sameUserRef(account, activeAccount);
+              const isLoggedIn =
+                isActive && connectionStatus === "connected" && !!storedAuth;
+              const isChecking =
+                isActive &&
+                (connectionStatus === "connecting" ||
+                  connectionStatus === "authenticating" ||
+                  connectionStatus === "reconnecting");
 
               return (
                 <DropdownMenuRadioItem
                   key={key}
                   value={key}
-                  onClick={() => {
-                    onSelectAccount();
+                  className={[
+                    "group/account hover:bg-accent hover:text-accent-foreground hover:**:text-accent-foreground",
+                    openActionsKey === key
+                      ? "bg-accent text-accent-foreground **:text-accent-foreground"
+                      : "",
+                  ].join(" ")}
+                  onClick={(event) => {
+                    setOpenActionsKey(null);
+                    event.currentTarget.blur();
                     openAccount(account);
+                    onSelectAccount();
                   }}
                 >
-                  <div className="flex min-w-0 flex-col">
+                  {isLoggedIn ? (
+                    <CheckCircle2 />
+                  ) : isChecking ? (
+                    <LoaderCircle className="animate-spin" />
+                  ) : (
+                    <CircleDashed />
+                  )}
+                  <div className="flex min-w-0 flex-1 flex-col">
                     <span className="truncate font-medium">{account.name}</span>
                     <span className="text-muted-foreground truncate text-xs">
                       {account.host}
                     </span>
                   </div>
+                  <DropdownMenu
+                    open={openActionsKey === key}
+                    onOpenChange={(open) => {
+                      setOpenActionsKey(open ? key : null);
+                    }}
+                  >
+                    <DropdownMenuTrigger
+                      render={
+                        <button
+                          type="button"
+                          className={[
+                            "bg-accent text-accent-foreground absolute right-1 size-6 items-center justify-center rounded-sm",
+                            openActionsKey === key
+                              ? "flex"
+                              : "hidden group-hover/account:flex group-focus-within/account:flex",
+                          ].join(" ")}
+                          aria-label={`Account actions for ${account.name}@${account.host}`}
+                          onPointerDown={(event) => event.stopPropagation()}
+                          onClick={(event) => event.stopPropagation()}
+                        />
+                      }
+                    >
+                      <MoreHorizontal className="size-4" />
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent
+                      side="right"
+                      align="start"
+                      className="w-52"
+                    >
+                      <DropdownMenuItem
+                        variant="destructive"
+                        className="whitespace-nowrap"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          removeAccount(account);
+                        }}
+                      >
+                        <Trash2 />
+                        Remove saved account
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                 </DropdownMenuRadioItem>
               );
             })}

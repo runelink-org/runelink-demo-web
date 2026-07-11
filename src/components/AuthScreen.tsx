@@ -52,14 +52,14 @@ export function AuthScreen({
 
   const [mode, setMode] = useState<AuthMode>("login");
   const [host, setHost] = useState(() =>
-    activeAccount && !canClose && prefillAccount ? activeAccount.host : ""
+    activeAccount && prefillAccount ? activeAccount.host : ""
   );
   const [name, setName] = useState(() =>
-    activeAccount && !canClose && prefillAccount ? activeAccount.name : ""
+    activeAccount && prefillAccount ? activeAccount.name : ""
   );
   const [password, setPassword] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const shouldFocusPassword = !canClose && prefillAccount;
+  const shouldFocusPassword = !!activeAccount && prefillAccount;
 
   useEffect(() => {
     clearAuthError();
