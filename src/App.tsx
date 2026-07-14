@@ -9,9 +9,11 @@ import {
   getActiveAccountAuth,
   useAuthStore,
 } from "@/lib/auth-store";
+import { type AppRoute, getContentRoute } from "@/lib/app-route";
 import { useChannelsStore } from "@/lib/channels-store";
 import { useNavigationStore } from "@/lib/navigation-store";
 import {
+  cancelPendingAuthentication,
   initializeRunelinkConnectionStore,
   useRunelinkConnectionStore,
 } from "@/lib/runelink-connection-store";
@@ -20,44 +22,8 @@ import { useMessagesStore } from "@/lib/messages-store";
 import { debugRunelink } from "@/lib/runelink-debug";
 import { serverChannelKey, userRefKey } from "@/lib/runelink-store-utils";
 import { useServersStore } from "@/lib/servers-store";
+import { useAppNavigation } from "@/lib/use-app-navigation";
 import { useUsersStore } from "@/lib/users-store";
-
-function getFallbackSelection(
-  servers: ServerWithChannels[],
-  currentSelection: { serverId: string | null; channelId: string | null }
-): { serverId: string | null; channelId: string | null } {
-  if (servers.length === 0) {
-    return { serverId: null, channelId: null };
-  }
-
-  const selectedServer = currentSelection.serverId
-    ? servers.find((server) => server.server.id === currentSelection.serverId)
-    : null;
-  const nextServer = selectedServer ?? servers[0];
-
-  if (!nextServer) {
-    return { serverId: null, channelId: null };
-  }
-
-  if (!currentSelection.channelId) {
-    return {
-      serverId: nextServer.server.id,
-      channelId: null,
-    };
-  }
-
-  const selectedChannel = currentSelection.channelId
-    ? nextServer.channels.find(
-        (channel) => channel.id === currentSelection.channelId
-      )
-    : null;
-  const nextChannel = selectedChannel ?? nextServer.channels[0] ?? null;
-
-  return {
-    serverId: nextServer.server.id,
-    channelId: nextChannel?.id ?? null,
-  };
-}
 
 function getTargetHost(serverHost: string, activeHost: string): string | null {
   return serverHost === activeHost ? null : serverHost;
@@ -65,19 +31,24 @@ function getTargetHost(serverHost: string, activeHost: string): string | null {
 
 export function App() {
   const pendingServerDetailsRef = useRef<Set<string>>(new Set());
-  const [isManagingAccounts, setIsManagingAccounts] = useState(false);
+  const { route, navigate, getCurrentRoute, backOrReplace, reconcileServers } =
+    useAppNavigation();
+  const previousRouteRef = useRef(route);
+  const authReturnRouteRef = useRef<AppRoute | null>(
+    route.screen === "auth" ? null : route
+  );
   const [manageSessionId, setManageSessionId] = useState(0);
   const [shouldPrefillAccount, setShouldPrefillAccount] = useState(true);
   const [manageOriginAccountKey, setManageOriginAccountKey] = useState<
-    string | null
-  >(null);
-  const [serverSettingsServerId, setServerSettingsServerId] = useState<
     string | null
   >(null);
   const [serverSettingsError, setServerSettingsError] = useState<string | null>(
     null
   );
   const [isSidebarLoading, setIsSidebarLoading] = useState(false);
+  const [resolvedSidebarAccountKey, setResolvedSidebarAccountKey] = useState<
+    string | null
+  >(null);
   const [sidebarError, setSidebarError] = useState<string | null>(null);
 
   const activeAccount = useAuthStore(getActiveAccount);
@@ -88,9 +59,10 @@ export function App() {
   const selectedChannelIdByServerId = useNavigationStore(
     (state) => state.selectedChannelIdByServerId
   );
-  const selectServer = useNavigationStore((state) => state.selectServer);
-  const selectChannel = useNavigationStore((state) => state.selectChannel);
   const connectionStatus = useRunelinkConnectionStore((state) => state.status);
+  const connectedAccount = useRunelinkConnectionStore(
+    (state) => state.connectedAccount
+  );
   const membershipsByUserRefKey = useMembershipsStore(
     (state) => state.membershipsByUserRefKey
   );
@@ -146,6 +118,24 @@ export function App() {
   const activeAccountKey = activeAccount
     ? `${activeAccount.name}@${activeAccount.host}`
     : null;
+  const serverSettingsServerId =
+    route.screen === "server-settings" ? route.serverId : null;
+
+  useEffect(() => {
+    if (previousRouteRef.current.screen === "auth" && route.screen !== "auth") {
+      cancelPendingAuthentication();
+    }
+    previousRouteRef.current = route;
+
+    setServerSettingsError(null);
+  }, [route]);
+
+  useEffect(() => {
+    if ((!activeAccount || !activeAuth) && route.screen !== "auth") {
+      authReturnRouteRef.current = route;
+      navigate({ screen: "auth" }, "replace");
+    }
+  }, [activeAccount, activeAuth, navigate, route]);
 
   useEffect(() => {
     initializeRunelinkConnectionStore();
@@ -154,6 +144,7 @@ export function App() {
   useEffect(() => {
     if (!activeAccount || !activeAuth) {
       setIsSidebarLoading(false);
+      setResolvedSidebarAccountKey(null);
       setSidebarError(null);
     }
   }, [activeAccount, activeAuth]);
@@ -164,10 +155,12 @@ export function App() {
     }
 
     const account = activeAccount;
+    const accountKey = `${account.name}@${account.host}`;
     let isCancelled = false;
 
     async function loadSidebar() {
       setIsSidebarLoading(true);
+      setResolvedSidebarAccountKey(null);
       setSidebarError(null);
 
       try {
@@ -189,27 +182,7 @@ export function App() {
           return;
         }
 
-        const navigationState = useNavigationStore.getState();
-        const nextSelection = getFallbackSelection(fullServers, {
-          serverId: navigationState.selectedServerId,
-          channelId: navigationState.selectedServerId
-            ? (navigationState.selectedChannelIdByServerId[
-                navigationState.selectedServerId
-              ] ?? null)
-            : null,
-        });
-
-        if (nextSelection.serverId !== navigationState.selectedServerId) {
-          selectServer(nextSelection.serverId);
-        }
-        if (
-          nextSelection.serverId &&
-          (navigationState.selectedChannelIdByServerId[
-            nextSelection.serverId
-          ] ?? null) !== nextSelection.channelId
-        ) {
-          selectChannel(nextSelection.serverId, nextSelection.channelId);
-        }
+        reconcileServers(fullServers);
       } catch (error) {
         if (isCancelled) {
           return;
@@ -218,10 +191,11 @@ export function App() {
         setSidebarError(
           error instanceof Error ? error.message : "Failed to load servers"
         );
-        selectServer(null);
+        reconcileServers([]);
       } finally {
         if (!isCancelled) {
           setIsSidebarLoading(false);
+          setResolvedSidebarAccountKey(accountKey);
         }
       }
     }
@@ -237,8 +211,7 @@ export function App() {
     connectionStatus,
     fetchMembershipsByUser,
     fetchServerWithChannels,
-    selectChannel,
-    selectServer,
+    reconcileServers,
   ]);
 
   const activeMemberships = activeAccount
@@ -318,7 +291,11 @@ export function App() {
   }, [activeAccount, connectionStatus, fetchUserByRef, userByRefKey]);
 
   useEffect(() => {
-    if (isSidebarLoading) {
+    if (
+      isSidebarLoading ||
+      !activeAccountKey ||
+      resolvedSidebarAccountKey !== activeAccountKey
+    ) {
       return;
     }
 
@@ -327,28 +304,13 @@ export function App() {
       hydratedServerIds: hydratedServers.map((server) => server.server.id),
     });
 
-    const nextSelection = getFallbackSelection(hydratedServers, {
-      serverId: selectedServerId,
-      channelId: selectedServerId
-        ? (selectedChannelIdByServerId[selectedServerId] ?? null)
-        : null,
-    });
-
-    if (nextSelection.serverId !== selectedServerId) {
-      selectServer(nextSelection.serverId);
-    }
-    if (
-      nextSelection.serverId &&
-      (selectedChannelIdByServerId[nextSelection.serverId] ?? null) !==
-        nextSelection.channelId
-    ) {
-      selectChannel(nextSelection.serverId, nextSelection.channelId);
-    }
+    reconcileServers(hydratedServers);
   }, [
+    activeAccountKey,
     hydratedServers,
     isSidebarLoading,
-    selectChannel,
-    selectServer,
+    reconcileServers,
+    resolvedSidebarAccountKey,
     selectedChannelIdByServerId,
     selectedServerId,
   ]);
@@ -396,6 +358,11 @@ export function App() {
       : serverSettingsError;
 
   useEffect(() => {
+    if (route.screen === "auth") {
+      document.title = "Account | RuneLink";
+      return;
+    }
+
     if (isServerSettingsOpen && serverSettingsServer) {
       document.title = `${serverSettingsServer.server.title} Settings | RuneLink`;
       return;
@@ -414,6 +381,7 @@ export function App() {
     document.title = `#${selectedChannel.title} | ${selectedServer.server.title}`;
   }, [
     isServerSettingsOpen,
+    route.screen,
     selectedChannel,
     selectedServer,
     serverSettingsServer,
@@ -426,7 +394,6 @@ export function App() {
 
     const server = hydratedServerById[serverSettingsServerId] ?? null;
     if (!server) {
-      setServerSettingsServerId(null);
       return;
     }
 
@@ -502,31 +469,56 @@ export function App() {
     selectedServerId,
   ]);
 
+  const connectedAccountKey = connectedAccount
+    ? `${connectedAccount.name}@${connectedAccount.host}`
+    : null;
   const switchedToReadyAccount =
-    isManagingAccounts &&
+    route.screen === "auth" &&
+    !!manageOriginAccountKey &&
     !!activeAccount &&
     !!activeAuth &&
-    activeAccountKey !== manageOriginAccountKey;
+    activeAccountKey !== manageOriginAccountKey &&
+    connectedAccountKey === activeAccountKey &&
+    connectionStatus === "connected";
 
-  const shouldShowAuthScreen = useMemo(() => {
-    return (
-      (isManagingAccounts && !switchedToReadyAccount) ||
-      !activeAccount ||
-      !activeAuth
-    );
-  }, [activeAccount, activeAuth, isManagingAccounts, switchedToReadyAccount]);
+  useEffect(() => {
+    if (!switchedToReadyAccount) {
+      return;
+    }
+    setManageOriginAccountKey(null);
+    setShouldPrefillAccount(true);
+    const destination: AppRoute = authReturnRouteRef.current ?? {
+      screen: "home",
+    };
+    authReturnRouteRef.current = null;
+    navigate(destination, "push");
+  }, [navigate, switchedToReadyAccount]);
+
+  const shouldShowAuthScreen =
+    route.screen === "auth" || !activeAccount || !activeAuth;
   const isChannelOpen = !!selectedServer && !!selectedChannel;
+
+  function handleOpenAuth(prefillAccount: boolean) {
+    cancelPendingAuthentication();
+    const currentRoute = getCurrentRoute();
+    if (currentRoute.screen !== "auth") {
+      authReturnRouteRef.current = currentRoute;
+    }
+    setManageOriginAccountKey(activeAccountKey);
+    setShouldPrefillAccount(prefillAccount);
+    setManageSessionId((value) => value + 1);
+    navigate({ screen: "auth" }, "push");
+  }
 
   function handleSelectServer(serverId: string) {
     setServerSettingsError(null);
-    setServerSettingsServerId(null);
-    selectServer(serverId);
+    const channelId = selectedChannelIdByServerId[serverId] ?? null;
+    navigate(getContentRoute(serverId, channelId), "push");
   }
 
   function handleSelectChannel(serverId: string, channel: Channel) {
     setServerSettingsError(null);
-    setServerSettingsServerId(null);
-    selectChannel(serverId, channel.id);
+    navigate({ screen: "channel", serverId, channelId: channel.id }, "push");
   }
 
   function handleDeselectChannel() {
@@ -534,18 +526,24 @@ export function App() {
       return;
     }
 
-    selectChannel(selectedServer.server.id, null);
+    navigate({ screen: "server", serverId: selectedServer.server.id }, "push");
   }
 
   function handleOpenServerSettings(serverId: string) {
     setServerSettingsError(null);
-    setServerSettingsServerId(serverId);
-    selectServer(serverId);
+    navigate({ screen: "server-settings", serverId }, "push");
   }
 
   function handleCloseServerSettings() {
     setServerSettingsError(null);
-    setServerSettingsServerId(null);
+    backOrReplace(getContentRoute(selectedServerId, selectedChannelId));
+  }
+
+  function handleCloseAuthScreen() {
+    authReturnRouteRef.current = null;
+    setManageOriginAccountKey(null);
+    setShouldPrefillAccount(true);
+    backOrReplace(getContentRoute(selectedServerId, selectedChannelId));
   }
 
   async function handleSendMessage(body: string) {
@@ -589,7 +587,14 @@ export function App() {
       getTargetHost(selectedServer.server.host, activeAccount.host)
     );
 
-    selectChannel(selectedServer.server.id, channel.id);
+    navigate(
+      {
+        screen: "channel",
+        serverId: selectedServer.server.id,
+        channelId: channel.id,
+      },
+      "push"
+    );
   }
 
   async function handleDeleteChannel(channel: Channel) {
@@ -622,7 +627,7 @@ export function App() {
       server.id,
       getTargetHost(host.trim(), activeAccount.host)
     );
-    selectServer(server.id);
+    navigate({ screen: "server", serverId: server.id }, "push");
   }
 
   async function handleSearchServers(host: string) {
@@ -654,7 +659,7 @@ export function App() {
       serverHost,
       activeAccount,
     });
-    selectServer(serverId);
+    navigate({ screen: "server", serverId }, "push");
   }
 
   async function handleLeaveServer(serverId: string, serverHost: string) {
@@ -695,17 +700,8 @@ export function App() {
           isSelectedServerHydrating={isSelectedServerHydrating}
           activeHost={activeAccount?.host ?? null}
           accountRailOnly={shouldShowAuthScreen}
-          onManageAccounts={() => {
-            setManageOriginAccountKey(activeAccountKey);
-            setShouldPrefillAccount(false);
-            setManageSessionId((value) => value + 1);
-            setIsManagingAccounts(true);
-          }}
-          onSelectAccount={() => {
-            setShouldPrefillAccount(true);
-            setManageSessionId((value) => value + 1);
-            setIsManagingAccounts(true);
-          }}
+          onManageAccounts={() => handleOpenAuth(false)}
+          onSelectAccount={() => handleOpenAuth(true)}
           onSelectServer={handleSelectServer}
           onSelectChannel={handleSelectChannel}
           onCreateServer={handleCreateServer}
@@ -738,10 +734,15 @@ export function App() {
             canClose={!!activeAccount && !!activeAuth}
             prefillAccount={shouldPrefillAccount}
             onDone={() => {
-              setIsManagingAccounts(false);
               setManageOriginAccountKey(null);
               setShouldPrefillAccount(true);
+              const destination: AppRoute = authReturnRouteRef.current ?? {
+                screen: "home",
+              };
+              authReturnRouteRef.current = null;
+              navigate(destination, "push");
             }}
+            onBack={handleCloseAuthScreen}
           />
         ) : isServerSettingsOpen ? (
           <ServerSettingsPage

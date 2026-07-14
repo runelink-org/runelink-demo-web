@@ -27,6 +27,7 @@ type AuthScreenProps = {
   canClose: boolean;
   prefillAccount: boolean;
   onDone: () => void;
+  onBack: () => void;
 };
 
 function normalizeUsernameDraft(input: string): string {
@@ -43,6 +44,7 @@ export function AuthScreen({
   canClose,
   prefillAccount,
   onDone,
+  onBack,
 }: AuthScreenProps) {
   const activeAccount = useAuthStore(getActiveAccount);
   const authError = useAuthStore((state) => state.authError);
@@ -198,7 +200,7 @@ export function AuthScreen({
 
             <div className="flex items-center justify-between gap-3">
               {canClose ? (
-                <Button type="button" variant="ghost" onClick={onDone}>
+                <Button type="button" variant="ghost" onClick={onBack}>
                   Back
                 </Button>
               ) : (

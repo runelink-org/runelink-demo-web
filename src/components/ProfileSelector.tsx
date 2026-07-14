@@ -127,8 +127,8 @@ export function ProfileSelector({
                   onClick={(event) => {
                     setOpenActionsKey(null);
                     event.currentTarget.blur();
-                    openAccount(account);
                     onSelectAccount();
+                    openAccount(account);
                   }}
                 >
                   {isLoggedIn ? (

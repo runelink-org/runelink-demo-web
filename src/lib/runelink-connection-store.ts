@@ -46,6 +46,7 @@ let syncInFlight: Promise<void> | null = null;
 let syncQueued = false;
 let replaceInProgress = false;
 let lastActiveSessionKey: string | null = null;
+let explicitAuthenticationInProgress = false;
 
 function getTransportSecurityMode(): "secure-only" | "prefer-secure" {
   return window.location.protocol === "https:"
@@ -430,23 +431,24 @@ export async function loginWithConnection(
   password: string,
   clientId: string
 ): Promise<TokenResponse> {
+  explicitAuthenticationInProgress = true;
   useRunelinkConnectionStore.setState({
     status: "connecting",
     lastError: null,
     connectedAccount: null,
   });
 
-  const connection = await ensureSocketForHost(userRef.host, {
-    forceReplace: true,
-  });
-
-  useRunelinkConnectionStore.setState({
-    status: "authenticating",
-    lastError: null,
-    connectedAccount: null,
-  });
-
   try {
+    const connection = await ensureSocketForHost(userRef.host, {
+      forceReplace: true,
+    });
+
+    useRunelinkConnectionStore.setState({
+      status: "authenticating",
+      lastError: null,
+      connectedAccount: null,
+    });
+
     const reply = await connection.send({
       type: "auth_token_password",
       data: {
@@ -462,15 +464,18 @@ export async function loginWithConnection(
     }
 
     const tokenResponse = TokenResponseSchema.parse(reply.data);
+    explicitAuthenticationInProgress = false;
     setAuthenticatedStatus(userRef);
     return tokenResponse;
   } catch (error) {
+    explicitAuthenticationInProgress = false;
     teardownConnection();
     useRunelinkConnectionStore.setState({
       status: "disconnected",
       lastError: error instanceof Error ? error.message : "Unable to log in",
       connectedAccount: null,
     });
+    void scheduleSyncConnectionToActiveAccount();
     throw error instanceof Error ? error : new Error(String(error));
   }
 }
@@ -479,23 +484,24 @@ export async function signupAndLoginWithConnection(
   userRef: UserRef,
   password: string
 ): Promise<{ tokenResponse: TokenResponse; clientId: string }> {
+  explicitAuthenticationInProgress = true;
   useRunelinkConnectionStore.setState({
     status: "connecting",
     lastError: null,
     connectedAccount: null,
   });
 
-  const connection = await ensureSocketForHost(userRef.host, {
-    forceReplace: true,
-  });
-
-  useRunelinkConnectionStore.setState({
-    status: "authenticating",
-    lastError: null,
-    connectedAccount: null,
-  });
-
   try {
+    const connection = await ensureSocketForHost(userRef.host, {
+      forceReplace: true,
+    });
+
+    useRunelinkConnectionStore.setState({
+      status: "authenticating",
+      lastError: null,
+      connectedAccount: null,
+    });
+
     const signupReply = await connection.send({
       type: "auth_signup",
       data: {
@@ -524,9 +530,11 @@ export async function signupAndLoginWithConnection(
     }
 
     const tokenResponse = TokenResponseSchema.parse(loginReply.data);
+    explicitAuthenticationInProgress = false;
     setAuthenticatedStatus(userRef);
     return { tokenResponse, clientId };
   } catch (error) {
+    explicitAuthenticationInProgress = false;
     teardownConnection();
     useRunelinkConnectionStore.setState({
       status: "disconnected",
@@ -534,8 +542,16 @@ export async function signupAndLoginWithConnection(
         error instanceof Error ? error.message : "Unable to create account",
       connectedAccount: null,
     });
+    void scheduleSyncConnectionToActiveAccount();
     throw error instanceof Error ? error : new Error(String(error));
   }
+}
+
+export function cancelPendingAuthentication(): void {
+  if (!explicitAuthenticationInProgress) {
+    return;
+  }
+  currentConnection?.disconnect();
 }
 
 export async function refreshConnectionAuth(
