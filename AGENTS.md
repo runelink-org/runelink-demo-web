@@ -20,3 +20,11 @@
 
 - Follow the existing project structure and conventions
 - Ensure type safety throughout the codebase
+
+## Vendored Repositories
+
+- Treat vendored Git repositories as submodules. Do not manually copy or edit their files to update them to an upstream commit.
+- When the relevant upstream work is on the currently tracked branch, update the vendored repository with `git submodule update --remote <path>`.
+- When the relevant upstream work is on another branch, use `git submodule set-branch --branch <branch> <path>` followed by `git submodule update --remote <path>`.
+- When returning a vendored repository from a child branch to a parent branch, use `git submodule set-branch --branch <parent-branch> <path>` followed by `git submodule update --remote <path>`.
+- After updating, verify that the submodule worktree is clean and that the parent repository records only the intended submodule commit change.
