@@ -1,3 +1,4 @@
 [submodule "vendor/runelink-sdk-js"]
 	path = vendor/runelink-sdk-js
 	url = https://github.com/runelink-org/runelink-sdk-js.git
+	branch = feature/capability-versioning
