@@ -326,6 +326,12 @@ export function MessagesPane({
 
   useLayoutEffect(() => {
     return () => {
+      // Skip saving until the channel's scroll position has been restored, so
+      // a premature cleanup (e.g. StrictMode remount) doesn't persist the top.
+      if (!hasRestoredScrollRef.current) {
+        return;
+      }
+
       saveScrollPosition(
         previousChannelKeyRef.current,
         lastKnownScrollTopRef.current
