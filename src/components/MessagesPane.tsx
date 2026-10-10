@@ -339,6 +339,8 @@ export function MessagesPane({
     };
   }, [saveScrollPosition, selectedChannelKey]);
 
+  // Runs after every render because the scroll container can mount without any
+  // of the values read here changing (e.g. once the sidebar finishes loading).
   useLayoutEffect(() => {
     if (
       !selectedChannelKey ||
@@ -364,15 +366,7 @@ export function MessagesPane({
     wasAtBottomRef.current = isAtBottom(element);
     saveCurrentScrollPosition();
     hasRestoredScrollRef.current = true;
-  }, [
-    isAtBottom,
-    isMessagesLoading,
-    saveCurrentScrollPosition,
-    scrollToBottom,
-    scrollByChannelKey,
-    selectedChannelKey,
-    selectedMessages.length,
-  ]);
+  });
 
   useLayoutEffect(() => {
     if (!selectedChannelKey || !hasRestoredScrollRef.current) {
