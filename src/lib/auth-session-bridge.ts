@@ -28,10 +28,6 @@ type AuthSessionActionsBridge = {
     userRef: UserRef,
     password: string
   ) => Promise<{ tokenResponse: TokenResponse; clientId: string }>;
-  refreshConnectionAuth: (
-    userRef: UserRef,
-    auth: StoredAccountAuth
-  ) => Promise<string>;
 };
 
 let authSessionStateBridge: AuthSessionStateBridge | null = null;
@@ -116,15 +112,4 @@ export function signupAuthSessionWithConnection(
     userRef,
     password
   );
-}
-
-export function refreshAuthSessionConnection(
-  userRef: UserRef,
-  auth: StoredAccountAuth
-): Promise<string> {
-  if (!authSessionActionsBridge) {
-    throw new Error("Auth session actions bridge is not registered");
-  }
-
-  return authSessionActionsBridge.refreshConnectionAuth(userRef, auth);
 }
