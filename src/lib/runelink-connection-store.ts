@@ -1,5 +1,6 @@
 import {
   RunelinkConnection,
+  RunelinkRequestError,
   TokenResponseSchema,
   type TokenResponse,
   type UserRef,
@@ -47,6 +48,48 @@ let syncQueued = false;
 let replaceInProgress = false;
 let lastActiveSessionKey: string | null = null;
 let explicitAuthenticationInProgress = false;
+let authRetryTimer: ReturnType<typeof setTimeout> | null = null;
+let authRetryAttempt = 0;
+let healthCheckInFlight = false;
+
+const AUTH_REQUEST_TIMEOUT_MS = 10_000;
+const HEALTH_CHECK_TIMEOUT_MS = 5_000;
+const HEARTBEAT_INTERVAL_MS = 30_000;
+const AUTH_RETRY_INITIAL_DELAY_MS = 1_000;
+const AUTH_RETRY_MAX_DELAY_MS = 30_000;
+// Error codes the host returns when a refresh token is unknown, expired, or
+// revoked. Anything else (network failures, timeouts, internal errors) is
+// treated as transient so the stored session survives it.
+const AUTH_REJECTION_ERROR_CODES = new Set(["auth_error", "not_found"]);
+
+class RequestTimeoutError extends Error {}
+
+function withTimeout<T>(
+  promise: Promise<T>,
+  timeoutMs: number,
+  message: string
+): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(
+      () => reject(new RequestTimeoutError(message)),
+      timeoutMs
+    );
+    promise.then(resolve, reject).finally(() => clearTimeout(timer));
+  });
+}
+
+function isAuthRejection(error: unknown): boolean {
+  return (
+    error instanceof RunelinkRequestError &&
+    AUTH_REJECTION_ERROR_CODES.has(error.code)
+  );
+}
+
+function clearAuthRetryTimer(): void {
+  if (authRetryTimer === null) return;
+  clearTimeout(authRetryTimer);
+  authRetryTimer = null;
+}
 
 function getTransportSecurityMode(): "secure-only" | "prefer-secure" {
   return window.location.protocol === "https:"
@@ -88,6 +131,7 @@ function setUnauthenticatedStatus(status: AccountConnectionStatus): void {
 
 function setAuthenticatedStatus(userRef: UserRef): void {
   currentConnectionAuthenticated = true;
+  authRetryAttempt = 0;
   useRunelinkConnectionStore.setState({
     status: "connected",
     lastError: null,
@@ -96,6 +140,7 @@ function setAuthenticatedStatus(userRef: UserRef): void {
 }
 
 function teardownConnection(): void {
+  clearAuthRetryTimer();
   currentStatusCleanup?.();
   currentErrorCleanup?.();
   currentUpdateCleanup?.();
@@ -274,12 +319,16 @@ async function authenticateWithAccessToken(
   userRef: UserRef,
   accessToken: string
 ): Promise<void> {
-  const reply = await connection.send({
-    type: "auth_token_access",
-    data: {
-      access_token: accessToken,
-    },
-  });
+  const reply = await withTimeout(
+    connection.send({
+      type: "auth_token_access",
+      data: {
+        access_token: accessToken,
+      },
+    }),
+    AUTH_REQUEST_TIMEOUT_MS,
+    "Timed out authenticating websocket"
+  );
 
   if (
     reply.type !== "auth_token_access" ||
@@ -296,14 +345,18 @@ async function authenticateWithRefreshToken(
   auth: StoredAccountAuth
 ): Promise<string> {
   const clientId = auth.client_id ?? crypto.randomUUID();
-  const reply = await connection.send({
-    type: "auth_token_refresh",
-    data: {
-      refresh_token: auth.refresh_token,
-      client_id: auth.client_id ?? null,
-      scope: auth.scope ?? null,
-    },
-  });
+  const reply = await withTimeout(
+    connection.send({
+      type: "auth_token_refresh",
+      data: {
+        refresh_token: auth.refresh_token,
+        client_id: auth.client_id ?? null,
+        scope: auth.scope ?? null,
+      },
+    }),
+    AUTH_REQUEST_TIMEOUT_MS,
+    "Timed out refreshing session"
+  );
 
   if (reply.type !== "auth_token") {
     throw new Error(`Unexpected reply type: ${reply.type}`);
@@ -338,7 +391,14 @@ async function authenticateStoredAccount(
           userRef,
           auth.access_token
         );
-      } catch {
+      } catch (error) {
+        // A refresh would fail the same way if the socket itself is broken.
+        if (
+          error instanceof RequestTimeoutError ||
+          connection.getStatus() !== "connected"
+        ) {
+          throw error;
+        }
         await authenticateWithRefreshToken(connection, userRef, auth);
       }
     } else {
@@ -359,6 +419,14 @@ async function authenticateStoredAccount(
       error instanceof Error
         ? error.message
         : "Unable to authenticate websocket";
+
+    if (!isAuthRejection(error)) {
+      // Keep the stored refresh token and try again on a fresh socket. This
+      // covers dropped or half-open sockets, timeouts, and host restarts.
+      scheduleAuthRetry(errorMessage);
+      return;
+    }
+
     clearAuthSessionAccount(userRef, errorMessage);
     connection.disconnect();
     useRunelinkConnectionStore.setState({
@@ -369,23 +437,113 @@ async function authenticateStoredAccount(
   }
 }
 
+function scheduleAuthRetry(errorMessage: string): void {
+  teardownConnection();
+  useRunelinkConnectionStore.setState({
+    status: "reconnecting",
+    lastError: errorMessage,
+    connectedAccount: null,
+  });
+
+  authRetryAttempt += 1;
+  const delayMs = Math.min(
+    AUTH_RETRY_INITIAL_DELAY_MS * 2 ** (authRetryAttempt - 1),
+    AUTH_RETRY_MAX_DELAY_MS
+  );
+  authRetryTimer = setTimeout(() => {
+    authRetryTimer = null;
+    void scheduleSyncConnectionToActiveAccount();
+  }, delayMs);
+}
+
+function forceReconnect(): void {
+  teardownConnection();
+  useRunelinkConnectionStore.setState({
+    status: "reconnecting",
+    connectedAccount: null,
+  });
+  void scheduleSyncConnectionToActiveAccount();
+}
+
+async function checkConnectionHealth(): Promise<void> {
+  if (healthCheckInFlight || explicitAuthenticationInProgress) {
+    return;
+  }
+
+  const { activeAccount, activeAuth } = getAuthSessionSnapshot();
+  if (!activeAccount || !activeAuth) {
+    return;
+  }
+
+  const { status } = useRunelinkConnectionStore.getState();
+  if (status === "authenticating" || status === "unauthenticated") {
+    // Authentication is already underway and bounded by its own timeout.
+    return;
+  }
+
+  const connection = currentConnection;
+  if (status !== "connected" || !connection) {
+    // Skip any pending backoff (which browsers throttle in background tabs)
+    // and reconnect right away.
+    forceReconnect();
+    return;
+  }
+
+  healthCheckInFlight = true;
+  try {
+    await withTimeout(
+      connection.send({ type: "ping" }),
+      HEALTH_CHECK_TIMEOUT_MS,
+      "Timed out waiting for RuneLink host"
+    );
+  } catch {
+    // The socket can look open after sleep or a network change while no
+    // longer delivering messages, so replace it rather than waiting.
+    if (connection === currentConnection) {
+      forceReconnect();
+    }
+  } finally {
+    healthCheckInFlight = false;
+  }
+}
+
+function initializeConnectionHealthChecks(): void {
+  const checkIfVisible = () => {
+    if (document.visibilityState === "visible") {
+      void checkConnectionHealth();
+    }
+  };
+
+  document.addEventListener("visibilitychange", checkIfVisible);
+  window.addEventListener("pageshow", (event) => {
+    // Restored from the back/forward cache with a dead socket.
+    if (event.persisted) checkIfVisible();
+  });
+  window.addEventListener("online", checkIfVisible);
+  setInterval(checkIfVisible, HEARTBEAT_INTERVAL_MS);
+}
+
 function scheduleSyncConnectionToActiveAccount(): Promise<void> {
   if (syncInFlight) {
     syncQueued = true;
     return syncInFlight;
   }
 
-  const syncPromise = syncConnectionToActiveAccount().finally(() => {
-    if (syncInFlight !== syncPromise) {
-      return;
-    }
+  // Failures are reflected in the store status, so waiters fall back to
+  // waitForStatus instead of receiving a stale connection error.
+  const syncPromise = syncConnectionToActiveAccount()
+    .catch(() => undefined)
+    .finally(() => {
+      if (syncInFlight !== syncPromise) {
+        return;
+      }
 
-    syncInFlight = null;
-    if (syncQueued) {
-      syncQueued = false;
-      void scheduleSyncConnectionToActiveAccount();
-    }
-  });
+      syncInFlight = null;
+      if (syncQueued) {
+        syncQueued = false;
+        void scheduleSyncConnectionToActiveAccount();
+      }
+    });
 
   syncInFlight = syncPromise;
   return syncPromise;
@@ -432,6 +590,7 @@ export async function loginWithConnection(
   clientId: string
 ): Promise<TokenResponse> {
   explicitAuthenticationInProgress = true;
+  clearAuthRetryTimer();
   useRunelinkConnectionStore.setState({
     status: "connecting",
     lastError: null,
@@ -485,6 +644,7 @@ export async function signupAndLoginWithConnection(
   password: string
 ): Promise<{ tokenResponse: TokenResponse; clientId: string }> {
   explicitAuthenticationInProgress = true;
+  clearAuthRetryTimer();
   useRunelinkConnectionStore.setState({
     status: "connecting",
     lastError: null,
@@ -640,6 +800,7 @@ export function initializeRunelinkConnectionStore(): void {
   lifecycleInitialized = true;
   lastActiveSessionKey = getActiveSessionKey();
   void scheduleSyncConnectionToActiveAccount();
+  initializeConnectionHealthChecks();
   subscribeToAuthSession(() => {
     const nextSessionKey = getActiveSessionKey();
     if (nextSessionKey === lastActiveSessionKey) {
