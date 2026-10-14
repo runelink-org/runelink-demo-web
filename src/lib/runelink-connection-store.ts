@@ -50,11 +50,12 @@ let lastActiveSessionKey: string | null = null;
 let explicitAuthenticationInProgress = false;
 let authRetryTimer: ReturnType<typeof setTimeout> | null = null;
 let authRetryAttempt = 0;
-let healthCheckInFlight = false;
+let hiddenAt: number | null = null;
 
 const AUTH_REQUEST_TIMEOUT_MS = 10_000;
-const HEALTH_CHECK_TIMEOUT_MS = 5_000;
-const HEARTBEAT_INTERVAL_MS = 30_000;
+// After this long in the background (e.g. sleep), the socket may look open
+// while no longer delivering messages, so it is replaced on return.
+const RESUME_RECONNECT_AFTER_MS = 60_000;
 const AUTH_RETRY_INITIAL_DELAY_MS = 1_000;
 const AUTH_RETRY_MAX_DELAY_MS = 30_000;
 // Error codes the host returns when a refresh token is unknown, expired, or
@@ -62,18 +63,13 @@ const AUTH_RETRY_MAX_DELAY_MS = 30_000;
 // treated as transient so the stored session survives it.
 const AUTH_REJECTION_ERROR_CODES = new Set(["auth_error", "not_found"]);
 
-class RequestTimeoutError extends Error {}
-
 function withTimeout<T>(
   promise: Promise<T>,
   timeoutMs: number,
   message: string
 ): Promise<T> {
   return new Promise((resolve, reject) => {
-    const timer = setTimeout(
-      () => reject(new RequestTimeoutError(message)),
-      timeoutMs
-    );
+    const timer = setTimeout(() => reject(new Error(message)), timeoutMs);
     promise.then(resolve, reject).finally(() => clearTimeout(timer));
   });
 }
@@ -82,6 +78,17 @@ function isAuthRejection(error: unknown): boolean {
   return (
     error instanceof RunelinkRequestError &&
     AUTH_REJECTION_ERROR_CODES.has(error.code)
+  );
+}
+
+// Whether `auth` is still the active session. Syncs can outlive a logout or
+// account switch (e.g. while waiting out a host outage), and must not restore
+// the old session when they resume.
+function isActiveSession(userRef: UserRef, auth: StoredAccountAuth): boolean {
+  const { activeAccount, activeAuth } = getAuthSessionSnapshot();
+  return (
+    sameUserRef(activeAccount, userRef) &&
+    activeAuth?.refresh_token === auth.refresh_token
   );
 }
 
@@ -192,6 +199,9 @@ async function waitForStatus(
   if (currentConnection && predicate(state.status, state.connectedAccount)) {
     return currentConnection;
   }
+  if (state.status === "disconnected") {
+    throw new Error(state.lastError ?? "RuneLink connection is not available");
+  }
 
   return new Promise((resolve, reject) => {
     const unsubscribe = useRunelinkConnectionStore.subscribe((storeState) => {
@@ -275,14 +285,19 @@ async function replaceConnection(host: string): Promise<RunelinkConnection> {
 
   currentConnection = connection;
   currentConnectionHost = host;
+  // Start connecting before subscribing so listeners never see the new
+  // connection's initial "disconnected" status, which would reject waiters.
+  const connectPromise = connection.connect();
   attachConnectionListeners(connection);
 
   try {
-    await connection.connect();
-    replaceInProgress = false;
-  } catch (error) {
-    replaceInProgress = false;
+    await connectPromise;
     if (connection === currentConnection) {
+      replaceInProgress = false;
+    }
+  } catch (error) {
+    if (connection === currentConnection) {
+      replaceInProgress = false;
       useRunelinkConnectionStore.setState({
         status: "disconnected",
         lastError: error instanceof Error ? error.message : "Unable to connect",
@@ -363,6 +378,9 @@ async function authenticateWithRefreshToken(
   }
 
   const tokenResponse = TokenResponseSchema.parse(reply.data);
+  if (!isActiveSession(userRef, auth)) {
+    throw new Error("Session changed while refreshing");
+  }
   storeAuthSessionToken(userRef, tokenResponse, clientId);
   return tokenResponse.access_token;
 }
@@ -392,26 +410,29 @@ async function authenticateStoredAccount(
           auth.access_token
         );
       } catch (error) {
-        // A refresh would fail the same way if the socket itself is broken.
-        if (
-          error instanceof RequestTimeoutError ||
-          connection.getStatus() !== "connected"
-        ) {
-          throw error;
-        }
+        // Sending on a replaced connection would reopen it.
+        if (connection !== currentConnection) throw error;
         await authenticateWithRefreshToken(connection, userRef, auth);
       }
     } else {
       await authenticateWithRefreshToken(connection, userRef, auth);
     }
 
-    if (generation !== syncGeneration || connection !== currentConnection) {
+    if (
+      generation !== syncGeneration ||
+      connection !== currentConnection ||
+      !isActiveSession(userRef, auth)
+    ) {
       return;
     }
 
     setAuthenticatedStatus(userRef);
   } catch (error) {
-    if (generation !== syncGeneration || connection !== currentConnection) {
+    if (
+      generation !== syncGeneration ||
+      connection !== currentConnection ||
+      !isActiveSession(userRef, auth)
+    ) {
       return;
     }
 
@@ -456,7 +477,12 @@ function scheduleAuthRetry(errorMessage: string): void {
   }, delayMs);
 }
 
-function forceReconnect(): void {
+function reconnectActiveSession(): void {
+  const { activeAccount, activeAuth } = getAuthSessionSnapshot();
+  if (!activeAccount || !activeAuth || explicitAuthenticationInProgress) {
+    return;
+  }
+
   teardownConnection();
   useRunelinkConnectionStore.setState({
     status: "reconnecting",
@@ -465,62 +491,25 @@ function forceReconnect(): void {
   void scheduleSyncConnectionToActiveAccount();
 }
 
-async function checkConnectionHealth(): Promise<void> {
-  if (healthCheckInFlight || explicitAuthenticationInProgress) {
-    return;
-  }
-
-  const { activeAccount, activeAuth } = getAuthSessionSnapshot();
-  if (!activeAccount || !activeAuth) {
-    return;
-  }
-
-  const { status } = useRunelinkConnectionStore.getState();
-  if (status === "authenticating" || status === "unauthenticated") {
-    // Authentication is already underway and bounded by its own timeout.
-    return;
-  }
-
-  const connection = currentConnection;
-  if (status !== "connected" || !connection) {
-    // Skip any pending backoff (which browsers throttle in background tabs)
-    // and reconnect right away.
-    forceReconnect();
-    return;
-  }
-
-  healthCheckInFlight = true;
-  try {
-    await withTimeout(
-      connection.send({ type: "ping" }),
-      HEALTH_CHECK_TIMEOUT_MS,
-      "Timed out waiting for RuneLink host"
-    );
-  } catch {
-    // The socket can look open after sleep or a network change while no
-    // longer delivering messages, so replace it rather than waiting.
-    if (connection === currentConnection) {
-      forceReconnect();
+function initializeResumeReconnect(): void {
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "hidden") {
+      hiddenAt = Date.now();
+      return;
     }
-  } finally {
-    healthCheckInFlight = false;
-  }
-}
-
-function initializeConnectionHealthChecks(): void {
-  const checkIfVisible = () => {
-    if (document.visibilityState === "visible") {
-      void checkConnectionHealth();
+    if (
+      hiddenAt !== null &&
+      Date.now() - hiddenAt >= RESUME_RECONNECT_AFTER_MS
+    ) {
+      reconnectActiveSession();
     }
-  };
-
-  document.addEventListener("visibilitychange", checkIfVisible);
+    hiddenAt = null;
+  });
   window.addEventListener("pageshow", (event) => {
     // Restored from the back/forward cache with a dead socket.
-    if (event.persisted) checkIfVisible();
+    if (event.persisted) reconnectActiveSession();
   });
-  window.addEventListener("online", checkIfVisible);
-  setInterval(checkIfVisible, HEARTBEAT_INTERVAL_MS);
+  window.addEventListener("online", reconnectActiveSession);
 }
 
 function scheduleSyncConnectionToActiveAccount(): Promise<void> {
@@ -590,7 +579,6 @@ export async function loginWithConnection(
   clientId: string
 ): Promise<TokenResponse> {
   explicitAuthenticationInProgress = true;
-  clearAuthRetryTimer();
   useRunelinkConnectionStore.setState({
     status: "connecting",
     lastError: null,
@@ -644,7 +632,6 @@ export async function signupAndLoginWithConnection(
   password: string
 ): Promise<{ tokenResponse: TokenResponse; clientId: string }> {
   explicitAuthenticationInProgress = true;
-  clearAuthRetryTimer();
   useRunelinkConnectionStore.setState({
     status: "connecting",
     lastError: null,
@@ -714,42 +701,6 @@ export function cancelPendingAuthentication(): void {
   currentConnection?.disconnect();
 }
 
-export async function refreshConnectionAuth(
-  userRef: UserRef,
-  auth: StoredAccountAuth
-): Promise<string> {
-  const forceReplace =
-    currentConnectionHost !== userRef.host || !connectionMatches(userRef);
-  const connection = await ensureSocketForHost(userRef.host, {
-    forceReplace,
-  });
-
-  useRunelinkConnectionStore.setState({
-    status: "authenticating",
-    lastError: null,
-    connectedAccount: null,
-  });
-
-  try {
-    const accessToken = await authenticateWithRefreshToken(
-      connection,
-      userRef,
-      auth
-    );
-    setAuthenticatedStatus(userRef);
-    return accessToken;
-  } catch (error) {
-    teardownConnection();
-    useRunelinkConnectionStore.setState({
-      status: "disconnected",
-      lastError:
-        error instanceof Error ? error.message : "Unable to refresh session",
-      connectedAccount: null,
-    });
-    throw error instanceof Error ? error : new Error(String(error));
-  }
-}
-
 async function syncConnectionToActiveAccount(): Promise<void> {
   const generation = ++syncGeneration;
   const authState = getAuthSessionSnapshot();
@@ -800,7 +751,7 @@ export function initializeRunelinkConnectionStore(): void {
   lifecycleInitialized = true;
   lastActiveSessionKey = getActiveSessionKey();
   void scheduleSyncConnectionToActiveAccount();
-  initializeConnectionHealthChecks();
+  initializeResumeReconnect();
   subscribeToAuthSession(() => {
     const nextSessionKey = getActiveSessionKey();
     if (nextSessionKey === lastActiveSessionKey) {
@@ -808,6 +759,7 @@ export function initializeRunelinkConnectionStore(): void {
     }
 
     lastActiveSessionKey = nextSessionKey;
+    authRetryAttempt = 0;
     void scheduleSyncConnectionToActiveAccount();
   });
 }
@@ -815,5 +767,4 @@ export function initializeRunelinkConnectionStore(): void {
 registerAuthSessionActionsBridge({
   loginWithConnection,
   signupAndLoginWithConnection,
-  refreshConnectionAuth,
 });
