@@ -6,6 +6,7 @@ import {
   MoreHorizontal,
   Plus,
   Trash2,
+  TriangleAlert,
   UserCircle2,
 } from "lucide-react";
 import { useState } from "react";
@@ -56,6 +57,30 @@ export function ProfileSelector({
   const logoutActive = useAuthStore((state) => state.logoutActive);
   const removeAccount = useAuthStore((state) => state.removeAccount);
   const connectionStatus = useRunelinkConnectionStore((state) => state.status);
+  const unsupportedCapabilities = useRunelinkConnectionStore(
+    (state) => state.unsupportedCapabilities
+  );
+  const incompatibleHost = useRunelinkConnectionStore(
+    (state) => state.incompatibleHost
+  );
+  const isLimited =
+    connectionStatus === "connected" && unsupportedCapabilities.length > 0;
+  const warning = incompatibleHost
+    ? {
+        label: "Incompatible host",
+        detail: incompatibleHost,
+        color: "text-destructive",
+      }
+    : isLimited
+      ? {
+          label: "Connected (limited)",
+          detail: `${activeAccount?.host} doesn't support ${unsupportedCapabilities.join(", ")}`,
+          color: "text-amber-500",
+        }
+      : null;
+  const warningIcon = warning ? (
+    <TriangleAlert className={warning.color} />
+  ) : null;
 
   const activeKey = activeAccount ? accountStorageKey(activeAccount) : "";
   const triggerLabel = activeAccount?.name.slice(0, 2).toUpperCase() ?? "AC";
@@ -66,12 +91,15 @@ export function ProfileSelector({
         render={
           <Button
             variant="outline"
-            className="size-12 rounded-2xl p-0"
-            title={
+            className="relative size-12 rounded-2xl p-0"
+            title={[
               activeAccount
                 ? `${activeAccount.name}@${activeAccount.host}`
-                : "Account"
-            }
+                : "Account",
+              warning?.label,
+            ]
+              .filter(Boolean)
+              .join(" · ")}
           />
         }
       >
@@ -80,6 +108,12 @@ export function ProfileSelector({
         ) : (
           <UserCircle2 className="size-7" />
         )}
+        {warning ? (
+          <span
+            className={`border-background absolute top-1 right-1 size-2.5 rounded-full border-2 bg-current ${warning.color}`}
+            aria-hidden
+          />
+        ) : null}
       </DropdownMenuTrigger>
 
       <DropdownMenuContent side="right" align="end" className="w-64">
@@ -91,9 +125,28 @@ export function ProfileSelector({
           </DropdownMenuLabel>
 
           {activeAccount ? (
-            <DropdownMenuItem disabled>
-              {activeAuth ? <CheckCircle2 /> : <CircleDashed />}
-              {activeAuth ? statusLabels[connectionStatus] : "Login required"}
+            // Warnings stay readable instead of dimmed like other status text.
+            <DropdownMenuItem
+              disabled
+              className={warning ? "data-disabled:opacity-100" : undefined}
+            >
+              {!activeAuth ? (
+                <CircleDashed />
+              ) : (
+                (warningIcon ?? <CheckCircle2 />)
+              )}
+              <div className="flex min-w-0 flex-col">
+                <span>
+                  {!activeAuth
+                    ? "Login required"
+                    : (warning?.label ?? statusLabels[connectionStatus])}
+                </span>
+                {activeAuth && warning ? (
+                  <span className="text-muted-foreground text-xs wrap-anywhere">
+                    {warning.detail}
+                  </span>
+                ) : null}
+              </div>
             </DropdownMenuItem>
           ) : null}
         </DropdownMenuGroup>
@@ -131,7 +184,12 @@ export function ProfileSelector({
                     openAccount(account);
                   }}
                 >
-                  {isLoggedIn ? (
+                  {isActive && warning ? (
+                    <>
+                      {warningIcon}
+                      <span className="sr-only">{warning.label}</span>
+                    </>
+                  ) : isLoggedIn ? (
                     <CheckCircle2 />
                   ) : isChecking ? (
                     <LoaderCircle className="animate-spin" />
