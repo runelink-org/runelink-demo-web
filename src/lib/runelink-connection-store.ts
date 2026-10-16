@@ -1,5 +1,6 @@
 import {
   RunelinkConnection,
+  RunelinkIncompatibleHostError,
   RunelinkRequestError,
   TokenResponseSchema,
   type TokenResponse,
@@ -31,6 +32,9 @@ type RunelinkConnectionStore = {
   status: AccountConnectionStatus;
   lastError: string | null;
   connectedAccount: UserRef | null;
+  // Capabilities this client offered that the host did not agree to.
+  unsupportedCapabilities: string[];
+  incompatibleHost: string | null;
   disconnect: () => void;
   request: (message: WsRequest) => Promise<WsReply>;
 };
@@ -92,6 +96,23 @@ function isActiveSession(userRef: UserRef, auth: StoredAccountAuth): boolean {
   );
 }
 
+// Fails before anything is sent, e.g. so signup cannot create an account that
+// cannot then log in.
+function requireCapabilities(
+  connection: RunelinkConnection,
+  host: string,
+  capabilities: string[]
+): void {
+  const unsupported = connection.getUnsupportedCapabilities() ?? [];
+  const missing = capabilities.filter((id) => unsupported.includes(id));
+  if (missing.length > 0) {
+    throw new RunelinkIncompatibleHostError(
+      host,
+      `missing ${missing.join(", ")}`
+    );
+  }
+}
+
 function clearAuthRetryTimer(): void {
   if (authRetryTimer === null) return;
   clearTimeout(authRetryTimer);
@@ -110,6 +131,8 @@ export const useRunelinkConnectionStore = create<RunelinkConnectionStore>(
     status: "disconnected",
     lastError: null,
     connectedAccount: null,
+    unsupportedCapabilities: [],
+    incompatibleHost: null,
     disconnect() {
       teardownConnection();
       set({
@@ -161,6 +184,10 @@ function teardownConnection(): void {
   currentConnectionHost = null;
   currentConnectionAuthenticated = false;
   replaceInProgress = false;
+  useRunelinkConnectionStore.setState({
+    unsupportedCapabilities: [],
+    incompatibleHost: null,
+  });
 }
 
 function connectionMatches(userRef: UserRef): boolean {
@@ -233,6 +260,9 @@ function attachConnectionListeners(connection: RunelinkConnection): void {
     }
 
     if (status === "connected") {
+      useRunelinkConnectionStore.setState({
+        unsupportedCapabilities: connection.getUnsupportedCapabilities() ?? [],
+      });
       if (currentConnectionAuthenticated) {
         const connectedAccount = getConnectedAccount();
         if (connectedAccount) {
@@ -262,6 +292,9 @@ function attachConnectionListeners(connection: RunelinkConnection): void {
 
     useRunelinkConnectionStore.setState({
       lastError: error.message,
+      ...(error instanceof RunelinkIncompatibleHostError
+        ? { incompatibleHost: error.message }
+        : {}),
     });
   });
 
@@ -398,6 +431,8 @@ async function authenticateStoredAccount(
   });
 
   try {
+    // Refresh-token sign-in is the fallback for every stored session.
+    requireCapabilities(connection, userRef.host, ["auth.token"]);
     const nowInSeconds = Math.floor(Date.now() / 1000);
     if (
       auth.access_token &&
@@ -410,8 +445,14 @@ async function authenticateStoredAccount(
           auth.access_token
         );
       } catch (error) {
-        // Sending on a replaced connection would reopen it.
-        if (connection !== currentConnection) throw error;
+        // Sending on a replaced connection would reopen it, and an
+        // incompatible host would fail the refresh the same way.
+        if (
+          connection !== currentConnection ||
+          error instanceof RunelinkIncompatibleHostError
+        ) {
+          throw error;
+        }
         await authenticateWithRefreshToken(connection, userRef, auth);
       }
     } else {
@@ -440,6 +481,19 @@ async function authenticateStoredAccount(
       error instanceof Error
         ? error.message
         : "Unable to authenticate websocket";
+
+    if (error instanceof RunelinkIncompatibleHostError) {
+      // Retrying cannot help until the host is updated, so keep the stored
+      // session and wait for the next explicit sync.
+      useRunelinkConnectionStore.setState({
+        status: "disconnected",
+        lastError: errorMessage,
+        connectedAccount: null,
+        incompatibleHost: errorMessage,
+      });
+      connection.disconnect();
+      return;
+    }
 
     if (!isAuthRejection(error)) {
       // Keep the stored refresh token and try again on a fresh socket. This
@@ -499,7 +553,8 @@ function initializeResumeReconnect(): void {
     }
     if (
       hiddenAt !== null &&
-      Date.now() - hiddenAt >= RESUME_RECONNECT_AFTER_MS
+      (Date.now() - hiddenAt >= RESUME_RECONNECT_AFTER_MS ||
+        useRunelinkConnectionStore.getState().incompatibleHost !== null)
     ) {
       reconnectActiveSession();
     }
@@ -596,6 +651,7 @@ export async function loginWithConnection(
       connectedAccount: null,
     });
 
+    requireCapabilities(connection, userRef.host, ["auth.token"]);
     const reply = await connection.send({
       type: "auth_token_password",
       data: {
@@ -649,6 +705,10 @@ export async function signupAndLoginWithConnection(
       connectedAccount: null,
     });
 
+    requireCapabilities(connection, userRef.host, [
+      "auth.signup",
+      "auth.token",
+    ]);
     const signupReply = await connection.send({
       type: "auth_signup",
       data: {
