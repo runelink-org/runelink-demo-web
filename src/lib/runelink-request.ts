@@ -43,10 +43,11 @@ type ExpectedReplyTypeByRequestType = {
   channels_get_by_server: "channels_get_by_server";
   channels_get_by_id: "channels_get_by_id";
   channels_delete: "channels_delete";
+  channels_move: "channels_move";
   messages_create: "messages_create";
   messages_get_all: "messages_get_all";
   messages_get_by_server: "messages_get_by_server";
-  messages_get_by_channel: "messages_get_by_channel";
+  messages_get_by_text_channel: "messages_get_by_text_channel";
   messages_get_by_id: "messages_get_by_id";
   messages_delete: "messages_delete";
 };
@@ -82,10 +83,11 @@ const expectedReplyTypeByRequestType = {
   channels_get_by_server: "channels_get_by_server",
   channels_get_by_id: "channels_get_by_id",
   channels_delete: "channels_delete",
+  channels_move: "channels_move",
   messages_create: "messages_create",
   messages_get_all: "messages_get_all",
   messages_get_by_server: "messages_get_by_server",
-  messages_get_by_channel: "messages_get_by_channel",
+  messages_get_by_text_channel: "messages_get_by_text_channel",
   messages_get_by_id: "messages_get_by_id",
   messages_delete: "messages_delete",
 } satisfies ExpectedReplyTypeByRequestType;

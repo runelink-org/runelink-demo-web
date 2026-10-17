@@ -3,49 +3,26 @@ import { create } from "zustand";
 import { requestExpected } from "@/lib/runelink-request";
 import {
   bindStoreToActiveAccount,
-  type ChannelId,
   type MessageId,
-  serverChannelKey,
-  type ServerId,
   type TargetHost,
+  type TextChannelId,
 } from "@/lib/runelink-store-utils";
 
 type MessagesState = {
-  allMessages: Message[];
-  messagesByServerId: Record<string, Message[]>;
-  messagesByChannelKey: Record<string, Message[]>;
-  messageById: Record<string, Message>;
-  isLoading: boolean;
-  isLoadingByServerId: Record<string, boolean>;
-  isLoadingByChannelKey: Record<string, boolean>;
-  error: string | null;
-  errorByServerId: Record<string, string | null>;
-  errorByChannelKey: Record<string, string | null>;
-  fetchMessages: (targetHost?: TargetHost) => Promise<Message[]>;
-  fetchMessagesByServer: (
-    serverId: ServerId,
+  messagesByTextChannelId: Record<string, Message[]>;
+  isLoadingByTextChannelId: Record<string, boolean>;
+  errorByTextChannelId: Record<string, string | null>;
+  fetchMessagesByTextChannel: (
+    textChannelId: TextChannelId,
     targetHost?: TargetHost
   ) => Promise<Message[]>;
-  fetchMessagesByChannel: (
-    serverId: ServerId,
-    channelId: ChannelId,
-    targetHost?: TargetHost
-  ) => Promise<Message[]>;
-  fetchMessageById: (
-    serverId: ServerId,
-    channelId: ChannelId,
-    messageId: MessageId,
-    targetHost?: TargetHost
-  ) => Promise<Message>;
   createMessage: (
-    serverId: ServerId,
-    channelId: ChannelId,
+    textChannelId: TextChannelId,
     newMessage: NewMessage,
     targetHost?: TargetHost
   ) => Promise<Message>;
   deleteMessage: (
-    serverId: ServerId,
-    channelId: ChannelId,
+    textChannelId: TextChannelId,
     messageId: MessageId,
     targetHost?: TargetHost
   ) => Promise<void>;
@@ -53,31 +30,20 @@ type MessagesState = {
 };
 
 const initialState = {
-  allMessages: [],
-  messagesByServerId: {},
-  messagesByChannelKey: {},
-  messageById: {},
-  isLoading: false,
-  isLoadingByServerId: {},
-  isLoadingByChannelKey: {},
-  error: null,
-  errorByServerId: {},
-  errorByChannelKey: {},
+  messagesByTextChannelId: {},
+  isLoadingByTextChannelId: {},
+  errorByTextChannelId: {},
 };
 
 function upsertMessage(messages: Message[], nextMessage: Message): Message[] {
-  return [
+  return sortMessages([
     ...messages.filter((message) => message.id !== nextMessage.id),
     nextMessage,
-  ];
+  ]);
 }
 
 function removeMessage(messages: Message[], messageId: MessageId): Message[] {
   return messages.filter((message) => message.id !== messageId);
-}
-
-function mergeMessages(messages: Message[]): Record<string, Message> {
-  return Object.fromEntries(messages.map((message) => [message.id, message]));
 }
 
 function sortMessages(messages: Message[]): Message[] {
@@ -89,151 +55,35 @@ function sortMessages(messages: Message[]): Message[] {
 export const useMessagesStore = create<MessagesState>((set) => ({
   ...initialState,
 
-  async fetchMessages(targetHost = null) {
-    set({ isLoading: true, error: null });
-
-    try {
-      const reply = await requestExpected("messages_get_all", {
-        type: "messages_get_all",
-        data: { target_host: targetHost },
-      });
-
-      set((state) => ({
-        allMessages: sortMessages(reply.data),
-        messageById: {
-          ...state.messageById,
-          ...mergeMessages(reply.data),
-        },
-        isLoading: false,
-        error: null,
-      }));
-
-      return reply.data;
-    } catch (error) {
-      const message =
-        error instanceof Error ? error.message : "Failed to load messages";
-      set({ isLoading: false, error: message });
-      throw error;
-    }
-  },
-
-  async fetchMessagesByServer(serverId, targetHost = null) {
+  async fetchMessagesByTextChannel(textChannelId, targetHost = null) {
     set((state) => ({
-      isLoadingByServerId: {
-        ...state.isLoadingByServerId,
-        [serverId]: true,
+      isLoadingByTextChannelId: {
+        ...state.isLoadingByTextChannelId,
+        [textChannelId]: true,
       },
-      errorByServerId: {
-        ...state.errorByServerId,
-        [serverId]: null,
+      errorByTextChannelId: {
+        ...state.errorByTextChannelId,
+        [textChannelId]: null,
       },
     }));
 
     try {
-      const reply = await requestExpected("messages_get_by_server", {
-        type: "messages_get_by_server",
+      const reply = await requestExpected("messages_get_by_text_channel", {
+        type: "messages_get_by_text_channel",
         data: {
-          server_id: serverId,
-          target_host: targetHost,
-        },
-      });
-
-      const channelMessages = reply.data.reduce<Record<string, Message[]>>(
-        (groups, message) => {
-          const key = serverChannelKey(serverId, message.channel_id);
-          groups[key] = [...(groups[key] ?? []), message];
-          return groups;
-        },
-        {}
-      );
-
-      set((state) => ({
-        messagesByServerId: {
-          ...state.messagesByServerId,
-          [serverId]: sortMessages(reply.data),
-        },
-        messagesByChannelKey: {
-          ...state.messagesByChannelKey,
-          ...Object.fromEntries(
-            Object.entries(channelMessages).map(([key, messages]) => [
-              key,
-              sortMessages(messages),
-            ])
-          ),
-        },
-        messageById: {
-          ...state.messageById,
-          ...mergeMessages(reply.data),
-        },
-        isLoadingByServerId: {
-          ...state.isLoadingByServerId,
-          [serverId]: false,
-        },
-        errorByServerId: {
-          ...state.errorByServerId,
-          [serverId]: null,
-        },
-      }));
-
-      return reply.data;
-    } catch (error) {
-      const message =
-        error instanceof Error
-          ? error.message
-          : "Failed to load server messages";
-      set((state) => ({
-        isLoadingByServerId: {
-          ...state.isLoadingByServerId,
-          [serverId]: false,
-        },
-        errorByServerId: {
-          ...state.errorByServerId,
-          [serverId]: message,
-        },
-      }));
-      throw error;
-    }
-  },
-
-  async fetchMessagesByChannel(serverId, channelId, targetHost = null) {
-    const channelKey = serverChannelKey(serverId, channelId);
-    set((state) => ({
-      isLoadingByChannelKey: {
-        ...state.isLoadingByChannelKey,
-        [channelKey]: true,
-      },
-      errorByChannelKey: {
-        ...state.errorByChannelKey,
-        [channelKey]: null,
-      },
-    }));
-
-    try {
-      const reply = await requestExpected("messages_get_by_channel", {
-        type: "messages_get_by_channel",
-        data: {
-          server_id: serverId,
-          channel_id: channelId,
+          text_channel_id: textChannelId,
           target_host: targetHost,
         },
       });
 
       set((state) => ({
-        messagesByChannelKey: {
-          ...state.messagesByChannelKey,
-          [channelKey]: sortMessages(reply.data),
+        messagesByTextChannelId: {
+          ...state.messagesByTextChannelId,
+          [textChannelId]: sortMessages(reply.data),
         },
-        messageById: {
-          ...state.messageById,
-          ...mergeMessages(reply.data),
-        },
-        isLoadingByChannelKey: {
-          ...state.isLoadingByChannelKey,
-          [channelKey]: false,
-        },
-        errorByChannelKey: {
-          ...state.errorByChannelKey,
-          [channelKey]: null,
+        isLoadingByTextChannelId: {
+          ...state.isLoadingByTextChannelId,
+          [textChannelId]: false,
         },
       }));
 
@@ -244,193 +94,60 @@ export const useMessagesStore = create<MessagesState>((set) => ({
           ? error.message
           : "Failed to load channel messages";
       set((state) => ({
-        isLoadingByChannelKey: {
-          ...state.isLoadingByChannelKey,
-          [channelKey]: false,
+        isLoadingByTextChannelId: {
+          ...state.isLoadingByTextChannelId,
+          [textChannelId]: false,
         },
-        errorByChannelKey: {
-          ...state.errorByChannelKey,
-          [channelKey]: message,
-        },
-      }));
-      throw error;
-    }
-  },
-
-  async fetchMessageById(serverId, channelId, messageId, targetHost = null) {
-    const channelKey = serverChannelKey(serverId, channelId);
-    set((state) => ({
-      isLoadingByChannelKey: {
-        ...state.isLoadingByChannelKey,
-        [channelKey]: true,
-      },
-      errorByChannelKey: {
-        ...state.errorByChannelKey,
-        [channelKey]: null,
-      },
-    }));
-
-    try {
-      const reply = await requestExpected("messages_get_by_id", {
-        type: "messages_get_by_id",
-        data: {
-          server_id: serverId,
-          channel_id: channelId,
-          message_id: messageId,
-          target_host: targetHost,
-        },
-      });
-
-      set((state) => ({
-        messagesByChannelKey: {
-          ...state.messagesByChannelKey,
-          [channelKey]: sortMessages(
-            upsertMessage(
-              state.messagesByChannelKey[channelKey] ?? [],
-              reply.data
-            )
-          ),
-        },
-        messagesByServerId: {
-          ...state.messagesByServerId,
-          [serverId]: sortMessages(
-            upsertMessage(state.messagesByServerId[serverId] ?? [], reply.data)
-          ),
-        },
-        messageById: {
-          ...state.messageById,
-          [reply.data.id]: reply.data,
-        },
-        isLoadingByChannelKey: {
-          ...state.isLoadingByChannelKey,
-          [channelKey]: false,
-        },
-        errorByChannelKey: {
-          ...state.errorByChannelKey,
-          [channelKey]: null,
-        },
-      }));
-
-      return reply.data;
-    } catch (error) {
-      const message =
-        error instanceof Error ? error.message : "Failed to load message";
-      set((state) => ({
-        isLoadingByChannelKey: {
-          ...state.isLoadingByChannelKey,
-          [channelKey]: false,
-        },
-        errorByChannelKey: {
-          ...state.errorByChannelKey,
-          [channelKey]: message,
+        errorByTextChannelId: {
+          ...state.errorByTextChannelId,
+          [textChannelId]: message,
         },
       }));
       throw error;
     }
   },
 
-  async createMessage(serverId, channelId, newMessage, targetHost = null) {
-    const channelKey = serverChannelKey(serverId, channelId);
+  async createMessage(textChannelId, newMessage, targetHost = null) {
     const reply = await requestExpected("messages_create", {
       type: "messages_create",
       data: {
-        server_id: serverId,
-        channel_id: channelId,
+        text_channel_id: textChannelId,
         new_message: newMessage,
         target_host: targetHost,
       },
     });
 
     set((state) => ({
-      allMessages: sortMessages(upsertMessage(state.allMessages, reply.data)),
-      messagesByServerId: {
-        ...state.messagesByServerId,
-        [serverId]: sortMessages(
-          upsertMessage(state.messagesByServerId[serverId] ?? [], reply.data)
+      messagesByTextChannelId: {
+        ...state.messagesByTextChannelId,
+        [textChannelId]: upsertMessage(
+          state.messagesByTextChannelId[textChannelId] ?? [],
+          reply.data
         ),
-      },
-      messagesByChannelKey: {
-        ...state.messagesByChannelKey,
-        [channelKey]: sortMessages(
-          upsertMessage(
-            state.messagesByChannelKey[channelKey] ?? [],
-            reply.data
-          )
-        ),
-      },
-      messageById: {
-        ...state.messageById,
-        [reply.data.id]: reply.data,
       },
     }));
 
     return reply.data;
   },
 
-  async deleteMessage(serverId, channelId, messageId, targetHost = null) {
-    const channelKey = serverChannelKey(serverId, channelId);
-    set((state) => ({
-      isLoadingByChannelKey: {
-        ...state.isLoadingByChannelKey,
-        [channelKey]: true,
+  async deleteMessage(textChannelId, messageId, targetHost = null) {
+    await requestExpected("messages_delete", {
+      type: "messages_delete",
+      data: {
+        message_id: messageId,
+        target_host: targetHost,
       },
-      errorByChannelKey: {
-        ...state.errorByChannelKey,
-        [channelKey]: null,
+    });
+
+    set((state) => ({
+      messagesByTextChannelId: {
+        ...state.messagesByTextChannelId,
+        [textChannelId]: removeMessage(
+          state.messagesByTextChannelId[textChannelId] ?? [],
+          messageId
+        ),
       },
     }));
-
-    try {
-      await requestExpected("messages_delete", {
-        type: "messages_delete",
-        data: {
-          server_id: serverId,
-          channel_id: channelId,
-          message_id: messageId,
-          target_host: targetHost,
-        },
-      });
-
-      set((state) => {
-        const nextMessageById = { ...state.messageById };
-        delete nextMessageById[messageId];
-
-        return {
-          allMessages: removeMessage(state.allMessages, messageId),
-          messagesByServerId: {
-            ...state.messagesByServerId,
-            [serverId]: removeMessage(
-              state.messagesByServerId[serverId] ?? [],
-              messageId
-            ),
-          },
-          messagesByChannelKey: {
-            ...state.messagesByChannelKey,
-            [channelKey]: removeMessage(
-              state.messagesByChannelKey[channelKey] ?? [],
-              messageId
-            ),
-          },
-          messageById: nextMessageById,
-          isLoadingByChannelKey: {
-            ...state.isLoadingByChannelKey,
-            [channelKey]: false,
-          },
-          errorByChannelKey: {
-            ...state.errorByChannelKey,
-            [channelKey]: null,
-          },
-        };
-      });
-    } catch (error) {
-      set((state) => ({
-        isLoadingByChannelKey: {
-          ...state.isLoadingByChannelKey,
-          [channelKey]: false,
-        },
-      }));
-      throw error;
-    }
   },
 
   reset() {

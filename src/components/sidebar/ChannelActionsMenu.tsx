@@ -1,10 +1,11 @@
-import type { Channel } from "@runelink/sdk";
-import { Copy, Ellipsis, Trash2 } from "lucide-react";
+import type { ServerChannel, ServerChannelKind } from "@runelink/sdk";
+import { Copy, Ellipsis, FolderPlus, Hash, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { formatChannelCliPath } from "@/lib/cli-path";
@@ -13,9 +14,11 @@ import { cn } from "@/lib/utils";
 type ChannelActionsMenuProps = {
   host: string;
   serverId: string;
-  channel: Channel;
+  channel: ServerChannel;
   canDeleteChannel: boolean;
-  onDeleteChannel: (channel: Channel) => void;
+  onDeleteChannel: (channel: ServerChannel) => void;
+  // Passed for categories when the user can create channels
+  onCreateChild?: (kind: ServerChannelKind) => void;
   className?: string;
   forceVisible?: boolean;
 };
@@ -26,9 +29,11 @@ export function ChannelActionsMenu({
   channel,
   canDeleteChannel,
   onDeleteChannel,
+  onCreateChild,
   className,
   forceVisible = false,
 }: ChannelActionsMenuProps) {
+  const isCategory = channel.kind === "category";
   async function handleCopyChannelId(channelId: string) {
     if (typeof navigator === "undefined" || !navigator.clipboard) {
       toast.error("Clipboard is not available.");
@@ -89,6 +94,29 @@ export function ChannelActionsMenu({
         sideOffset={8}
         className="w-64"
       >
+        {onCreateChild ? (
+          <>
+            <DropdownMenuItem
+              className="cursor-pointer gap-3 rounded-xl px-3 py-2"
+              onClick={() => {
+                onCreateChild("text");
+              }}
+            >
+              <Hash className="size-4" />
+              <span className="font-medium">Create channel</span>
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              className="cursor-pointer gap-3 rounded-xl px-3 py-2"
+              onClick={() => {
+                onCreateChild("category");
+              }}
+            >
+              <FolderPlus className="size-4" />
+              <span className="font-medium">Create category</span>
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+          </>
+        ) : null}
         <DropdownMenuItem
           className="cursor-pointer gap-3 rounded-xl px-3 py-2"
           onClick={() => {
@@ -120,7 +148,9 @@ export function ChannelActionsMenu({
           }}
         >
           <Trash2 className="size-4" />
-          <span className="font-medium">Delete channel</span>
+          <span className="font-medium">
+            {isCategory ? "Delete category" : "Delete channel"}
+          </span>
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
