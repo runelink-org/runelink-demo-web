@@ -15,12 +15,10 @@ function isRevealModifierHeld(event: KeyboardEvent): boolean {
   return event.shiftKey || event.ctrlKey || event.metaKey;
 }
 
-// Whether a reorder modifier is held outside of text entry
+// Whether a reorder modifier is held outside of text entry, so typing
+// capitals doesn't flash the handles
 export function useReorderModifierHeld(): boolean {
   const [isModifierHeld, setIsModifierHeld] = useState(false);
-  const [isEditing, setIsEditing] = useState(() =>
-    isEditableElement(document.activeElement)
-  );
 
   useEffect(() => {
     function handleKey(event: KeyboardEvent) {
@@ -32,23 +30,15 @@ export function useReorderModifierHeld(): boolean {
       setIsModifierHeld(false);
     }
 
-    function handleFocusChange() {
-      setIsEditing(isEditableElement(document.activeElement));
-    }
-
     window.addEventListener("keydown", handleKey);
     window.addEventListener("keyup", handleKey);
     window.addEventListener("blur", handleBlur);
-    document.addEventListener("focusin", handleFocusChange);
-    document.addEventListener("focusout", handleFocusChange);
     return () => {
       window.removeEventListener("keydown", handleKey);
       window.removeEventListener("keyup", handleKey);
       window.removeEventListener("blur", handleBlur);
-      document.removeEventListener("focusin", handleFocusChange);
-      document.removeEventListener("focusout", handleFocusChange);
     };
   }, []);
 
-  return isModifierHeld && !isEditing;
+  return isModifierHeld && !isEditableElement(document.activeElement);
 }

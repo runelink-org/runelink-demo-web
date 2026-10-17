@@ -10,7 +10,7 @@ import type {
   WsUpdate,
 } from "@runelink/sdk";
 import { getActiveAccount, useAuthStore } from "@/lib/auth-store";
-import { useChannelsStore } from "@/lib/channels-store";
+import { applyChannelUpserts, useChannelsStore } from "@/lib/channels-store";
 import { upsertMembership } from "@/lib/membership-utils";
 import { useMembershipsStore } from "@/lib/memberships-store";
 import { useMessagesStore } from "@/lib/messages-store";
@@ -217,44 +217,21 @@ function removeServerChannelState(serverId: string): void {
   });
 }
 
-function removeServerMessageState(
-  serverId: string,
-  deletedTextChannelIds: string[]
-): void {
-  const deletedChannelIdSet = new Set(deletedTextChannelIds);
-  const deletedChannelKeys = deletedTextChannelIds;
-
-  useMessagesStore.setState((state) => {
-    const nextMessageById = { ...state.messageById };
-
-    for (const channelKey of deletedChannelKeys) {
-      for (const message of state.messagesByTextChannelId[channelKey] ?? []) {
-        delete nextMessageById[message.id];
-      }
-    }
-
-    return {
-      allMessages: state.allMessages.filter(
-        (message) => !deletedChannelIdSet.has(message.text_channel_id)
-      ),
-      messagesByServerId: omitRecordKey(state.messagesByServerId, serverId),
-      messagesByTextChannelId: omitRecordKeys(
-        state.messagesByTextChannelId,
-        deletedChannelKeys
-      ),
-      messageById: nextMessageById,
-      isLoadingByServerId: omitRecordKey(state.isLoadingByServerId, serverId),
-      isLoadingByTextChannelId: omitRecordKeys(
-        state.isLoadingByTextChannelId,
-        deletedChannelKeys
-      ),
-      errorByServerId: omitRecordKey(state.errorByServerId, serverId),
-      errorByTextChannelId: omitRecordKeys(
-        state.errorByTextChannelId,
-        deletedChannelKeys
-      ),
-    };
-  });
+function removeMessageState(deletedTextChannelIds: string[]): void {
+  useMessagesStore.setState((state) => ({
+    messagesByTextChannelId: omitRecordKeys(
+      state.messagesByTextChannelId,
+      deletedTextChannelIds
+    ),
+    isLoadingByTextChannelId: omitRecordKeys(
+      state.isLoadingByTextChannelId,
+      deletedTextChannelIds
+    ),
+    errorByTextChannelId: omitRecordKeys(
+      state.errorByTextChannelId,
+      deletedTextChannelIds
+    ),
+  }));
 }
 
 function removeServerNavigationState(serverId: string): void {
@@ -283,50 +260,10 @@ function removeLoadedServerState(serverId: string): void {
   const deletedTextChannelIds = getKnownTextChannelIdsForServer(serverId);
 
   removeServerMembershipState(serverId);
-  removeServerMessageState(serverId, deletedTextChannelIds);
+  removeMessageState(deletedTextChannelIds);
   removeServerChannelState(serverId);
   removeServerNavigationState(serverId);
   removeServerStoreState(serverId);
-}
-
-function removeChannelMessageState(
-  serverId: string,
-  textChannelId: string
-): void {
-  const channelKey = textChannelId;
-
-  useMessagesStore.setState((state) => {
-    const nextMessageById = { ...state.messageById };
-
-    for (const message of state.messagesByTextChannelId[channelKey] ?? []) {
-      delete nextMessageById[message.id];
-    }
-
-    return {
-      allMessages: state.allMessages.filter(
-        (message) => message.text_channel_id !== textChannelId
-      ),
-      messagesByServerId: {
-        ...state.messagesByServerId,
-        [serverId]: (state.messagesByServerId[serverId] ?? []).filter(
-          (message) => message.text_channel_id !== textChannelId
-        ),
-      },
-      messagesByTextChannelId: omitRecordKey(
-        state.messagesByTextChannelId,
-        channelKey
-      ),
-      messageById: nextMessageById,
-      isLoadingByTextChannelId: omitRecordKey(
-        state.isLoadingByTextChannelId,
-        channelKey
-      ),
-      errorByTextChannelId: omitRecordKey(
-        state.errorByTextChannelId,
-        channelKey
-      ),
-    };
-  });
 }
 
 function removeChannelStoreState(serverId: string, channelId: string): void {
@@ -593,38 +530,7 @@ function handleChannelUpsert(channel: ServerChannel): void {
     return;
   }
 
-  useChannelsStore.setState((state) => ({
-    channelsByServerId: {
-      ...state.channelsByServerId,
-      [channel.server_id]: upsertById(
-        state.channelsByServerId[channel.server_id] ?? [],
-        channel
-      ),
-    },
-    channelById: {
-      ...state.channelById,
-      [channel.id]: channel,
-    },
-  }));
-
-  useServersStore.setState((state) => {
-    if (!(channel.server_id in state.serverWithChannelsById)) {
-      return {};
-    }
-
-    return {
-      serverWithChannelsById: {
-        ...state.serverWithChannelsById,
-        [channel.server_id]: {
-          ...state.serverWithChannelsById[channel.server_id],
-          channels: upsertById(
-            state.serverWithChannelsById[channel.server_id].channels,
-            channel
-          ),
-        },
-      },
-    };
-  });
+  applyChannelUpserts(channel.server_id, [channel]);
 }
 
 function handleChannelDeleted(serverId: string, channelId: string): void {
@@ -636,53 +542,27 @@ function handleChannelDeleted(serverId: string, channelId: string): void {
     (channel) => channel.id === channelId
   )?.text_channel_id;
   if (textChannelId) {
-    removeChannelMessageState(serverId, textChannelId);
+    removeMessageState([textChannelId]);
   }
   removeChannelStoreState(serverId, channelId);
   removeChannelNavigationState(serverId, channelId);
 }
 
 function handleMessageUpsert(message: Message): void {
-  if (!isLoadedTextChannel(message.text_channel_id)) {
+  const textChannelId = message.text_channel_id;
+  if (!isLoadedTextChannel(textChannelId)) {
     return;
   }
 
-  const channelKey = message.text_channel_id;
-  const serverId = findLoadedServerChannel(
-    (channel) => channel.text_channel_id === channelKey
-  )?.server_id;
-
-  useMessagesStore.setState((state) => {
-    const nextState: Partial<typeof state> = {
-      messagesByTextChannelId: {
-        ...state.messagesByTextChannelId,
-        [channelKey]: upsertMessage(
-          state.messagesByTextChannelId[channelKey] ?? [],
-          message
-        ),
-      },
-      messageById: {
-        ...state.messageById,
-        [message.id]: message,
-      },
-    };
-
-    if (serverId && serverId in state.messagesByServerId) {
-      nextState.messagesByServerId = {
-        ...state.messagesByServerId,
-        [serverId]: upsertMessage(
-          state.messagesByServerId[serverId] ?? [],
-          message
-        ),
-      };
-    }
-
-    if (state.allMessages.length > 0 || message.id in state.messageById) {
-      nextState.allMessages = upsertMessage(state.allMessages, message);
-    }
-
-    return nextState;
-  });
+  useMessagesStore.setState((state) => ({
+    messagesByTextChannelId: {
+      ...state.messagesByTextChannelId,
+      [textChannelId]: upsertMessage(
+        state.messagesByTextChannelId[textChannelId] ?? [],
+        message
+      ),
+    },
+  }));
 }
 
 function handleMessageDeleted(textChannelId: string, messageId: string): void {
@@ -690,44 +570,15 @@ function handleMessageDeleted(textChannelId: string, messageId: string): void {
     return;
   }
 
-  const channelKey = textChannelId;
-  const serverId = findLoadedServerChannel(
-    (channel) => channel.text_channel_id === textChannelId
-  )?.server_id;
-
-  useMessagesStore.setState((state) => {
-    const nextState: Partial<typeof state> = {
-      messagesByTextChannelId: {
-        ...state.messagesByTextChannelId,
-        [channelKey]: removeMessage(
-          state.messagesByTextChannelId[channelKey] ?? [],
-          messageId
-        ),
-      },
-    };
-
-    if (serverId && serverId in state.messagesByServerId) {
-      nextState.messagesByServerId = {
-        ...state.messagesByServerId,
-        [serverId]: removeMessage(
-          state.messagesByServerId[serverId] ?? [],
-          messageId
-        ),
-      };
-    }
-
-    if (state.allMessages.length > 0 || messageId in state.messageById) {
-      nextState.allMessages = removeMessage(state.allMessages, messageId);
-    }
-
-    if (messageId in state.messageById) {
-      const nextMessageById = { ...state.messageById };
-      delete nextMessageById[messageId];
-      nextState.messageById = nextMessageById;
-    }
-
-    return nextState;
-  });
+  useMessagesStore.setState((state) => ({
+    messagesByTextChannelId: {
+      ...state.messagesByTextChannelId,
+      [textChannelId]: removeMessage(
+        state.messagesByTextChannelId[textChannelId] ?? [],
+        messageId
+      ),
+    },
+  }));
 }
 
 export function handleRunelinkUpdate(update: WsUpdate): void {

@@ -366,8 +366,7 @@ export function Sidebar({
             isLoading={isLoading}
             error={error}
             isSelectedServerHydrating={isSelectedServerHydrating}
-            canCreateChannel={canDeleteSelectedServer}
-            canDeleteSelectedServer={canDeleteSelectedServer}
+            canManageChannels={canDeleteSelectedServer}
             onOpenCreateChannel={(kind, parentChannelId) => {
               setCreateChannelRequest({ kind, parentChannelId });
             }}

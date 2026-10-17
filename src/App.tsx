@@ -556,7 +556,6 @@ export function App() {
       return;
     }
     await createMessage(
-      selectedServer.server.id,
       selectedTextChannelId,
       {
         author: activeAccount,
@@ -572,7 +571,6 @@ export function App() {
     }
 
     await deleteMessage(
-      selectedServer.server.id,
       selectedTextChannelId,
       message.id,
       getTargetHost(selectedServer.server.host, activeAccount.host)
