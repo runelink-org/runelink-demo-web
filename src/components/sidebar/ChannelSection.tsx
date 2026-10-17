@@ -266,7 +266,7 @@ export function ChannelSection({
         </div>
       </div>
 
-      <div className="min-h-0 flex-1 overflow-y-auto" data-channel-tree>
+      <div className="min-h-0 flex-1 overflow-y-auto pb-6" data-channel-tree>
         {error ? (
           <div className="rounded-2xl border border-destructive/15 bg-destructive/5 px-4 py-3 text-sm text-sidebar-foreground/80">
             {error}
