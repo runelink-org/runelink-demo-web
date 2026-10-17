@@ -30,7 +30,12 @@ function childrenByParent(
       channel.parent_channel_id && ids.has(channel.parent_channel_id)
         ? channel.parent_channel_id
         : null;
-    children.set(parentId, [...(children.get(parentId) ?? []), channel]);
+    const siblings = children.get(parentId);
+    if (siblings) {
+      siblings.push(channel);
+    } else {
+      children.set(parentId, [channel]);
+    }
   }
   for (const siblings of children.values()) {
     siblings.sort(compareChannels);
