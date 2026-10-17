@@ -205,8 +205,8 @@ export const useMessagesStore = create<MessagesState>((set) => ({
     }));
 
     try {
-      const reply = await requestExpected("messages_get_by_channel", {
-        type: "messages_get_by_channel",
+      const reply = await requestExpected("messages_get_by_text_channel", {
+        type: "messages_get_by_text_channel",
         data: {
           text_channel_id: textChannelId,
           target_host: targetHost,

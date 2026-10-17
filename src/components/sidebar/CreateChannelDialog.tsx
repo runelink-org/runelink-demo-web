@@ -64,6 +64,10 @@ export function CreateChannelDialog({
       label: channel.title,
     })),
   ];
+  // The chosen parent may have been deleted while the dialog was open
+  const parent = parentItems.some((item) => item.value === parentValue)
+    ? parentValue
+    : ROOT_VALUE;
   const noun = kind === "category" ? "category" : "channel";
 
   useEffect(() => {
@@ -96,7 +100,7 @@ export function CreateChannelDialog({
       await onCreateChannel(
         kind,
         nextTitle,
-        parentValue === ROOT_VALUE ? null : parentValue
+        parent === ROOT_VALUE ? null : parent
       );
       onOpenChange(false);
     } catch (nextError) {
@@ -176,7 +180,7 @@ export function CreateChannelDialog({
               <Label htmlFor="channel-parent">Location</Label>
               <Select
                 items={parentItems}
-                value={parentValue}
+                value={parent}
                 onValueChange={(value) => {
                   setParentValue(value ?? ROOT_VALUE);
                 }}

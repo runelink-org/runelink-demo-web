@@ -17,30 +17,38 @@ function isRevealModifierHeld(event: KeyboardEvent): boolean {
 
 // Whether a reorder modifier is held outside of text entry
 export function useReorderModifierHeld(): boolean {
-  const [isHeld, setIsHeld] = useState(false);
+  const [isModifierHeld, setIsModifierHeld] = useState(false);
+  const [isEditing, setIsEditing] = useState(() =>
+    isEditableElement(document.activeElement)
+  );
 
   useEffect(() => {
     function handleKey(event: KeyboardEvent) {
-      setIsHeld(
-        isRevealModifierHeld(event) &&
-          !isEditableElement(document.activeElement)
-      );
+      setIsModifierHeld(isRevealModifierHeld(event));
     }
 
     // Key releases are missed while the window is unfocused
     function handleBlur() {
-      setIsHeld(false);
+      setIsModifierHeld(false);
+    }
+
+    function handleFocusChange() {
+      setIsEditing(isEditableElement(document.activeElement));
     }
 
     window.addEventListener("keydown", handleKey);
     window.addEventListener("keyup", handleKey);
     window.addEventListener("blur", handleBlur);
+    document.addEventListener("focusin", handleFocusChange);
+    document.addEventListener("focusout", handleFocusChange);
     return () => {
       window.removeEventListener("keydown", handleKey);
       window.removeEventListener("keyup", handleKey);
       window.removeEventListener("blur", handleBlur);
+      document.removeEventListener("focusin", handleFocusChange);
+      document.removeEventListener("focusout", handleFocusChange);
     };
   }, []);
 
-  return isHeld;
+  return isModifierHeld && !isEditing;
 }

@@ -8,6 +8,7 @@ import {
   parseAppRoute,
   writeAppRoute,
 } from "@/lib/app-route";
+import { firstTextChannel } from "@/lib/channel-tree";
 import { useNavigationStore } from "@/lib/navigation-store";
 
 type NavigationSelection = {
@@ -37,9 +38,11 @@ function getFallbackSelection(
   }
 
   const selectedChannel = nextServer.channels.find(
-    (channel) => channel.id === currentSelection.channelId
+    (channel) =>
+      channel.id === currentSelection.channelId && channel.kind === "text"
   );
-  const nextChannel = selectedChannel ?? nextServer.channels[0] ?? null;
+  const nextChannel =
+    selectedChannel ?? firstTextChannel(nextServer.channels) ?? null;
 
   return {
     serverId: nextServer.server.id,

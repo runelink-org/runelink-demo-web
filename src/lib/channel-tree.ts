@@ -5,12 +5,10 @@ export type ChannelRow = {
   depth: number;
 };
 
-export type DropPlacement = "before" | "after" | "inside";
-
-export type DropTarget = {
-  channelId: string;
-  placement: DropPlacement;
-};
+// Drops relative to a channel row, or after everything at the server root
+export type DropTarget =
+  | { channelId: string; placement: "before" | "after" | "inside" }
+  | { channelId: null; placement: "root-end" };
 
 // Siblings are ordered by position, then ID, matching the host
 function compareChannels(left: ServerChannel, right: ServerChannel): number {
@@ -20,23 +18,43 @@ function compareChannels(left: ServerChannel, right: ServerChannel): number {
   return left.id < right.id ? -1 : left.id > right.id ? 1 : 0;
 }
 
-// The parent used for display, treating channels with a missing parent as
-// root channels
-function effectiveParentId(
-  channels: ServerChannel[],
-  channel: ServerChannel
+// Sorted children by parent ID, with null for the server root. Channels with
+// a missing parent are treated as root channels.
+function childrenByParent(
+  channels: ServerChannel[]
+): Map<string | null, ServerChannel[]> {
+  const ids = new Set(channels.map((channel) => channel.id));
+  const children = new Map<string | null, ServerChannel[]>();
+  for (const channel of channels) {
+    const parentId =
+      channel.parent_channel_id && ids.has(channel.parent_channel_id)
+        ? channel.parent_channel_id
+        : null;
+    children.set(parentId, [...(children.get(parentId) ?? []), channel]);
+  }
+  for (const siblings of children.values()) {
+    siblings.sort(compareChannels);
+  }
+  return children;
+}
+
+function parentOf(
+  children: Map<string | null, ServerChannel[]>,
+  channelId: string
 ): string | null {
-  const parentId = channel.parent_channel_id;
-  return parentId && channels.some((c) => c.id === parentId) ? parentId : null;
+  for (const [parentId, siblings] of children) {
+    if (siblings.some((channel) => channel.id === channelId)) {
+      return parentId;
+    }
+  }
+  return null;
 }
 
 export function childrenOf(
   channels: ServerChannel[],
   parentId: string | null
 ): ServerChannel[] {
-  return channels
-    .filter((channel) => effectiveParentId(channels, channel) === parentId)
-    .sort(compareChannels);
+  return childrenByParent(channels).get(parentId) ?? [];
 }
 
 // Channels in depth-first tree order, skipping children of collapsed
@@ -45,10 +63,11 @@ export function visibleRows(
   channels: ServerChannel[],
   collapsedIds: ReadonlySet<string>
 ): ChannelRow[] {
+  const children = childrenByParent(channels);
   const rows: ChannelRow[] = [];
 
   function visit(parentId: string | null, depth: number) {
-    for (const channel of childrenOf(channels, parentId)) {
+    for (const channel of children.get(parentId) ?? []) {
       rows.push({ channel, depth });
       if (channel.kind === "category" && !collapsedIds.has(channel.id)) {
         visit(channel.id, depth + 1);
@@ -67,24 +86,29 @@ export function categoryRows(channels: ServerChannel[]): ChannelRow[] {
   );
 }
 
-function isSelfOrDescendant(
+// The first text channel in tree order
+export function firstTextChannel(
+  channels: ServerChannel[]
+): ServerChannel | null {
+  return (
+    visibleRows(channels, new Set()).find((row) => row.channel.kind === "text")
+      ?.channel ?? null
+  );
+}
+
+// IDs of the ancestors of a channel, nearest first
+export function ancestorIds(
   channels: ServerChannel[],
-  channelId: string | null,
-  ancestorId: string
-): boolean {
-  const visited = new Set<string>();
-  let currentId = channelId;
-
-  while (currentId && !visited.has(currentId)) {
-    if (currentId === ancestorId) {
-      return true;
-    }
-    visited.add(currentId);
-    const current = channels.find((channel) => channel.id === currentId);
-    currentId = current ? effectiveParentId(channels, current) : null;
+  channelId: string
+): string[] {
+  const children = childrenByParent(channels);
+  const ancestors: string[] = [];
+  let parentId = parentOf(children, channelId);
+  while (parentId && !ancestors.includes(parentId)) {
+    ancestors.push(parentId);
+    parentId = parentOf(children, parentId);
   }
-
-  return false;
+  return ancestors;
 }
 
 // The move that drops `draggedId` at `target`, or null if the drop is
@@ -94,34 +118,38 @@ export function planDrop(
   draggedId: string,
   target: DropTarget
 ): ServerChannelMove | null {
+  const children = childrenByParent(channels);
+  const siblingsOf = (parentId: string | null) =>
+    (children.get(parentId) ?? []).filter((c) => c.id !== draggedId);
+
+  if (target.placement === "root-end") {
+    return { parent_channel_id: null, index: siblingsOf(null).length };
+  }
+
   const targetChannel = channels.find((c) => c.id === target.channelId);
   if (!targetChannel || targetChannel.id === draggedId) {
     return null;
   }
-
-  if (target.placement === "inside") {
-    if (
-      targetChannel.kind !== "category" ||
-      isSelfOrDescendant(channels, targetChannel.id, draggedId)
-    ) {
-      return null;
-    }
-    return {
-      parent_channel_id: targetChannel.id,
-      index: childrenOf(channels, targetChannel.id).filter(
-        (channel) => channel.id !== draggedId
-      ).length,
-    };
-  }
-
-  const parentId = effectiveParentId(channels, targetChannel);
-  if (isSelfOrDescendant(channels, parentId, draggedId)) {
+  const parentId =
+    target.placement === "inside"
+      ? targetChannel.id
+      : parentOf(children, targetChannel.id);
+  if (
+    (target.placement === "inside" && targetChannel.kind !== "category") ||
+    [parentId, ...(parentId ? ancestorIds(channels, parentId) : [])].includes(
+      draggedId
+    )
+  ) {
     return null;
   }
-  const siblings = childrenOf(channels, parentId).filter(
-    (channel) => channel.id !== draggedId
+
+  // Dropping onto a category places the channel first inside it
+  if (target.placement === "inside") {
+    return { parent_channel_id: parentId, index: 0 };
+  }
+  const targetIndex = siblingsOf(parentId).findIndex(
+    (c) => c.id === targetChannel.id
   );
-  const targetIndex = siblings.findIndex((c) => c.id === targetChannel.id);
   return {
     parent_channel_id: parentId,
     index: target.placement === "before" ? targetIndex : targetIndex + 1,
@@ -134,18 +162,11 @@ export function isNoOpMove(
   channelId: string,
   move: ServerChannelMove
 ): boolean {
-  const channel = channels.find((c) => c.id === channelId);
-  if (
-    !channel ||
-    effectiveParentId(channels, channel) !== move.parent_channel_id
-  ) {
+  const children = childrenByParent(channels);
+  if (parentOf(children, channelId) !== move.parent_channel_id) {
     return false;
   }
-  const siblings = childrenOf(channels, move.parent_channel_id).filter(
-    (c) => c.id !== channelId
-  );
-  const currentIndex = childrenOf(channels, move.parent_channel_id).findIndex(
-    (c) => c.id === channelId
-  );
-  return Math.min(move.index, siblings.length) === currentIndex;
+  const siblings = children.get(move.parent_channel_id) ?? [];
+  const currentIndex = siblings.findIndex((c) => c.id === channelId);
+  return Math.min(move.index, siblings.length - 1) === currentIndex;
 }
