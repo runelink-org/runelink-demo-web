@@ -41,8 +41,7 @@ function getFallbackSelection(
     (channel) =>
       channel.id === currentSelection.channelId && channel.kind === "text"
   );
-  const nextChannel =
-    selectedChannel ?? firstTextChannel(nextServer.channels) ?? null;
+  const nextChannel = selectedChannel ?? firstTextChannel(nextServer.channels);
 
   return {
     serverId: nextServer.server.id,

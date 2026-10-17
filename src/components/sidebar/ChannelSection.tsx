@@ -190,11 +190,12 @@ export function ChannelSection({
     if (!channel || !channelMove) {
       return;
     }
-    if (channelMove.parent_channel_id) {
+    const parentId = channelMove.parent_channel_id;
+    if (parentId) {
       // Reveal the moved channel in its new category
       setCollapsedIds((current) => {
         const next = new Set(current);
-        next.delete(channelMove.parent_channel_id ?? "");
+        next.delete(parentId);
         return next;
       });
     }
@@ -321,8 +322,8 @@ export function ChannelSection({
                       isCollapsed={collapsedIds.has(channel.id)}
                       canManageChannels={canManageChannels}
                       onToggleCollapsed={toggleCollapsed}
-                      onCreateChild={(parent, kind) => {
-                        onOpenCreateChannel(kind, parent.id);
+                      onCreateChild={(kind) => {
+                        onOpenCreateChannel(kind, channel.id);
                       }}
                       onDeleteChannel={onDeleteChannel}
                     />
