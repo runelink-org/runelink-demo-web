@@ -9,6 +9,7 @@ import {
 export type TargetHost = string | null;
 export type ServerId = string;
 export type ChannelId = string;
+export type TextChannelId = string;
 export type MessageId = string;
 
 export function userRefKey(userRef: UserRef): string {

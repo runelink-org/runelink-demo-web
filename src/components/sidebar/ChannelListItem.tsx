@@ -1,4 +1,4 @@
-import type { Channel } from "@runelink/sdk";
+import type { ServerChannel } from "@runelink/sdk";
 import { Hash } from "lucide-react";
 import { ChannelActionsMenu } from "@/components/sidebar/ChannelActionsMenu";
 import { Button } from "@/components/ui/button";
@@ -7,11 +7,11 @@ import { cn } from "@/lib/utils";
 type ChannelListItemProps = {
   host: string;
   serverId: string;
-  channel: Channel;
+  channel: ServerChannel;
   isSelected: boolean;
   canDeleteChannel: boolean;
-  onSelect: (channel: Channel) => void;
-  onDeleteChannel: (channel: Channel) => void;
+  onSelect: (channel: ServerChannel) => void;
+  onDeleteChannel: (channel: ServerChannel) => void;
 };
 
 export function ChannelListItem({

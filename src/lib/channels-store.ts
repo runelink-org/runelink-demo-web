@@ -1,4 +1,8 @@
-import { type Channel, type NewChannel } from "@runelink/sdk";
+import {
+  type NewServerChannel,
+  type ServerChannel,
+  type ServerChannelMove,
+} from "@runelink/sdk";
 import { create } from "zustand";
 import { requestExpected } from "@/lib/runelink-request";
 import {
@@ -10,32 +14,38 @@ import {
 import { useServersStore } from "@/lib/servers-store";
 
 type ChannelsState = {
-  channelsByServerId: Record<string, Channel[]>;
-  channelById: Record<string, Channel>;
+  channelsByServerId: Record<string, ServerChannel[]>;
+  channelById: Record<string, ServerChannel>;
   isLoading: boolean;
   isLoadingByServerId: Record<string, boolean>;
   error: string | null;
   errorByServerId: Record<string, string | null>;
-  fetchChannels: (targetHost?: TargetHost) => Promise<Channel[]>;
+  fetchChannels: (targetHost?: TargetHost) => Promise<ServerChannel[]>;
   fetchChannelsByServer: (
     serverId: ServerId,
     targetHost?: TargetHost
-  ) => Promise<Channel[]>;
+  ) => Promise<ServerChannel[]>;
   fetchChannelById: (
     serverId: ServerId,
     channelId: ChannelId,
     targetHost?: TargetHost
-  ) => Promise<Channel>;
+  ) => Promise<ServerChannel>;
   createChannel: (
     serverId: ServerId,
-    newChannel: NewChannel,
+    newChannel: NewServerChannel,
     targetHost?: TargetHost
-  ) => Promise<Channel>;
+  ) => Promise<ServerChannel>;
   deleteChannel: (
     serverId: ServerId,
     channelId: ChannelId,
     targetHost?: TargetHost
   ) => Promise<void>;
+  moveChannel: (
+    serverId: ServerId,
+    channelId: ChannelId,
+    channelMove: ServerChannelMove,
+    targetHost?: TargetHost
+  ) => Promise<ServerChannel[]>;
   reset: () => void;
 };
 
@@ -48,19 +58,34 @@ const initialState = {
   errorByServerId: {},
 };
 
-function upsertChannel(channels: Channel[], nextChannel: Channel): Channel[] {
+function upsertChannel(
+  channels: ServerChannel[],
+  nextChannel: ServerChannel
+): ServerChannel[] {
   return [
     ...channels.filter((channel) => channel.id !== nextChannel.id),
     nextChannel,
   ];
 }
 
-function removeChannel(channels: Channel[], channelId: ChannelId): Channel[] {
+function upsertChannels(
+  channels: ServerChannel[],
+  nextChannels: ServerChannel[]
+): ServerChannel[] {
+  return nextChannels.reduce(upsertChannel, channels);
+}
+
+function removeChannel(
+  channels: ServerChannel[],
+  channelId: ChannelId
+): ServerChannel[] {
   return channels.filter((channel) => channel.id !== channelId);
 }
 
-function groupChannelsByServer(channels: Channel[]): Record<string, Channel[]> {
-  return channels.reduce<Record<string, Channel[]>>((groups, channel) => {
+function groupChannelsByServer(
+  channels: ServerChannel[]
+): Record<string, ServerChannel[]> {
+  return channels.reduce<Record<string, ServerChannel[]>>((groups, channel) => {
     const existingChannels = groups[channel.server_id] ?? [];
     groups[channel.server_id] = [...existingChannels, channel];
     return groups;
@@ -373,6 +398,55 @@ export const useChannelsStore = create<ChannelsState>((set) => ({
       }));
       throw error;
     }
+  },
+
+  async moveChannel(serverId, channelId, channelMove, targetHost = null) {
+    const reply = await requestExpected("channels_move", {
+      type: "channels_move",
+      data: {
+        server_id: serverId,
+        channel_id: channelId,
+        channel_move: channelMove,
+        target_host: targetHost,
+      },
+    });
+
+    set((state) => ({
+      channelsByServerId: {
+        ...state.channelsByServerId,
+        [serverId]: upsertChannels(
+          state.channelsByServerId[serverId] ?? [],
+          reply.data
+        ),
+      },
+      channelById: {
+        ...state.channelById,
+        ...Object.fromEntries(
+          reply.data.map((channel) => [channel.id, channel])
+        ),
+      },
+    }));
+
+    useServersStore.setState((state) => {
+      if (!(serverId in state.serverWithChannelsById)) {
+        return {};
+      }
+
+      return {
+        serverWithChannelsById: {
+          ...state.serverWithChannelsById,
+          [serverId]: {
+            ...state.serverWithChannelsById[serverId],
+            channels: upsertChannels(
+              state.serverWithChannelsById[serverId].channels,
+              reply.data
+            ),
+          },
+        },
+      };
+    });
+
+    return reply.data;
   },
 
   reset() {

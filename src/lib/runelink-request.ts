@@ -43,6 +43,7 @@ type ExpectedReplyTypeByRequestType = {
   channels_get_by_server: "channels_get_by_server";
   channels_get_by_id: "channels_get_by_id";
   channels_delete: "channels_delete";
+  channels_move: "channels_move";
   messages_create: "messages_create";
   messages_get_all: "messages_get_all";
   messages_get_by_server: "messages_get_by_server";
@@ -82,6 +83,7 @@ const expectedReplyTypeByRequestType = {
   channels_get_by_server: "channels_get_by_server",
   channels_get_by_id: "channels_get_by_id",
   channels_delete: "channels_delete",
+  channels_move: "channels_move",
   messages_create: "messages_create",
   messages_get_all: "messages_get_all",
   messages_get_by_server: "messages_get_by_server",

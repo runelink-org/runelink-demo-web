@@ -1,4 +1,10 @@
-import type { Channel, Message, ServerWithChannels } from "@runelink/sdk";
+import type {
+  Message,
+  ServerChannel,
+  ServerChannelKind,
+  ServerChannelMove,
+  ServerWithChannels,
+} from "@runelink/sdk";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AuthScreen } from "@/components/AuthScreen";
 import { MessagesPane } from "@/components/MessagesPane";
@@ -100,17 +106,18 @@ export function App() {
   const fetchUserByRef = useUsersStore((state) => state.fetchUserByRef);
   const createChannel = useChannelsStore((state) => state.createChannel);
   const deleteChannel = useChannelsStore((state) => state.deleteChannel);
-  const messagesByChannelKey = useMessagesStore(
-    (state) => state.messagesByChannelKey
+  const moveChannel = useChannelsStore((state) => state.moveChannel);
+  const messagesByTextChannelId = useMessagesStore(
+    (state) => state.messagesByTextChannelId
   );
-  const isLoadingByChannelKey = useMessagesStore(
-    (state) => state.isLoadingByChannelKey
+  const isLoadingByTextChannelId = useMessagesStore(
+    (state) => state.isLoadingByTextChannelId
   );
-  const errorByChannelKey = useMessagesStore(
-    (state) => state.errorByChannelKey
+  const errorByTextChannelId = useMessagesStore(
+    (state) => state.errorByTextChannelId
   );
-  const fetchMessagesByChannel = useMessagesStore(
-    (state) => state.fetchMessagesByChannel
+  const fetchMessagesByTextChannel = useMessagesStore(
+    (state) => state.fetchMessagesByTextChannel
   );
   const createMessage = useMessagesStore((state) => state.createMessage);
   const deleteMessage = useMessagesStore((state) => state.deleteMessage);
@@ -337,8 +344,9 @@ export function App() {
     ? !(selectedServer.server.id in serverWithChannelsById) ||
       pendingServerDetailsRef.current.has(selectedServer.server.id)
     : false;
+  // Categories can't be opened, so only text channels count as selected
   const selectedChannel = selectedServer?.channels.find(
-    (channel) => channel.id === selectedChannelId
+    (channel) => channel.id === selectedChannelId && channel.kind === "text"
   );
   const serverSettingsServer = serverSettingsServerId
     ? (hydratedServerById[serverSettingsServerId] ?? null)
@@ -428,23 +436,23 @@ export function App() {
     selectedServerId && selectedChannelId
       ? serverChannelKey(selectedServerId, selectedChannelId)
       : null;
-  const selectedMessages = selectedChannelKey
-    ? (messagesByChannelKey[selectedChannelKey] ?? [])
+  const selectedTextChannelId = selectedChannel?.text_channel_id ?? null;
+  const selectedMessages = selectedTextChannelId
+    ? (messagesByTextChannelId[selectedTextChannelId] ?? [])
     : [];
-  const isMessagesLoading = selectedChannelKey
-    ? (isLoadingByChannelKey[selectedChannelKey] ?? false)
+  const isMessagesLoading = selectedTextChannelId
+    ? (isLoadingByTextChannelId[selectedTextChannelId] ?? false)
     : false;
-  const hasFetchedSelectedMessages = selectedChannelKey
-    ? selectedChannelKey in messagesByChannelKey
+  const hasFetchedSelectedMessages = selectedTextChannelId
+    ? selectedTextChannelId in messagesByTextChannelId
     : false;
-  const messagesError = selectedChannelKey
-    ? (errorByChannelKey[selectedChannelKey] ?? null)
+  const messagesError = selectedTextChannelId
+    ? (errorByTextChannelId[selectedTextChannelId] ?? null)
     : null;
 
   useEffect(() => {
     if (
-      !selectedServerId ||
-      !selectedChannelId ||
+      !selectedTextChannelId ||
       hasFetchedSelectedMessages ||
       connectionStatus !== "connected" ||
       !selectedServer ||
@@ -453,20 +461,17 @@ export function App() {
       return;
     }
 
-    void fetchMessagesByChannel(
-      selectedServerId,
-      selectedChannelId,
+    void fetchMessagesByTextChannel(
+      selectedTextChannelId,
       getTargetHost(selectedServer.server.host, activeAccount.host)
     );
   }, [
     activeAccount,
     connectionStatus,
-    fetchMessagesByChannel,
+    fetchMessagesByTextChannel,
     hasFetchedSelectedMessages,
-    messagesByChannelKey,
-    selectedChannelId,
     selectedServer,
-    selectedServerId,
+    selectedTextChannelId,
   ]);
 
   const connectedAccountKey = connectedAccount
@@ -516,7 +521,7 @@ export function App() {
     navigate(getContentRoute(serverId, channelId), "push");
   }
 
-  function handleSelectChannel(serverId: string, channel: Channel) {
+  function handleSelectChannel(serverId: string, channel: ServerChannel) {
     setServerSettingsError(null);
     navigate({ screen: "channel", serverId, channelId: channel.id }, "push");
   }
@@ -547,12 +552,12 @@ export function App() {
   }
 
   async function handleSendMessage(body: string) {
-    if (!activeAccount || !selectedServer || !selectedChannel) {
+    if (!activeAccount || !selectedServer || !selectedTextChannelId) {
       return;
     }
     await createMessage(
       selectedServer.server.id,
-      selectedChannel.id,
+      selectedTextChannelId,
       {
         author: activeAccount,
         body,
@@ -562,30 +567,39 @@ export function App() {
   }
 
   async function handleDeleteMessage(message: Message) {
-    if (!activeAccount || !selectedServer || !selectedChannel) {
+    if (!activeAccount || !selectedServer || !selectedTextChannelId) {
       return;
     }
 
     await deleteMessage(
       selectedServer.server.id,
-      selectedChannel.id,
+      selectedTextChannelId,
       message.id,
       getTargetHost(selectedServer.server.host, activeAccount.host)
     );
   }
 
-  async function handleCreateChannel(title: string, description: string) {
+  async function handleCreateChannel(
+    kind: ServerChannelKind,
+    title: string,
+    parentChannelId: string | null
+  ) {
     if (!activeAccount || !selectedServer) {
       return;
     }
     const channel = await createChannel(
       selectedServer.server.id,
       {
+        kind,
         title,
-        description: description.trim() || null,
+        description: null,
+        parent_channel_id: parentChannelId,
       },
       getTargetHost(selectedServer.server.host, activeAccount.host)
     );
+    if (channel.kind !== "text") {
+      return;
+    }
 
     navigate(
       {
@@ -597,13 +611,28 @@ export function App() {
     );
   }
 
-  async function handleDeleteChannel(channel: Channel) {
+  async function handleDeleteChannel(channel: ServerChannel) {
     if (!activeAccount || !selectedServer) {
       return;
     }
     await deleteChannel(
       selectedServer.server.id,
       channel.id,
+      getTargetHost(selectedServer.server.host, activeAccount.host)
+    );
+  }
+
+  async function handleMoveChannel(
+    channel: ServerChannel,
+    channelMove: ServerChannelMove
+  ) {
+    if (!activeAccount || !selectedServer) {
+      return;
+    }
+    await moveChannel(
+      selectedServer.server.id,
+      channel.id,
+      channelMove,
       getTargetHost(selectedServer.server.host, activeAccount.host)
     );
   }
@@ -715,6 +744,7 @@ export function App() {
           canDeleteSelectedServer={canDeleteSelectedServer}
           onCreateChannel={handleCreateChannel}
           onDeleteChannel={handleDeleteChannel}
+          onMoveChannel={handleMoveChannel}
         />
       </div>
 
