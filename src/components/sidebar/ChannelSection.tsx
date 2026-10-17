@@ -11,6 +11,7 @@ import { CategoryListItem } from "@/components/sidebar/CategoryListItem";
 import { ChannelListItem } from "@/components/sidebar/ChannelListItem";
 import { Button } from "@/components/ui/button";
 import {
+  ancestorIds,
   childrenOf,
   type DropTarget,
   isNoOpMove,
@@ -48,20 +49,31 @@ type DragState = {
   target: DropTarget | null;
 };
 
-// Where a pointer at clientY would drop relative to a row
+// Where a pointer would drop. Returns undefined in the gaps between rows,
+// where the previous target should be kept.
 function dropTargetAt(
   channels: ServerChannel[],
   collapsedIds: ReadonlySet<string>,
   draggedId: string,
   clientX: number,
   clientY: number
-): DropTarget | null {
-  const row = document
-    .elementFromPoint(clientX, clientY)
-    ?.closest<HTMLElement>("[data-channel-row]");
-  const channelId = row?.dataset.channelRow;
-  const channel = channels.find((c) => c.id === channelId);
-  if (!row || !channel) {
+): DropTarget | null | undefined {
+  const element = document.elementFromPoint(clientX, clientY);
+  const row = element?.closest<HTMLElement>("[data-channel-row]");
+  if (!row) {
+    const tree = element?.closest("[data-channel-tree]");
+    const rows = tree?.querySelectorAll("[data-channel-row]") ?? [];
+    const lastRow = rows[rows.length - 1];
+    if (!tree || !lastRow) {
+      return null;
+    }
+    // Empty space below the last row drops at the end of the server root
+    return clientY > lastRow.getBoundingClientRect().bottom
+      ? { channelId: null, placement: "root-end" }
+      : undefined;
+  }
+  const channel = channels.find((c) => c.id === row.dataset.channelRow);
+  if (!channel) {
     return null;
   }
 
@@ -107,12 +119,29 @@ export function ChannelSection({
     () => new Set()
   );
   const [drag, setDrag] = useState<DragState | null>(null);
+  const [revealedChannelId, setRevealedChannelId] = useState<string | null>(
+    null
+  );
   const isModifierHeld = useReorderModifierHeld();
   const channels = selectedServer?.channels ?? [];
   const rows = visibleRows(channels, collapsedIds);
   const canManageChannels = canCreateChannel;
   const showHandles = canManageChannels && (isModifierHeld || drag !== null);
   const gutterPx = canManageChannels ? HANDLE_GUTTER_PX : 0;
+
+  // Expand the categories containing a newly selected channel, such as one
+  // just created in a collapsed category
+  if (selectedChannelId !== revealedChannelId) {
+    setRevealedChannelId(selectedChannelId);
+    if (selectedChannelId) {
+      const ancestors = ancestorIds(channels, selectedChannelId);
+      setCollapsedIds((current) =>
+        ancestors.some((id) => current.has(id))
+          ? new Set([...current].filter((id) => !ancestors.includes(id)))
+          : current
+      );
+    }
+  }
 
   useEffect(() => {
     if (!drag) {
@@ -171,8 +200,9 @@ export function ChannelSection({
       event.clientY
     );
     if (
-      target?.channelId !== drag.target?.channelId ||
-      target?.placement !== drag.target?.placement
+      target !== undefined &&
+      (target?.channelId !== drag.target?.channelId ||
+        target?.placement !== drag.target?.placement)
     ) {
       setDrag({ ...drag, target });
     }
@@ -236,7 +266,7 @@ export function ChannelSection({
         </div>
       </div>
 
-      <div className="min-h-0 flex-1 overflow-y-auto">
+      <div className="min-h-0 flex-1 overflow-y-auto" data-channel-tree>
         {error ? (
           <div className="rounded-2xl border border-destructive/15 bg-destructive/5 px-4 py-3 text-sm text-sidebar-foreground/80">
             {error}
@@ -258,7 +288,7 @@ export function ChannelSection({
             This server does not have any channels yet.
           </div>
         ) : (
-          <div className="space-y-1" role="tree">
+          <div className="relative space-y-1" role="tree">
             {rows.map(({ channel, depth }) => {
               const indentPx = depth * INDENT_PX;
               const isDragged = drag?.channelId === channel.id;
@@ -308,6 +338,9 @@ export function ChannelSection({
                       onPointerCancel={() => {
                         setDrag(null);
                       }}
+                      onLostPointerCapture={() => {
+                        setDrag(null);
+                      }}
                       // Ctrl-click opens the context menu on macOS
                       onContextMenu={(event) => {
                         event.preventDefault();
@@ -346,6 +379,13 @@ export function ChannelSection({
                 </div>
               );
             })}
+            {drag?.target?.placement === "root-end" ? (
+              <div
+                aria-hidden
+                className="pointer-events-none absolute right-1 -bottom-[3px] h-0.5 rounded-full bg-primary"
+                style={{ left: gutterPx }}
+              />
+            ) : null}
           </div>
         )}
       </div>
