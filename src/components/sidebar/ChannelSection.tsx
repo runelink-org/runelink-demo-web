@@ -4,8 +4,8 @@ import type {
   ServerChannelMove,
   ServerWithChannels,
 } from "@runelink/sdk";
-import { GripVertical, Plus } from "lucide-react";
-import { useState } from "react";
+import { Plus } from "lucide-react";
+import { useRef, useState } from "react";
 import { toast } from "sonner";
 import { CategoryListItem } from "@/components/sidebar/CategoryListItem";
 import { ChannelListItem } from "@/components/sidebar/ChannelListItem";
@@ -16,11 +16,11 @@ import {
   planDrop,
   visibleRows,
 } from "@/lib/channel-tree";
-import { useReorderModifierHeld } from "@/lib/use-reorder-modifier";
 import { cn } from "@/lib/utils";
 
 const INDENT_PX = 14;
-const HANDLE_GUTTER_PX = 16;
+// How far a pressed pointer moves before a click becomes a drag
+const DRAG_THRESHOLD_PX = 5;
 
 type ChannelSectionProps = {
   selectedServer: ServerWithChannels | null;
@@ -44,6 +44,13 @@ type ChannelSectionProps = {
 type DragState = {
   channelId: string;
   target: DropTarget | null;
+};
+
+type PressState = {
+  channelId: string;
+  pointerId: number;
+  startX: number;
+  startY: number;
 };
 
 // Where a pointer would drop
@@ -111,11 +118,12 @@ export function ChannelSection({
   const [revealedChannelId, setRevealedChannelId] = useState<string | null>(
     null
   );
-  const isModifierHeld = useReorderModifierHeld();
+  // A pressed row that hasn't moved far enough to drag yet
+  const pressRef = useRef<PressState | null>(null);
+  // Set when a drag ends, so the click that follows doesn't select the row
+  const suppressClickRef = useRef(false);
   const channels = selectedServer?.channels ?? [];
   const rows = visibleRows(channels, collapsedIds);
-  const showHandles = canManageChannels && (isModifierHeld || drag !== null);
-  const gutterPx = canManageChannels ? HANDLE_GUTTER_PX : 0;
 
   // Expand the categories containing a newly selected channel, such as one
   // just created in a collapsed category
@@ -148,41 +156,65 @@ export function ChannelSection({
   }
 
   function handlePointerDown(
-    event: React.PointerEvent<HTMLButtonElement>,
+    event: React.PointerEvent<HTMLDivElement>,
     channel: ServerChannel
   ) {
-    if (event.button !== 0) {
+    suppressClickRef.current = false;
+    if (
+      !canManageChannels ||
+      event.button !== 0 ||
+      // Pressing the actions menu opens it rather than dragging
+      (event.target as Element).closest("[aria-haspopup]")
+    ) {
       return;
     }
-    event.preventDefault();
-    event.currentTarget.setPointerCapture(event.pointerId);
-    setDrag({ channelId: channel.id, target: null });
+    pressRef.current = {
+      channelId: channel.id,
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startY: event.clientY,
+    };
   }
 
-  function handlePointerMove(event: React.PointerEvent<HTMLButtonElement>) {
-    if (!drag) {
-      return;
+  function handlePointerMove(event: React.PointerEvent<HTMLDivElement>) {
+    let channelId = drag?.channelId;
+    if (!channelId) {
+      const press = pressRef.current;
+      if (
+        !press ||
+        press.pointerId !== event.pointerId ||
+        Math.hypot(event.clientX - press.startX, event.clientY - press.startY) <
+          DRAG_THRESHOLD_PX
+      ) {
+        return;
+      }
+      channelId = press.channelId;
+      pressRef.current = null;
+      event.currentTarget.setPointerCapture(event.pointerId);
     }
     const target = dropTargetAt(
       channels,
       collapsedIds,
-      drag.channelId,
+      channelId,
       event.clientX,
       event.clientY
     );
     if (
+      !drag ||
       target?.channelId !== drag.target?.channelId ||
       target?.placement !== drag.target?.placement
     ) {
-      setDrag({ ...drag, target });
+      setDrag({ channelId, target });
     }
   }
 
   function handlePointerUp() {
+    pressRef.current = null;
     if (!drag) {
       return;
     }
     setDrag(null);
+    suppressClickRef.current = true;
 
     const channel = channels.find((c) => c.id === drag.channelId);
     const channelMove =
@@ -271,11 +303,30 @@ export function ChannelSection({
                   data-channel-row={channel.id}
                   className={cn(
                     "relative rounded-2xl py-0.5",
-                    isDragged && "opacity-50",
+                    canManageChannels && "select-none",
+                    isDragged && "cursor-grabbing opacity-50",
                     placement === "inside" &&
                       "bg-primary/10 ring-2 ring-primary/40"
                   )}
-                  style={{ paddingLeft: indentPx + gutterPx }}
+                  style={{ paddingLeft: indentPx }}
+                  onPointerDown={(event) => {
+                    handlePointerDown(event, channel);
+                  }}
+                  onPointerMove={handlePointerMove}
+                  onPointerUp={handlePointerUp}
+                  onPointerCancel={() => {
+                    pressRef.current = null;
+                  }}
+                  onLostPointerCapture={() => {
+                    setDrag(null);
+                  }}
+                  onClickCapture={(event) => {
+                    if (suppressClickRef.current) {
+                      suppressClickRef.current = false;
+                      event.preventDefault();
+                      event.stopPropagation();
+                    }
+                  }}
                 >
                   {placement === "before" || placement === "after" ? (
                     <div
@@ -284,34 +335,8 @@ export function ChannelSection({
                         "pointer-events-none absolute right-1 z-10 h-0.5 rounded-full bg-primary",
                         placement === "before" ? "-top-px" : "-bottom-px"
                       )}
-                      style={{ left: indentPx + gutterPx }}
+                      style={{ left: indentPx }}
                     />
-                  ) : null}
-
-                  {showHandles ? (
-                    <button
-                      type="button"
-                      className={cn(
-                        "absolute top-1/2 z-10 flex h-8 -translate-y-1/2 touch-none items-center justify-center rounded-md text-sidebar-foreground/50 hover:text-sidebar-foreground",
-                        drag ? "cursor-grabbing" : "cursor-grab"
-                      )}
-                      style={{ left: indentPx, width: HANDLE_GUTTER_PX }}
-                      aria-label={`Drag to move ${channel.title}`}
-                      onPointerDown={(event) => {
-                        handlePointerDown(event, channel);
-                      }}
-                      onPointerMove={handlePointerMove}
-                      onPointerUp={handlePointerUp}
-                      onLostPointerCapture={() => {
-                        setDrag(null);
-                      }}
-                      // Ctrl-click opens the context menu on macOS
-                      onContextMenu={(event) => {
-                        event.preventDefault();
-                      }}
-                    >
-                      <GripVertical className="size-4" />
-                    </button>
                   ) : null}
 
                   {channel.kind === "category" ? (
@@ -346,8 +371,7 @@ export function ChannelSection({
             {drag?.target?.placement === "root-end" ? (
               <div
                 aria-hidden
-                className="pointer-events-none absolute right-1 -bottom-px h-0.5 rounded-full bg-primary"
-                style={{ left: gutterPx }}
+                className="pointer-events-none absolute right-1 -bottom-px left-0 h-0.5 rounded-full bg-primary"
               />
             ) : null}
           </div>
