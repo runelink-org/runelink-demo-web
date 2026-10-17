@@ -86,9 +86,7 @@ export function CreateChannelDialog({
     const nextTitle = title.trim();
     if (!nextTitle) {
       setError(
-        kind === "category"
-          ? "Category name is required."
-          : "Channel name is required."
+        `${noun === "category" ? "Category" : "Channel"} name is required.`
       );
       return;
     }
@@ -115,15 +113,7 @@ export function CreateChannelDialog({
   }
 
   return (
-    <AlertDialog
-      open={request !== null}
-      onOpenChange={(nextOpen) => {
-        onOpenChange(nextOpen);
-        if (!nextOpen) {
-          setError(null);
-        }
-      }}
-    >
+    <AlertDialog open={request !== null} onOpenChange={onOpenChange}>
       <AlertDialogContent>
         <form className="space-y-4" onSubmit={handleSubmit}>
           <AlertDialogHeader>

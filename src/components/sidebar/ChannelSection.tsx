@@ -5,16 +5,14 @@ import type {
   ServerWithChannels,
 } from "@runelink/sdk";
 import { GripVertical, Plus } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { toast } from "sonner";
 import { CategoryListItem } from "@/components/sidebar/CategoryListItem";
 import { ChannelListItem } from "@/components/sidebar/ChannelListItem";
 import { Button } from "@/components/ui/button";
 import {
   ancestorIds,
-  childrenOf,
   type DropTarget,
-  isNoOpMove,
   planDrop,
   visibleRows,
 } from "@/lib/channel-tree";
@@ -30,8 +28,7 @@ type ChannelSectionProps = {
   isLoading: boolean;
   error: string | null;
   isSelectedServerHydrating: boolean;
-  canCreateChannel: boolean;
-  canDeleteSelectedServer: boolean;
+  canManageChannels: boolean;
   onOpenCreateChannel: (
     kind: ServerChannelKind,
     parentChannelId: string | null
@@ -49,28 +46,21 @@ type DragState = {
   target: DropTarget | null;
 };
 
-// Where a pointer would drop. Returns undefined in the gaps between rows,
-// where the previous target should be kept.
+// Where a pointer would drop
 function dropTargetAt(
   channels: ServerChannel[],
   collapsedIds: ReadonlySet<string>,
   draggedId: string,
   clientX: number,
   clientY: number
-): DropTarget | null | undefined {
+): DropTarget | null {
   const element = document.elementFromPoint(clientX, clientY);
   const row = element?.closest<HTMLElement>("[data-channel-row]");
   if (!row) {
-    const tree = element?.closest("[data-channel-tree]");
-    const rows = tree?.querySelectorAll("[data-channel-row]") ?? [];
-    const lastRow = rows[rows.length - 1];
-    if (!tree || !lastRow) {
-      return null;
-    }
-    // Empty space below the last row drops at the end of the server root
-    return clientY > lastRow.getBoundingClientRect().bottom
+    // Rows are contiguous, so the rest of the tree is the space below them
+    return element?.closest("[data-channel-tree]")
       ? { channelId: null, placement: "root-end" }
-      : undefined;
+      : null;
   }
   const channel = channels.find((c) => c.id === row.dataset.channelRow);
   if (!channel) {
@@ -84,7 +74,7 @@ function dropTargetAt(
     // Below an expanded category, its first child is the next drop target
     const hasVisibleChildren =
       !collapsedIds.has(channel.id) &&
-      childrenOf(channels, channel.id).length > 0;
+      channels.some((c) => c.parent_channel_id === channel.id);
     const placement =
       fraction < 0.3
         ? "before"
@@ -108,8 +98,7 @@ export function ChannelSection({
   isLoading,
   error,
   isSelectedServerHydrating,
-  canCreateChannel,
-  canDeleteSelectedServer,
+  canManageChannels,
   onOpenCreateChannel,
   onSelectChannel,
   onDeleteChannel,
@@ -125,7 +114,6 @@ export function ChannelSection({
   const isModifierHeld = useReorderModifierHeld();
   const channels = selectedServer?.channels ?? [];
   const rows = visibleRows(channels, collapsedIds);
-  const canManageChannels = canCreateChannel;
   const showHandles = canManageChannels && (isModifierHeld || drag !== null);
   const gutterPx = canManageChannels ? HANDLE_GUTTER_PX : 0;
 
@@ -143,25 +131,8 @@ export function ChannelSection({
     }
   }
 
-  useEffect(() => {
-    if (!drag) {
-      return;
-    }
-
-    function handleKeyDown(event: KeyboardEvent) {
-      if (event.key === "Escape") {
-        setDrag(null);
-      }
-    }
-
-    window.addEventListener("keydown", handleKeyDown);
-    return () => {
-      window.removeEventListener("keydown", handleKeyDown);
-    };
-  }, [drag]);
-
   const createChannelTooltip = selectedServer
-    ? canCreateChannel
+    ? canManageChannels
       ? "Create channel"
       : "Only server admins can create channels."
     : "Select a server first.";
@@ -200,9 +171,8 @@ export function ChannelSection({
       event.clientY
     );
     if (
-      target !== undefined &&
-      (target?.channelId !== drag.target?.channelId ||
-        target?.placement !== drag.target?.placement)
+      target?.channelId !== drag.target?.channelId ||
+      target?.placement !== drag.target?.placement
     ) {
       setDrag({ ...drag, target });
     }
@@ -217,11 +187,7 @@ export function ChannelSection({
     const channel = channels.find((c) => c.id === drag.channelId);
     const channelMove =
       drag.target && planDrop(channels, drag.channelId, drag.target);
-    if (
-      !channel ||
-      !channelMove ||
-      isNoOpMove(channels, channel.id, channelMove)
-    ) {
+    if (!channel || !channelMove) {
       return;
     }
     if (channelMove.parent_channel_id) {
@@ -257,7 +223,7 @@ export function ChannelSection({
               onClick={() => {
                 onOpenCreateChannel("text", null);
               }}
-              disabled={!selectedServer || !canCreateChannel}
+              disabled={!selectedServer || !canManageChannels}
               aria-label={createChannelTooltip}
             >
               <Plus className="size-4" />
@@ -288,7 +254,7 @@ export function ChannelSection({
             This server does not have any channels yet.
           </div>
         ) : (
-          <div className="relative space-y-1" role="tree">
+          <div className="relative" role="tree">
             {rows.map(({ channel, depth }) => {
               const indentPx = depth * INDENT_PX;
               const isDragged = drag?.channelId === channel.id;
@@ -303,7 +269,7 @@ export function ChannelSection({
                   role="treeitem"
                   data-channel-row={channel.id}
                   className={cn(
-                    "relative rounded-2xl",
+                    "relative rounded-2xl py-0.5",
                     isDragged && "opacity-50",
                     placement === "inside" &&
                       "bg-primary/10 ring-2 ring-primary/40"
@@ -315,7 +281,7 @@ export function ChannelSection({
                       aria-hidden
                       className={cn(
                         "pointer-events-none absolute right-1 z-10 h-0.5 rounded-full bg-primary",
-                        placement === "before" ? "-top-[3px]" : "-bottom-[3px]"
+                        placement === "before" ? "-top-px" : "-bottom-px"
                       )}
                       style={{ left: indentPx + gutterPx }}
                     />
@@ -335,9 +301,6 @@ export function ChannelSection({
                       }}
                       onPointerMove={handlePointerMove}
                       onPointerUp={handlePointerUp}
-                      onPointerCancel={() => {
-                        setDrag(null);
-                      }}
                       onLostPointerCapture={() => {
                         setDrag(null);
                       }}
@@ -369,7 +332,7 @@ export function ChannelSection({
                       serverId={selectedServer.server.id}
                       channel={channel}
                       isSelected={channel.id === selectedChannelId}
-                      canDeleteChannel={canDeleteSelectedServer}
+                      canDeleteChannel={canManageChannels}
                       onSelect={(nextChannel) => {
                         onSelectChannel(selectedServer.server.id, nextChannel);
                       }}
@@ -382,7 +345,7 @@ export function ChannelSection({
             {drag?.target?.placement === "root-end" ? (
               <div
                 aria-hidden
-                className="pointer-events-none absolute right-1 -bottom-[3px] h-0.5 rounded-full bg-primary"
+                className="pointer-events-none absolute right-1 -bottom-px h-0.5 rounded-full bg-primary"
                 style={{ left: gutterPx }}
               />
             ) : null}

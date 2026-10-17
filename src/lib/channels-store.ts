@@ -411,41 +411,7 @@ export const useChannelsStore = create<ChannelsState>((set) => ({
       },
     });
 
-    set((state) => ({
-      channelsByServerId: {
-        ...state.channelsByServerId,
-        [serverId]: upsertChannels(
-          state.channelsByServerId[serverId] ?? [],
-          reply.data
-        ),
-      },
-      channelById: {
-        ...state.channelById,
-        ...Object.fromEntries(
-          reply.data.map((channel) => [channel.id, channel])
-        ),
-      },
-    }));
-
-    useServersStore.setState((state) => {
-      if (!(serverId in state.serverWithChannelsById)) {
-        return {};
-      }
-
-      return {
-        serverWithChannelsById: {
-          ...state.serverWithChannelsById,
-          [serverId]: {
-            ...state.serverWithChannelsById[serverId],
-            channels: upsertChannels(
-              state.serverWithChannelsById[serverId].channels,
-              reply.data
-            ),
-          },
-        },
-      };
-    });
-
+    applyChannelUpserts(serverId, reply.data);
     return reply.data;
   },
 
@@ -453,6 +419,45 @@ export const useChannelsStore = create<ChannelsState>((set) => ({
     set(initialState);
   },
 }));
+
+// Apply upserted channels of a server to the channel and server stores
+export function applyChannelUpserts(
+  serverId: ServerId,
+  channels: ServerChannel[]
+): void {
+  useChannelsStore.setState((state) => ({
+    channelsByServerId: {
+      ...state.channelsByServerId,
+      [serverId]: upsertChannels(
+        state.channelsByServerId[serverId] ?? [],
+        channels
+      ),
+    },
+    channelById: {
+      ...state.channelById,
+      ...Object.fromEntries(channels.map((channel) => [channel.id, channel])),
+    },
+  }));
+
+  useServersStore.setState((state) => {
+    if (!(serverId in state.serverWithChannelsById)) {
+      return {};
+    }
+
+    return {
+      serverWithChannelsById: {
+        ...state.serverWithChannelsById,
+        [serverId]: {
+          ...state.serverWithChannelsById[serverId],
+          channels: upsertChannels(
+            state.serverWithChannelsById[serverId].channels,
+            channels
+          ),
+        },
+      },
+    };
+  });
+}
 
 bindStoreToActiveAccount(() => {
   useChannelsStore.getState().reset();

@@ -17,7 +17,7 @@ type ChannelActionsMenuProps = {
   channel: ServerChannel;
   canDeleteChannel: boolean;
   onDeleteChannel: (channel: ServerChannel) => void;
-  // Offered for categories when the user can create channels
+  // Passed for categories when the user can create channels
   onCreateChild?: (kind: ServerChannelKind) => void;
   className?: string;
   forceVisible?: boolean;
@@ -94,7 +94,7 @@ export function ChannelActionsMenu({
         sideOffset={8}
         className="w-64"
       >
-        {isCategory && onCreateChild ? (
+        {onCreateChild ? (
           <>
             <DropdownMenuItem
               className="cursor-pointer gap-3 rounded-xl px-3 py-2"

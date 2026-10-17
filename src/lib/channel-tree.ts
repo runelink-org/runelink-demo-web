@@ -18,48 +18,23 @@ function compareChannels(left: ServerChannel, right: ServerChannel): number {
   return left.id < right.id ? -1 : left.id > right.id ? 1 : 0;
 }
 
-// Sorted children by parent ID, with null for the server root. Channels with
-// a missing parent are treated as root channels.
+// Sorted children by parent ID, with null for the server root
 function childrenByParent(
   channels: ServerChannel[]
 ): Map<string | null, ServerChannel[]> {
-  const ids = new Set(channels.map((channel) => channel.id));
   const children = new Map<string | null, ServerChannel[]>();
   for (const channel of channels) {
-    const parentId =
-      channel.parent_channel_id && ids.has(channel.parent_channel_id)
-        ? channel.parent_channel_id
-        : null;
-    const siblings = children.get(parentId);
+    const siblings = children.get(channel.parent_channel_id);
     if (siblings) {
       siblings.push(channel);
     } else {
-      children.set(parentId, [channel]);
+      children.set(channel.parent_channel_id, [channel]);
     }
   }
   for (const siblings of children.values()) {
     siblings.sort(compareChannels);
   }
   return children;
-}
-
-function parentOf(
-  children: Map<string | null, ServerChannel[]>,
-  channelId: string
-): string | null {
-  for (const [parentId, siblings] of children) {
-    if (siblings.some((channel) => channel.id === channelId)) {
-      return parentId;
-    }
-  }
-  return null;
-}
-
-export function childrenOf(
-  channels: ServerChannel[],
-  parentId: string | null
-): ServerChannel[] {
-  return childrenByParent(channels).get(parentId) ?? [];
 }
 
 // Channels in depth-first tree order, skipping children of collapsed
@@ -101,17 +76,17 @@ export function firstTextChannel(
   );
 }
 
-// IDs of the ancestors of a channel, nearest first
+// IDs of a channel's ancestors, nearest first
 export function ancestorIds(
   channels: ServerChannel[],
   channelId: string
 ): string[] {
-  const children = childrenByParent(channels);
+  const byId = new Map(channels.map((channel) => [channel.id, channel]));
   const ancestors: string[] = [];
-  let parentId = parentOf(children, channelId);
-  while (parentId && !ancestors.includes(parentId)) {
+  let parentId = byId.get(channelId)?.parent_channel_id ?? null;
+  while (parentId) {
     ancestors.push(parentId);
-    parentId = parentOf(children, parentId);
+    parentId = byId.get(parentId)?.parent_channel_id ?? null;
   }
   return ancestors;
 }
@@ -123,9 +98,10 @@ export function planDrop(
   draggedId: string,
   target: DropTarget
 ): ServerChannelMove | null {
-  const children = childrenByParent(channels);
   const siblingsOf = (parentId: string | null) =>
-    (children.get(parentId) ?? []).filter((c) => c.id !== draggedId);
+    channels
+      .filter((c) => c.parent_channel_id === parentId && c.id !== draggedId)
+      .sort(compareChannels);
 
   if (target.placement === "root-end") {
     return { parent_channel_id: null, index: siblingsOf(null).length };
@@ -138,12 +114,11 @@ export function planDrop(
   const parentId =
     target.placement === "inside"
       ? targetChannel.id
-      : parentOf(children, targetChannel.id);
+      : targetChannel.parent_channel_id;
   if (
     (target.placement === "inside" && targetChannel.kind !== "category") ||
-    [parentId, ...(parentId ? ancestorIds(channels, parentId) : [])].includes(
-      draggedId
-    )
+    (parentId &&
+      [parentId, ...ancestorIds(channels, parentId)].includes(draggedId))
   ) {
     return null;
   }
@@ -159,19 +134,4 @@ export function planDrop(
     parent_channel_id: parentId,
     index: target.placement === "before" ? targetIndex : targetIndex + 1,
   };
-}
-
-// Whether a move would leave the channel where it already is
-export function isNoOpMove(
-  channels: ServerChannel[],
-  channelId: string,
-  move: ServerChannelMove
-): boolean {
-  const children = childrenByParent(channels);
-  if (parentOf(children, channelId) !== move.parent_channel_id) {
-    return false;
-  }
-  const siblings = children.get(move.parent_channel_id) ?? [];
-  const currentIndex = siblings.findIndex((c) => c.id === channelId);
-  return Math.min(move.index, siblings.length - 1) === currentIndex;
 }
