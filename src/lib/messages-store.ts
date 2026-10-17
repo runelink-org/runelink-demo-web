@@ -3,49 +3,45 @@ import { create } from "zustand";
 import { requestExpected } from "@/lib/runelink-request";
 import {
   bindStoreToActiveAccount,
-  type ChannelId,
   type MessageId,
-  serverChannelKey,
   type ServerId,
   type TargetHost,
+  type TextChannelId,
 } from "@/lib/runelink-store-utils";
 
 type MessagesState = {
   allMessages: Message[];
   messagesByServerId: Record<string, Message[]>;
-  messagesByChannelKey: Record<string, Message[]>;
+  messagesByTextChannelId: Record<string, Message[]>;
   messageById: Record<string, Message>;
   isLoading: boolean;
   isLoadingByServerId: Record<string, boolean>;
-  isLoadingByChannelKey: Record<string, boolean>;
+  isLoadingByTextChannelId: Record<string, boolean>;
   error: string | null;
   errorByServerId: Record<string, string | null>;
-  errorByChannelKey: Record<string, string | null>;
+  errorByTextChannelId: Record<string, string | null>;
   fetchMessages: (targetHost?: TargetHost) => Promise<Message[]>;
   fetchMessagesByServer: (
     serverId: ServerId,
     targetHost?: TargetHost
   ) => Promise<Message[]>;
-  fetchMessagesByChannel: (
-    serverId: ServerId,
-    channelId: ChannelId,
+  fetchMessagesByTextChannel: (
+    textChannelId: TextChannelId,
     targetHost?: TargetHost
   ) => Promise<Message[]>;
   fetchMessageById: (
-    serverId: ServerId,
-    channelId: ChannelId,
     messageId: MessageId,
     targetHost?: TargetHost
   ) => Promise<Message>;
   createMessage: (
     serverId: ServerId,
-    channelId: ChannelId,
+    textChannelId: TextChannelId,
     newMessage: NewMessage,
     targetHost?: TargetHost
   ) => Promise<Message>;
   deleteMessage: (
     serverId: ServerId,
-    channelId: ChannelId,
+    textChannelId: TextChannelId,
     messageId: MessageId,
     targetHost?: TargetHost
   ) => Promise<void>;
@@ -55,14 +51,14 @@ type MessagesState = {
 const initialState = {
   allMessages: [],
   messagesByServerId: {},
-  messagesByChannelKey: {},
+  messagesByTextChannelId: {},
   messageById: {},
   isLoading: false,
   isLoadingByServerId: {},
-  isLoadingByChannelKey: {},
+  isLoadingByTextChannelId: {},
   error: null,
   errorByServerId: {},
-  errorByChannelKey: {},
+  errorByTextChannelId: {},
 };
 
 function upsertMessage(messages: Message[], nextMessage: Message): Message[] {
@@ -140,7 +136,7 @@ export const useMessagesStore = create<MessagesState>((set) => ({
 
       const channelMessages = reply.data.reduce<Record<string, Message[]>>(
         (groups, message) => {
-          const key = serverChannelKey(serverId, message.channel_id);
+          const key = message.text_channel_id;
           groups[key] = [...(groups[key] ?? []), message];
           return groups;
         },
@@ -152,8 +148,8 @@ export const useMessagesStore = create<MessagesState>((set) => ({
           ...state.messagesByServerId,
           [serverId]: sortMessages(reply.data),
         },
-        messagesByChannelKey: {
-          ...state.messagesByChannelKey,
+        messagesByTextChannelId: {
+          ...state.messagesByTextChannelId,
           ...Object.fromEntries(
             Object.entries(channelMessages).map(([key, messages]) => [
               key,
@@ -195,15 +191,15 @@ export const useMessagesStore = create<MessagesState>((set) => ({
     }
   },
 
-  async fetchMessagesByChannel(serverId, channelId, targetHost = null) {
-    const channelKey = serverChannelKey(serverId, channelId);
+  async fetchMessagesByTextChannel(textChannelId, targetHost = null) {
+    const channelKey = textChannelId;
     set((state) => ({
-      isLoadingByChannelKey: {
-        ...state.isLoadingByChannelKey,
+      isLoadingByTextChannelId: {
+        ...state.isLoadingByTextChannelId,
         [channelKey]: true,
       },
-      errorByChannelKey: {
-        ...state.errorByChannelKey,
+      errorByTextChannelId: {
+        ...state.errorByTextChannelId,
         [channelKey]: null,
       },
     }));
@@ -212,27 +208,26 @@ export const useMessagesStore = create<MessagesState>((set) => ({
       const reply = await requestExpected("messages_get_by_channel", {
         type: "messages_get_by_channel",
         data: {
-          server_id: serverId,
-          channel_id: channelId,
+          text_channel_id: textChannelId,
           target_host: targetHost,
         },
       });
 
       set((state) => ({
-        messagesByChannelKey: {
-          ...state.messagesByChannelKey,
+        messagesByTextChannelId: {
+          ...state.messagesByTextChannelId,
           [channelKey]: sortMessages(reply.data),
         },
         messageById: {
           ...state.messageById,
           ...mergeMessages(reply.data),
         },
-        isLoadingByChannelKey: {
-          ...state.isLoadingByChannelKey,
+        isLoadingByTextChannelId: {
+          ...state.isLoadingByTextChannelId,
           [channelKey]: false,
         },
-        errorByChannelKey: {
-          ...state.errorByChannelKey,
+        errorByTextChannelId: {
+          ...state.errorByTextChannelId,
           [channelKey]: null,
         },
       }));
@@ -244,12 +239,12 @@ export const useMessagesStore = create<MessagesState>((set) => ({
           ? error.message
           : "Failed to load channel messages";
       set((state) => ({
-        isLoadingByChannelKey: {
-          ...state.isLoadingByChannelKey,
+        isLoadingByTextChannelId: {
+          ...state.isLoadingByTextChannelId,
           [channelKey]: false,
         },
-        errorByChannelKey: {
-          ...state.errorByChannelKey,
+        errorByTextChannelId: {
+          ...state.errorByTextChannelId,
           [channelKey]: message,
         },
       }));
@@ -257,103 +252,22 @@ export const useMessagesStore = create<MessagesState>((set) => ({
     }
   },
 
-  async fetchMessageById(serverId, channelId, messageId, targetHost = null) {
-    const channelKey = serverChannelKey(serverId, channelId);
-    set((state) => ({
-      isLoadingByChannelKey: {
-        ...state.isLoadingByChannelKey,
-        [channelKey]: true,
-      },
-      errorByChannelKey: {
-        ...state.errorByChannelKey,
-        [channelKey]: null,
-      },
-    }));
-
-    try {
-      const reply = await requestExpected("messages_get_by_id", {
-        type: "messages_get_by_id",
-        data: {
-          server_id: serverId,
-          channel_id: channelId,
-          message_id: messageId,
-          target_host: targetHost,
-        },
-      });
-
-      set((state) => ({
-        messagesByChannelKey: {
-          ...state.messagesByChannelKey,
-          [channelKey]: sortMessages(
-            upsertMessage(
-              state.messagesByChannelKey[channelKey] ?? [],
-              reply.data
-            )
-          ),
-        },
-        messagesByServerId: {
-          ...state.messagesByServerId,
-          [serverId]: sortMessages(
-            upsertMessage(state.messagesByServerId[serverId] ?? [], reply.data)
-          ),
-        },
-        messageById: {
-          ...state.messageById,
-          [reply.data.id]: reply.data,
-        },
-        isLoadingByChannelKey: {
-          ...state.isLoadingByChannelKey,
-          [channelKey]: false,
-        },
-        errorByChannelKey: {
-          ...state.errorByChannelKey,
-          [channelKey]: null,
-        },
-      }));
-
-      return reply.data;
-    } catch (error) {
-      const message =
-        error instanceof Error ? error.message : "Failed to load message";
-      set((state) => ({
-        isLoadingByChannelKey: {
-          ...state.isLoadingByChannelKey,
-          [channelKey]: false,
-        },
-        errorByChannelKey: {
-          ...state.errorByChannelKey,
-          [channelKey]: message,
-        },
-      }));
-      throw error;
-    }
-  },
-
-  async createMessage(serverId, channelId, newMessage, targetHost = null) {
-    const channelKey = serverChannelKey(serverId, channelId);
-    const reply = await requestExpected("messages_create", {
-      type: "messages_create",
+  async fetchMessageById(messageId, targetHost = null) {
+    const reply = await requestExpected("messages_get_by_id", {
+      type: "messages_get_by_id",
       data: {
-        server_id: serverId,
-        channel_id: channelId,
-        new_message: newMessage,
+        message_id: messageId,
         target_host: targetHost,
       },
     });
+    const channelKey = reply.data.text_channel_id;
 
     set((state) => ({
-      allMessages: sortMessages(upsertMessage(state.allMessages, reply.data)),
-      messagesByServerId: {
-        ...state.messagesByServerId,
-        [serverId]: sortMessages(
-          upsertMessage(state.messagesByServerId[serverId] ?? [], reply.data)
-        ),
-      },
-      messagesByChannelKey: {
-        ...state.messagesByChannelKey,
+      messagesByTextChannelId: {
+        ...state.messagesByTextChannelId,
         [channelKey]: sortMessages(
           upsertMessage(
-            state.messagesByChannelKey[channelKey] ?? [],
+            state.messagesByTextChannelId[channelKey] ?? [],
             reply.data
           )
         ),
@@ -367,15 +281,52 @@ export const useMessagesStore = create<MessagesState>((set) => ({
     return reply.data;
   },
 
-  async deleteMessage(serverId, channelId, messageId, targetHost = null) {
-    const channelKey = serverChannelKey(serverId, channelId);
+  async createMessage(serverId, textChannelId, newMessage, targetHost = null) {
+    const channelKey = textChannelId;
+    const reply = await requestExpected("messages_create", {
+      type: "messages_create",
+      data: {
+        text_channel_id: textChannelId,
+        new_message: newMessage,
+        target_host: targetHost,
+      },
+    });
+
     set((state) => ({
-      isLoadingByChannelKey: {
-        ...state.isLoadingByChannelKey,
+      allMessages: sortMessages(upsertMessage(state.allMessages, reply.data)),
+      messagesByServerId: {
+        ...state.messagesByServerId,
+        [serverId]: sortMessages(
+          upsertMessage(state.messagesByServerId[serverId] ?? [], reply.data)
+        ),
+      },
+      messagesByTextChannelId: {
+        ...state.messagesByTextChannelId,
+        [channelKey]: sortMessages(
+          upsertMessage(
+            state.messagesByTextChannelId[channelKey] ?? [],
+            reply.data
+          )
+        ),
+      },
+      messageById: {
+        ...state.messageById,
+        [reply.data.id]: reply.data,
+      },
+    }));
+
+    return reply.data;
+  },
+
+  async deleteMessage(serverId, textChannelId, messageId, targetHost = null) {
+    const channelKey = textChannelId;
+    set((state) => ({
+      isLoadingByTextChannelId: {
+        ...state.isLoadingByTextChannelId,
         [channelKey]: true,
       },
-      errorByChannelKey: {
-        ...state.errorByChannelKey,
+      errorByTextChannelId: {
+        ...state.errorByTextChannelId,
         [channelKey]: null,
       },
     }));
@@ -384,8 +335,6 @@ export const useMessagesStore = create<MessagesState>((set) => ({
       await requestExpected("messages_delete", {
         type: "messages_delete",
         data: {
-          server_id: serverId,
-          channel_id: channelId,
           message_id: messageId,
           target_host: targetHost,
         },
@@ -404,28 +353,28 @@ export const useMessagesStore = create<MessagesState>((set) => ({
               messageId
             ),
           },
-          messagesByChannelKey: {
-            ...state.messagesByChannelKey,
+          messagesByTextChannelId: {
+            ...state.messagesByTextChannelId,
             [channelKey]: removeMessage(
-              state.messagesByChannelKey[channelKey] ?? [],
+              state.messagesByTextChannelId[channelKey] ?? [],
               messageId
             ),
           },
           messageById: nextMessageById,
-          isLoadingByChannelKey: {
-            ...state.isLoadingByChannelKey,
+          isLoadingByTextChannelId: {
+            ...state.isLoadingByTextChannelId,
             [channelKey]: false,
           },
-          errorByChannelKey: {
-            ...state.errorByChannelKey,
+          errorByTextChannelId: {
+            ...state.errorByTextChannelId,
             [channelKey]: null,
           },
         };
       });
     } catch (error) {
       set((state) => ({
-        isLoadingByChannelKey: {
-          ...state.isLoadingByChannelKey,
+        isLoadingByTextChannelId: {
+          ...state.isLoadingByTextChannelId,
           [channelKey]: false,
         },
       }));

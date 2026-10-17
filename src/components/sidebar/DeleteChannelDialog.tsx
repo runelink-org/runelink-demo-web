@@ -1,4 +1,4 @@
-import type { Channel } from "@runelink/sdk";
+import type { ServerChannel } from "@runelink/sdk";
 import { useState } from "react";
 import { toast } from "sonner";
 import {
@@ -13,9 +13,9 @@ import {
 } from "@/components/ui/alert-dialog";
 
 type DeleteChannelDialogProps = {
-  channel: Channel | null;
+  channel: ServerChannel | null;
   onOpenChange: (open: boolean) => void;
-  onDeleteChannel: (channel: Channel) => Promise<void>;
+  onDeleteChannel: (channel: ServerChannel) => Promise<void>;
 };
 
 export function DeleteChannelDialog({
@@ -25,6 +25,7 @@ export function DeleteChannelDialog({
 }: DeleteChannelDialogProps) {
   const [error, setError] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const noun = channel?.kind === "category" ? "category" : "channel";
 
   async function handleConfirm() {
     if (!channel) {
@@ -36,14 +37,14 @@ export function DeleteChannelDialog({
 
     try {
       await onDeleteChannel(channel);
-      toast.success(`Deleted channel: ${channel.title}`);
+      toast.success(`Deleted ${noun}: ${channel.title}`);
       onOpenChange(false);
     } catch (nextError) {
-      toast.error("Failed to delete channel.");
+      toast.error(`Failed to delete ${noun}.`);
       setError(
         nextError instanceof Error
           ? nextError.message
-          : "Failed to delete channel"
+          : `Failed to delete ${noun}`
       );
     } finally {
       setIsDeleting(false);
@@ -62,11 +63,13 @@ export function DeleteChannelDialog({
     >
       <AlertDialogContent size="sm">
         <AlertDialogHeader>
-          <AlertDialogTitle>Delete channel?</AlertDialogTitle>
+          <AlertDialogTitle>Delete {noun}?</AlertDialogTitle>
           <AlertDialogDescription>
-            {channel
-              ? `This will remove #${channel.title} from the server.`
-              : "This will remove the selected channel from the server."}
+            {channel?.kind === "category"
+              ? `This will remove the ${channel.title} category. Only empty categories can be deleted.`
+              : channel
+                ? `This will remove #${channel.title} from the server.`
+                : "This will remove the selected channel from the server."}
           </AlertDialogDescription>
         </AlertDialogHeader>
 
@@ -82,7 +85,7 @@ export function DeleteChannelDialog({
               void handleConfirm();
             }}
           >
-            {isDeleting ? "Deleting..." : "Delete channel"}
+            {isDeleting ? "Deleting..." : `Delete ${noun}`}
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>

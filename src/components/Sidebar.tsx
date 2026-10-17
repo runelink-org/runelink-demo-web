@@ -1,10 +1,19 @@
-import type { Channel, Server, ServerWithChannels } from "@runelink/sdk";
+import type {
+  Server,
+  ServerChannel,
+  ServerChannelKind,
+  ServerChannelMove,
+  ServerWithChannels,
+} from "@runelink/sdk";
 import { Layers3, LoaderCircle } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { flushSync } from "react-dom";
 import { ProfileSelector } from "@/components/ProfileSelector";
 import { AddServerMenu } from "@/components/sidebar/AddServerMenu";
-import { CreateChannelDialog } from "@/components/sidebar/CreateChannelDialog";
+import {
+  CreateChannelDialog,
+  type CreateChannelRequest,
+} from "@/components/sidebar/CreateChannelDialog";
 import { ChannelSection } from "@/components/sidebar/ChannelSection";
 import { DeleteChannelDialog } from "@/components/sidebar/DeleteChannelDialog";
 import { DeleteServerDialog } from "@/components/sidebar/DeleteServerDialog";
@@ -27,7 +36,7 @@ type SidebarProps = {
   onManageAccounts: () => void;
   onSelectAccount: () => void;
   onSelectServer: (serverId: string) => void;
-  onSelectChannel: (serverId: string, channel: Channel) => void;
+  onSelectChannel: (serverId: string, channel: ServerChannel) => void;
   onCreateServer: (
     host: string,
     title: string,
@@ -39,8 +48,16 @@ type SidebarProps = {
   onLeaveServer: (serverId: string, serverHost: string) => Promise<void>;
   onDeleteServer: (serverId: string, serverHost: string) => Promise<void>;
   canDeleteSelectedServer: boolean;
-  onCreateChannel: (title: string, description: string) => Promise<void>;
-  onDeleteChannel: (channel: Channel) => Promise<void>;
+  onCreateChannel: (
+    kind: ServerChannelKind,
+    title: string,
+    parentChannelId: string | null
+  ) => Promise<void>;
+  onDeleteChannel: (channel: ServerChannel) => Promise<void>;
+  onMoveChannel: (
+    channel: ServerChannel,
+    channelMove: ServerChannelMove
+  ) => Promise<void>;
 };
 
 const CHANNEL_PANEL_WIDTH_KEY = "runelink.demo.channels-sidebar-width";
@@ -99,13 +116,15 @@ export function Sidebar({
   canDeleteSelectedServer,
   onCreateChannel,
   onDeleteChannel,
+  onMoveChannel,
 }: SidebarProps) {
   const [channelPanelWidth, setChannelPanelWidth] = useState<number>(() =>
     loadStoredChannelPanelWidth()
   );
-  const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
+  const [createChannelRequest, setCreateChannelRequest] =
+    useState<CreateChannelRequest | null>(null);
   const [channelPendingDelete, setChannelPendingDelete] =
-    useState<Channel | null>(null);
+    useState<ServerChannel | null>(null);
   const [serverPendingLeave, setServerPendingLeave] = useState<Server | null>(
     null
   );
@@ -349,8 +368,8 @@ export function Sidebar({
             isSelectedServerHydrating={isSelectedServerHydrating}
             canCreateChannel={canDeleteSelectedServer}
             canDeleteSelectedServer={canDeleteSelectedServer}
-            onOpenCreateChannel={() => {
-              setIsCreateDialogOpen(true);
+            onOpenCreateChannel={(kind, parentChannelId) => {
+              setCreateChannelRequest({ kind, parentChannelId });
             }}
             onSelectChannel={(serverId, channel) => {
               scheduleSelectionCommit(
@@ -366,6 +385,7 @@ export function Sidebar({
             onDeleteChannel={(channel) => {
               setChannelPendingDelete(channel);
             }}
+            onMoveChannel={onMoveChannel}
           />
         </div>
       )}
@@ -385,9 +405,14 @@ export function Sidebar({
       )}
 
       <CreateChannelDialog
-        open={isCreateDialogOpen}
+        request={createChannelRequest}
         serverTitle={selectedServer?.server.title ?? null}
-        onOpenChange={setIsCreateDialogOpen}
+        channels={selectedServer?.channels ?? []}
+        onOpenChange={(open) => {
+          if (!open) {
+            setCreateChannelRequest(null);
+          }
+        }}
         onCreateChannel={onCreateChannel}
       />
 
