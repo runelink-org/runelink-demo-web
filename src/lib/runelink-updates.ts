@@ -144,24 +144,6 @@ function isLoadedTextChannel(textChannelId: string): boolean {
   return textChannelId in state.messagesByTextChannelId;
 }
 
-function findLoadedServerChannel(
-  predicate: (channel: ServerChannel) => boolean
-): ServerChannel | null {
-  const serverState = useServersStore.getState();
-
-  for (const serverWithChannels of Object.values(
-    serverState.serverWithChannelsById
-  )) {
-    const channel = serverWithChannels.channels.find(predicate);
-    if (channel) {
-      return channel;
-    }
-  }
-
-  const channelState = useChannelsStore.getState();
-  return Object.values(channelState.channelById).find(predicate) ?? null;
-}
-
 function getKnownTextChannelIdsForServer(serverId: string): string[] {
   const channelState = useChannelsStore.getState();
   const serverState = useServersStore.getState();
@@ -538,8 +520,13 @@ function handleChannelDeleted(serverId: string, channelId: string): void {
     return;
   }
 
-  const textChannelId = findLoadedServerChannel(
-    (channel) => channel.id === channelId
+  const textChannelId = (
+    useChannelsStore.getState().channelById[channelId] ??
+    useServersStore
+      .getState()
+      .serverWithChannelsById[
+        serverId
+      ]?.channels.find((channel) => channel.id === channelId)
   )?.text_channel_id;
   if (textChannelId) {
     removeMessageState([textChannelId]);

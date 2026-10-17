@@ -10,7 +10,7 @@ type CategoryListItemProps = {
   isCollapsed: boolean;
   canManageChannels: boolean;
   onToggleCollapsed: (channel: ServerChannel) => void;
-  onCreateChild: (parent: ServerChannel, kind: ServerChannelKind) => void;
+  onCreateChild: (kind: ServerChannelKind) => void;
   onDeleteChannel: (channel: ServerChannel) => void;
 };
 
@@ -51,13 +51,7 @@ export function CategoryListItem({
         canDeleteChannel={canManageChannels}
         className="absolute right-2 bottom-0"
         onDeleteChannel={onDeleteChannel}
-        onCreateChild={
-          canManageChannels
-            ? (kind) => {
-                onCreateChild(channel, kind);
-              }
-            : undefined
-        }
+        onCreateChild={canManageChannels ? onCreateChild : undefined}
       />
     </div>
   );
