@@ -12,6 +12,7 @@ import { ChannelListItem } from "@/components/sidebar/ChannelListItem";
 import { Button } from "@/components/ui/button";
 import {
   ancestorIds,
+  type ChannelRow,
   type DropTarget,
   planDrop,
   visibleRows,
@@ -56,7 +57,7 @@ type PressState = {
 // Where a pointer would drop
 function dropTargetAt(
   channels: ServerChannel[],
-  collapsedIds: ReadonlySet<string>,
+  rows: ChannelRow[],
   draggedId: string,
   clientX: number,
   clientY: number
@@ -79,9 +80,9 @@ function dropTargetAt(
   let target: DropTarget;
   if (channel.kind === "category") {
     // Below an expanded category, its first child is the next drop target
-    const hasVisibleChildren =
-      !collapsedIds.has(channel.id) &&
-      channels.some((c) => c.parent_channel_id === channel.id);
+    const hasVisibleChildren = rows.some(
+      (r) => r.channel.parent_channel_id === channel.id
+    );
     const placement =
       fraction < 0.3
         ? "before"
@@ -123,7 +124,7 @@ export function ChannelSection({
   // Set when a drag ends, so the click that follows doesn't select the row
   const suppressClickRef = useRef(false);
   const channels = selectedServer?.channels ?? [];
-  const rows = visibleRows(channels, collapsedIds);
+  const rows = visibleRows(channels, collapsedIds, selectedChannelId);
 
   // Expand the categories containing a newly selected channel, such as one
   // just created in a collapsed category
@@ -145,10 +146,15 @@ export function ChannelSection({
       : "Only server admins can create channels."
     : "Select a server first.";
 
-  function toggleCollapsed(channel: ServerChannel) {
+  function toggleCollapsed(channel: ServerChannel, isCollapsed: boolean) {
     setCollapsedIds((current) => {
       const next = new Set(current);
-      if (!next.delete(channel.id)) {
+      if (isCollapsed) {
+        // A category shown collapsed by a collapsed ancestor expands with it
+        for (const id of [channel.id, ...ancestorIds(channels, channel.id)]) {
+          next.delete(id);
+        }
+      } else {
         next.add(channel.id);
       }
       return next;
@@ -194,7 +200,7 @@ export function ChannelSection({
     }
     const target = dropTargetAt(
       channels,
-      collapsedIds,
+      rows,
       channelId,
       event.clientX,
       event.clientY
@@ -288,7 +294,7 @@ export function ChannelSection({
           </div>
         ) : (
           <div className="relative" role="tree">
-            {rows.map(({ channel, depth }) => {
+            {rows.map(({ channel, depth, isCollapsed }) => {
               const indentPx = depth * INDENT_PX;
               const isDragged = drag?.channelId === channel.id;
               const placement =
@@ -344,9 +350,11 @@ export function ChannelSection({
                       host={selectedServer.server.host}
                       serverId={selectedServer.server.id}
                       channel={channel}
-                      isCollapsed={collapsedIds.has(channel.id)}
+                      isCollapsed={isCollapsed}
                       canManageChannels={canManageChannels}
-                      onToggleCollapsed={toggleCollapsed}
+                      onToggleCollapsed={() => {
+                        toggleCollapsed(channel, isCollapsed);
+                      }}
                       onCreateChild={(kind) => {
                         onOpenCreateChannel(kind, channel.id);
                       }}

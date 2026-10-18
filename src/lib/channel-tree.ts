@@ -3,6 +3,8 @@ import type { ServerChannel, ServerChannelMove } from "@runelink/sdk";
 export type ChannelRow = {
   channel: ServerChannel;
   depth: number;
+  // Shown collapsed, by its own state or a collapsed ancestor
+  isCollapsed: boolean;
 };
 
 // Drops relative to a channel row, or after everything at the server root
@@ -38,24 +40,33 @@ function childrenByParent(
 }
 
 // Channels in depth-first tree order, skipping children of collapsed
-// categories
+// categories. The pinned channel and its ancestors stay visible inside
+// collapsed categories, so the selected channel can't be hidden.
 export function visibleRows(
   channels: ServerChannel[],
-  collapsedIds: ReadonlySet<string>
+  collapsedIds: ReadonlySet<string>,
+  pinnedId: string | null = null
 ): ChannelRow[] {
   const children = childrenByParent(channels);
+  const pinnedPath = new Set(
+    pinnedId ? [pinnedId, ...ancestorIds(channels, pinnedId)] : []
+  );
   const rows: ChannelRow[] = [];
 
-  function visit(parentId: string | null, depth: number) {
+  function visit(parentId: string | null, depth: number, hidden: boolean) {
     for (const channel of children.get(parentId) ?? []) {
-      rows.push({ channel, depth });
-      if (channel.kind === "category" && !collapsedIds.has(channel.id)) {
-        visit(channel.id, depth + 1);
+      if (hidden && !pinnedPath.has(channel.id)) {
+        continue;
+      }
+      const isCollapsed = hidden || collapsedIds.has(channel.id);
+      rows.push({ channel, depth, isCollapsed });
+      if (channel.kind === "category") {
+        visit(channel.id, depth + 1, isCollapsed);
       }
     }
   }
 
-  visit(null, 0);
+  visit(null, 0, false);
   return rows;
 }
 

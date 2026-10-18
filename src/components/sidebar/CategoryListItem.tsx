@@ -9,7 +9,7 @@ type CategoryListItemProps = {
   channel: ServerChannel;
   isCollapsed: boolean;
   canManageChannels: boolean;
-  onToggleCollapsed: (channel: ServerChannel) => void;
+  onToggleCollapsed: () => void;
   onCreateChild: (kind: ServerChannelKind) => void;
   onDeleteChannel: (channel: ServerChannel) => void;
 };
@@ -36,9 +36,7 @@ export function CategoryListItem({
           "focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:outline-none"
         )}
         aria-expanded={!isCollapsed}
-        onClick={() => {
-          onToggleCollapsed(channel);
-        }}
+        onClick={onToggleCollapsed}
       >
         <Chevron className="size-3.5 shrink-0" />
         <span className="truncate">{channel.title}</span>
