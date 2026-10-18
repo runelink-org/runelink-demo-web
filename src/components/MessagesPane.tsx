@@ -19,6 +19,7 @@ import {
   Users,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Separator } from "@/components/ui/separator";
 import { ChannelActionsMenu } from "@/components/sidebar/ChannelActionsMenu";
 import { Textarea } from "@/components/ui/textarea";
 import {
@@ -57,6 +58,10 @@ type MessagesPaneProps = {
 };
 
 const MEMBERS_PANE_OPEN_KEY = "runelink.demo.members-pane-open";
+const MEMBERS_PANE_WIDTH_KEY = "runelink.demo.members-pane-width";
+const DEFAULT_MEMBERS_PANE_WIDTH = 240;
+const MIN_MEMBERS_PANE_WIDTH = 180;
+const MAX_MEMBERS_PANE_WIDTH = 360;
 
 type MembersPaneToggleProps = {
   isOpen: boolean;
@@ -89,6 +94,25 @@ function MembersPaneToggle({ isOpen, onToggle }: MembersPaneToggleProps) {
 
 function loadStoredMembersPaneOpen(): boolean {
   return window.localStorage.getItem(MEMBERS_PANE_OPEN_KEY) !== "false";
+}
+
+function clampMembersPaneWidth(value: number): number {
+  return Math.min(
+    MAX_MEMBERS_PANE_WIDTH,
+    Math.max(MIN_MEMBERS_PANE_WIDTH, value)
+  );
+}
+
+function loadStoredMembersPaneWidth(): number {
+  const storedWidth = window.localStorage.getItem(MEMBERS_PANE_WIDTH_KEY);
+  if (!storedWidth) {
+    return DEFAULT_MEMBERS_PANE_WIDTH;
+  }
+
+  const parsedWidth = Number(storedWidth);
+  return Number.isFinite(parsedWidth)
+    ? clampMembersPaneWidth(parsedWidth)
+    : DEFAULT_MEMBERS_PANE_WIDTH;
 }
 
 function formatMessageTimestamp(value: Date): string {
@@ -279,6 +303,9 @@ export function MessagesPane({
   const [isMembersPaneOpen, setIsMembersPaneOpen] = useState(() =>
     loadStoredMembersPaneOpen()
   );
+  const [membersPaneWidth, setMembersPaneWidth] = useState(() =>
+    loadStoredMembersPaneWidth()
+  );
   const isMembersPaneShown = !!membersPane && isMembersPaneOpen;
   const [draft, setDraft] = useState("");
   const [isSending, setIsSending] = useState(false);
@@ -370,14 +397,21 @@ export function MessagesPane({
     textareaRef.current?.focus();
   }, [canCompose, isSending, selectedChannel?.id, selectedServer?.server.id]);
 
-  // Showing or hiding the members pane (by toggling it or crossing the wide
-  // layout breakpoint) rewraps messages, so stay at the bottom if the reader
-  // was there
+  useEffect(() => {
+    window.localStorage.setItem(
+      MEMBERS_PANE_WIDTH_KEY,
+      String(membersPaneWidth)
+    );
+  }, [membersPaneWidth]);
+
+  // Showing, hiding, or resizing the members pane (including by crossing the
+  // wide layout breakpoint) rewraps messages, so stay at the bottom if the
+  // reader was there
   useLayoutEffect(() => {
     if (wasAtBottomRef.current) {
       scrollToBottom();
     }
-  }, [isMembersPaneShown, scrollToBottom]);
+  }, [isMembersPaneShown, membersPaneWidth, scrollToBottom]);
 
   useLayoutEffect(() => {
     if (previousChannelKeyRef.current === selectedChannelKey) {
@@ -520,6 +554,30 @@ export function MessagesPane({
     const nextIsOpen = !isMembersPaneOpen;
     setIsMembersPaneOpen(nextIsOpen);
     window.localStorage.setItem(MEMBERS_PANE_OPEN_KEY, String(nextIsOpen));
+  }
+
+  function handleMembersPaneResizeStart(
+    event: React.PointerEvent<HTMLButtonElement>
+  ) {
+    event.preventDefault();
+
+    const startX = event.clientX;
+    const startWidth = membersPaneWidth;
+
+    // The pane is on the right, so dragging left widens it
+    function handlePointerMove(pointerEvent: PointerEvent) {
+      setMembersPaneWidth(
+        clampMembersPaneWidth(startWidth - (pointerEvent.clientX - startX))
+      );
+    }
+
+    function handlePointerUp() {
+      window.removeEventListener("pointermove", handlePointerMove);
+      window.removeEventListener("pointerup", handlePointerUp);
+    }
+
+    window.addEventListener("pointermove", handlePointerMove);
+    window.addEventListener("pointerup", handlePointerUp);
   }
 
   function handleComposerResizeStart(
@@ -763,23 +821,37 @@ export function MessagesPane({
       </section>
 
       {isMembersPaneShown ? (
-        <aside
-          aria-labelledby="members-pane-title"
-          className="flex w-60 shrink-0 flex-col border-l border-border/70 bg-background"
-        >
-          <div className="flex items-center justify-between gap-2 border-b border-border/70 py-4 pr-6 pl-4">
-            <p
-              id="members-pane-title"
-              className="text-sm font-semibold text-foreground"
-            >
-              Members
-            </p>
-            <MembersPaneToggle isOpen onToggle={handleToggleMembersPane} />
-          </div>
-          <div className="min-h-0 flex-1 overflow-y-auto px-2 py-4">
-            {membersPane}
-          </div>
-        </aside>
+        <>
+          <button
+            type="button"
+            className="group relative flex w-3 shrink-0 cursor-col-resize items-stretch justify-center bg-sidebar/40 transition hover:bg-sidebar-accent/60"
+            aria-label="Resize members pane"
+            onPointerDown={handleMembersPaneResizeStart}
+          >
+            <Separator
+              orientation="vertical"
+              className="bg-sidebar-border transition group-hover:bg-primary"
+            />
+          </button>
+          <aside
+            aria-labelledby="members-pane-title"
+            className="flex shrink-0 flex-col bg-background"
+            style={{ width: `${membersPaneWidth}px` }}
+          >
+            <div className="flex items-center justify-between gap-2 border-b border-border/70 py-4 pr-6 pl-4">
+              <p
+                id="members-pane-title"
+                className="text-sm font-semibold text-foreground"
+              >
+                Members
+              </p>
+              <MembersPaneToggle isOpen onToggle={handleToggleMembersPane} />
+            </div>
+            <div className="min-h-0 flex-1 overflow-y-auto px-2 py-4">
+              {membersPane}
+            </div>
+          </aside>
+        </>
       ) : null}
     </div>
   );
