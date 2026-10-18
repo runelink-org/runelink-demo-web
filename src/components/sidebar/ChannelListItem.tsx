@@ -28,17 +28,17 @@ export function ChannelListItem({
       className={cn(
         "group relative rounded-2xl border transition-colors",
         isSelected
-          ? "border-sidebar-border/70 bg-primary/12 shadow-sm dark:border-sidebar-border dark:bg-sidebar-accent/80"
-          : "border-transparent hover:bg-sidebar-accent/70"
+          ? "border-sidebar-border/70 bg-primary/12 shadow-sm dark:border-sidebar-border dark:bg-muted"
+          : "border-transparent hover:bg-primary/6 dark:hover:bg-muted/60"
       )}
     >
       <Button
         variant="ghost"
         className={cn(
-          "h-auto w-full min-w-0 cursor-pointer justify-start rounded-2xl px-3 py-3 pr-12 text-left",
+          "h-auto w-full min-w-0 cursor-pointer justify-start rounded-2xl px-3 py-3 pr-12 text-left hover:bg-transparent dark:hover:bg-transparent",
           isSelected
-            ? "text-foreground hover:bg-transparent dark:text-sidebar-foreground"
-            : "text-sidebar-foreground/80 hover:bg-transparent hover:text-sidebar-foreground"
+            ? "text-foreground dark:text-sidebar-foreground"
+            : "text-sidebar-foreground/80 hover:text-sidebar-foreground"
         )}
         onClick={() => {
           onSelect(channel);
