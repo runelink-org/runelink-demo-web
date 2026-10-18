@@ -61,7 +61,7 @@ type SidebarProps = {
 };
 
 const CHANNEL_PANEL_WIDTH_KEY = "runelink.demo.channels-sidebar-width";
-const DEFAULT_CHANNEL_PANEL_WIDTH = 320;
+const DEFAULT_CHANNEL_PANEL_WIDTH = 280;
 const MIN_CHANNEL_PANEL_WIDTH = 160;
 const MAX_CHANNEL_PANEL_WIDTH = 420;
 
