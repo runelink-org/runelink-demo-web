@@ -7,6 +7,8 @@ import type {
 } from "@runelink/sdk";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AuthScreen } from "@/components/AuthScreen";
+import { ServerMemberList } from "@/components/members/ServerMemberList";
+import { ServerMembersPage } from "@/components/members/ServerMembersPage";
 import { MessagesPane } from "@/components/MessagesPane";
 import { ServerSettingsPage } from "@/components/server-settings/ServerSettingsPage";
 import { Sidebar } from "@/components/Sidebar";
@@ -29,6 +31,7 @@ import { debugRunelink } from "@/lib/runelink-debug";
 import { serverChannelKey, userRefKey } from "@/lib/runelink-store-utils";
 import { useServersStore } from "@/lib/servers-store";
 import { useAppNavigation } from "@/lib/use-app-navigation";
+import { useIsWideLayout } from "@/lib/use-wide-layout";
 import { useUsersStore } from "@/lib/users-store";
 
 function getTargetHost(serverHost: string, activeHost: string): string | null {
@@ -37,6 +40,7 @@ function getTargetHost(serverHost: string, activeHost: string): string | null {
 
 export function App() {
   const pendingServerDetailsRef = useRef<Set<string>>(new Set());
+  const pendingMembersServerIdsRef = useRef<Set<string>>(new Set());
   const { route, navigate, getCurrentRoute, backOrReplace, reconcileServers } =
     useAppNavigation();
   const previousRouteRef = useRef(route);
@@ -48,15 +52,16 @@ export function App() {
   const [manageOriginAccountKey, setManageOriginAccountKey] = useState<
     string | null
   >(null);
-  const [serverSettingsError, setServerSettingsError] = useState<string | null>(
-    null
-  );
+  const [membersErrorByServerId, setMembersErrorByServerId] = useState<
+    Record<string, string>
+  >({});
   const [isSidebarLoading, setIsSidebarLoading] = useState(false);
   const [resolvedSidebarAccountKey, setResolvedSidebarAccountKey] = useState<
     string | null
   >(null);
   const [sidebarError, setSidebarError] = useState<string | null>(null);
 
+  const isWideLayout = useIsWideLayout();
   const activeAccount = useAuthStore(getActiveAccount);
   const activeAuth = useAuthStore(getActiveAccountAuth);
   const selectedServerId = useNavigationStore(
@@ -134,8 +139,31 @@ export function App() {
     }
     previousRouteRef.current = route;
 
-    setServerSettingsError(null);
+    // Lets the members effect retry failed loads after navigating
+    setMembersErrorByServerId({});
   }, [route]);
+
+  // Retries failed member loads once the connection is back
+  useEffect(() => {
+    if (connectionStatus === "connected") {
+      setMembersErrorByServerId({});
+    }
+  }, [connectionStatus]);
+
+  // Wide layouts show members beside the channel, so drop the members page
+  // route to keep the pane toggle in charge
+  useEffect(() => {
+    if (isWideLayout && route.screen === "channel-members") {
+      navigate(
+        {
+          screen: "channel",
+          serverId: route.serverId,
+          channelId: route.channelId,
+        },
+        "replace"
+      );
+    }
+  }, [isWideLayout, navigate, route]);
 
   useEffect(() => {
     if ((!activeAccount || !activeAuth) && route.screen !== "auth") {
@@ -363,7 +391,14 @@ export function App() {
     !isLoadingServerSettingsMembers &&
     !serverSettingsServer
       ? "Failed to load the selected server."
-      : serverSettingsError;
+      : serverSettingsServerId
+        ? (membersErrorByServerId[serverSettingsServerId] ?? null)
+        : null;
+  const membersServerId = serverSettingsServerId ?? selectedServerId;
+  const isChannelOpen = !!selectedServer && !!selectedChannel;
+  // Wide layouts show members beside the channel instead of on their own page
+  const isMembersPageOpen =
+    route.screen === "channel-members" && isChannelOpen && !isWideLayout;
 
   useEffect(() => {
     if (route.screen === "auth") {
@@ -386,8 +421,14 @@ export function App() {
       return;
     }
 
+    if (isMembersPageOpen) {
+      document.title = `Members | ${selectedServer.server.title}`;
+      return;
+    }
+
     document.title = `#${selectedChannel.title} | ${selectedServer.server.title}`;
   }, [
+    isMembersPageOpen,
     isServerSettingsOpen,
     route.screen,
     selectedChannel,
@@ -396,11 +437,11 @@ export function App() {
   ]);
 
   useEffect(() => {
-    if (!serverSettingsServerId) {
+    if (!membersServerId) {
       return;
     }
 
-    const server = hydratedServerById[serverSettingsServerId] ?? null;
+    const server = hydratedServerById[membersServerId] ?? null;
     if (!server) {
       return;
     }
@@ -409,27 +450,39 @@ export function App() {
       return;
     }
 
-    if (hasFetchedMembersByServerId[serverSettingsServerId]) {
-      setServerSettingsError(null);
+    if (
+      hasFetchedMembersByServerId[membersServerId] ||
+      pendingMembersServerIdsRef.current.has(membersServerId) ||
+      membersServerId in membersErrorByServerId
+    ) {
       return;
     }
 
-    setServerSettingsError(null);
+    pendingMembersServerIdsRef.current.add(membersServerId);
     void fetchMembersByServer(
-      serverSettingsServerId,
+      membersServerId,
       getTargetHost(server.server.host, activeAccount.host)
-    ).catch((error) => {
-      setServerSettingsError(
-        error instanceof Error ? error.message : "Failed to load server members"
-      );
-    });
+    )
+      .catch((error) => {
+        setMembersErrorByServerId((errors) => ({
+          ...errors,
+          [membersServerId]:
+            error instanceof Error
+              ? error.message
+              : "Failed to load server members",
+        }));
+      })
+      .finally(() => {
+        pendingMembersServerIdsRef.current.delete(membersServerId);
+      });
   }, [
     activeAccount,
     connectionStatus,
     fetchMembersByServer,
     hydratedServerById,
     hasFetchedMembersByServerId,
-    serverSettingsServerId,
+    membersErrorByServerId,
+    membersServerId,
   ]);
 
   const selectedChannelKey =
@@ -501,7 +554,16 @@ export function App() {
 
   const shouldShowAuthScreen =
     route.screen === "auth" || !activeAccount || !activeAuth;
-  const isChannelOpen = !!selectedServer && !!selectedChannel;
+  const selectedServerMemberList = selectedServer ? (
+    <ServerMemberList
+      serverId={selectedServer.server.id}
+      serverHost={selectedServer.server.host}
+      members={membersByServerId[selectedServer.server.id] ?? []}
+      isLoading={isLoadingMembersByServerId[selectedServer.server.id] ?? false}
+      error={membersErrorByServerId[selectedServer.server.id] ?? null}
+      canModerateMembers={canDeleteSelectedServer}
+    />
+  ) : null;
 
   function handleOpenAuth(prefillAccount: boolean) {
     cancelPendingAuthentication();
@@ -516,13 +578,11 @@ export function App() {
   }
 
   function handleSelectServer(serverId: string) {
-    setServerSettingsError(null);
     const channelId = selectedChannelIdByServerId[serverId] ?? null;
     navigate(getContentRoute(serverId, channelId), "push");
   }
 
   function handleSelectChannel(serverId: string, channel: ServerChannel) {
-    setServerSettingsError(null);
     navigate({ screen: "channel", serverId, channelId: channel.id }, "push");
   }
 
@@ -534,13 +594,26 @@ export function App() {
     navigate({ screen: "server", serverId: selectedServer.server.id }, "push");
   }
 
+  function handleOpenMembers() {
+    if (!selectedServerId || !selectedChannelId) {
+      return;
+    }
+
+    navigate(
+      {
+        screen: "channel-members",
+        serverId: selectedServerId,
+        channelId: selectedChannelId,
+      },
+      "push"
+    );
+  }
+
   function handleOpenServerSettings(serverId: string) {
-    setServerSettingsError(null);
     navigate({ screen: "server-settings", serverId }, "push");
   }
 
-  function handleCloseServerSettings() {
-    setServerSettingsError(null);
+  function handleBackToContent() {
     backOrReplace(getContentRoute(selectedServerId, selectedChannelId));
   }
 
@@ -778,8 +851,15 @@ export function App() {
             members={serverSettingsMembers}
             isLoadingMembers={isLoadingServerSettingsMembers}
             membersError={serverSettingsMembersError}
-            onDone={handleCloseServerSettings}
+            onDone={handleBackToContent}
           />
+        ) : isMembersPageOpen && selectedServer ? (
+          <ServerMembersPage
+            serverTitle={selectedServer.server.title}
+            onBack={handleBackToContent}
+          >
+            {selectedServerMemberList}
+          </ServerMembersPage>
         ) : (
           <MessagesPane
             selectedServer={selectedServer}
@@ -798,6 +878,8 @@ export function App() {
             onSendMessage={handleSendMessage}
             onDeleteChannel={handleDeleteChannel}
             onDeleteMessage={handleDeleteMessage}
+            membersPane={isWideLayout ? selectedServerMemberList : null}
+            onOpenMembers={handleOpenMembers}
           />
         )}
       </main>

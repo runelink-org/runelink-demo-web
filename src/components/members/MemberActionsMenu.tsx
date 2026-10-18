@@ -25,8 +25,7 @@ type MemberActionsMenuProps = {
   serverId: string;
   serverHost: string;
   member: ServerMember;
-  canKickMembers: boolean;
-  canManageMemberRoles: boolean;
+  canModerateMembers: boolean;
 };
 
 function getTargetHost(serverHost: string, activeHost: string): string | null {
@@ -41,8 +40,7 @@ export function MemberActionsMenu({
   serverId,
   serverHost,
   member,
-  canKickMembers,
-  canManageMemberRoles,
+  canModerateMembers,
 }: MemberActionsMenuProps) {
   const activeAccount = useAuthStore(getActiveAccount);
   const [isConfirmingSelfDemotion, setIsConfirmingSelfDemotion] =
@@ -151,7 +149,7 @@ export function MemberActionsMenu({
             <Copy className="size-4" />
             <span className="font-medium">Copy user ID</span>
           </DropdownMenuItem>
-          {canManageMemberRoles ? (
+          {canModerateMembers ? (
             <DropdownMenuItem
               variant={member.role === "admin" ? "destructive" : "default"}
               className="cursor-pointer gap-3 rounded-xl px-3 py-2"
@@ -176,7 +174,7 @@ export function MemberActionsMenu({
               </span>
             </DropdownMenuItem>
           ) : null}
-          {canKickMembers ? (
+          {canModerateMembers && !isActiveAccount ? (
             <DropdownMenuItem
               variant="destructive"
               className="cursor-pointer gap-3 rounded-xl px-3 py-2"

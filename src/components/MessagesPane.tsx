@@ -3,17 +3,29 @@ import {
   useCallback,
   type FormEvent,
   type KeyboardEvent,
+  type ReactNode,
   type RefObject,
   useEffect,
   useLayoutEffect,
   useRef,
   useState,
 } from "react";
-import { ArrowLeft, Hash, SendHorizonal, ServerCrash } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
+import {
+  ArrowLeft,
+  Hash,
+  PanelRight,
+  SendHorizonal,
+  ServerCrash,
+  Users,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ChannelActionsMenu } from "@/components/sidebar/ChannelActionsMenu";
 import { Textarea } from "@/components/ui/textarea";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { sameUserRef } from "@/lib/account-storage";
 import { useMessageScrollStore } from "@/lib/message-scroll-store";
 import { DeleteMessageDialog } from "./messages/DeleteMessageDialog";
@@ -38,7 +50,46 @@ type MessagesPaneProps = {
     channel: ServerWithChannels["channels"][number]
   ) => Promise<void>;
   onDeleteMessage: (message: Message) => Promise<void>;
+  // Shown beside the messages when passed, which App does on wide screens
+  membersPane: ReactNode;
+  // Opens the full-screen members page when there is no members pane
+  onOpenMembers: () => void;
 };
+
+const MEMBERS_PANE_OPEN_KEY = "runelink.demo.members-pane-open";
+
+type MembersPaneToggleProps = {
+  isOpen: boolean;
+  onToggle: () => void;
+};
+
+function MembersPaneToggle({ isOpen, onToggle }: MembersPaneToggleProps) {
+  const label = isOpen ? "Hide members" : "Show members";
+
+  return (
+    <Tooltip>
+      <TooltipTrigger
+        render={
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="size-9 shrink-0 rounded-full text-muted-foreground"
+            onClick={onToggle}
+            aria-label={label}
+          />
+        }
+      >
+        <PanelRight className="size-4" />
+      </TooltipTrigger>
+      <TooltipContent side="bottom">{label}</TooltipContent>
+    </Tooltip>
+  );
+}
+
+function loadStoredMembersPaneOpen(): boolean {
+  return window.localStorage.getItem(MEMBERS_PANE_OPEN_KEY) !== "false";
+}
 
 function formatMessageTimestamp(value: Date): string {
   const now = new Date();
@@ -222,7 +273,13 @@ export function MessagesPane({
   onSendMessage,
   onDeleteChannel,
   onDeleteMessage,
+  membersPane,
+  onOpenMembers,
 }: MessagesPaneProps) {
+  const [isMembersPaneOpen, setIsMembersPaneOpen] = useState(() =>
+    loadStoredMembersPaneOpen()
+  );
+  const isMembersPaneShown = !!membersPane && isMembersPaneOpen;
   const [draft, setDraft] = useState("");
   const [isSending, setIsSending] = useState(false);
   const [sendError, setSendError] = useState<string | null>(null);
@@ -312,6 +369,15 @@ export function MessagesPane({
 
     textareaRef.current?.focus();
   }, [canCompose, isSending, selectedChannel?.id, selectedServer?.server.id]);
+
+  // Showing or hiding the members pane (by toggling it or crossing the wide
+  // layout breakpoint) rewraps messages, so stay at the bottom if the reader
+  // was there
+  useLayoutEffect(() => {
+    if (wasAtBottomRef.current) {
+      scrollToBottom();
+    }
+  }, [isMembersPaneShown, scrollToBottom]);
 
   useLayoutEffect(() => {
     if (previousChannelKeyRef.current === selectedChannelKey) {
@@ -450,6 +516,12 @@ export function MessagesPane({
     void handleSubmit();
   }
 
+  function handleToggleMembersPane() {
+    const nextIsOpen = !isMembersPaneOpen;
+    setIsMembersPaneOpen(nextIsOpen);
+    window.localStorage.setItem(MEMBERS_PANE_OPEN_KEY, String(nextIsOpen));
+  }
+
   function handleComposerResizeStart(
     event: React.PointerEvent<HTMLButtonElement>
   ) {
@@ -474,202 +546,241 @@ export function MessagesPane({
   }
 
   return (
-    <section className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-      <header className="border-b border-border/70 bg-background/80 px-4 py-4 backdrop-blur sm:px-6">
-        {selectedServer && selectedChannel ? (
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex min-w-0 items-start justify-between gap-3">
-              <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-2">
+    <div className="flex min-h-0 min-w-0 flex-1 overflow-hidden">
+      <section className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+        <header className="border-b border-border/70 bg-background/80 px-4 py-4 backdrop-blur sm:px-6">
+          {selectedServer && selectedChannel ? (
+            <div className="flex min-h-9 min-w-0 items-center justify-between gap-3">
+              <div className="flex min-w-0 items-center gap-2">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="-ml-2 size-9 shrink-0 rounded-full sm:hidden"
+                  onClick={onDeselectChannel}
+                  aria-label="Back to channels"
+                >
+                  <ArrowLeft className="size-4" />
+                </Button>
+                <Hash className="size-5 shrink-0 text-muted-foreground" />
+                <h1 className="truncate text-xl font-semibold text-foreground">
+                  {selectedChannel.title}
+                </h1>
+              </div>
+
+              <div className="flex shrink-0 items-center gap-1">
+                {membersPane ? (
+                  isMembersPaneOpen ? null : (
+                    <MembersPaneToggle
+                      isOpen={false}
+                      onToggle={handleToggleMembersPane}
+                    />
+                  )
+                ) : (
                   <Button
                     type="button"
                     variant="ghost"
                     size="icon"
-                    className="-ml-2 size-9 shrink-0 rounded-full sm:hidden"
-                    onClick={onDeselectChannel}
-                    aria-label="Back to channels"
+                    className="size-9 rounded-full"
+                    onClick={onOpenMembers}
+                    aria-label="Show members"
                   >
-                    <ArrowLeft className="size-4" />
+                    <Users className="size-4" />
                   </Button>
-                  <Hash className="size-5 shrink-0 text-muted-foreground" />
-                  <h1 className="truncate text-xl font-semibold text-foreground">
-                    {selectedChannel.title}
-                  </h1>
+                )}
+                <div className="sm:hidden">
+                  <ChannelActionsMenu
+                    host={selectedServer.server.host}
+                    serverId={selectedServer.server.id}
+                    channel={selectedChannel}
+                    canDeleteChannel={canDeleteChannel}
+                    forceVisible
+                    onDeleteChannel={(channel) => {
+                      void onDeleteChannel(channel);
+                    }}
+                  />
                 </div>
               </div>
-
-              <div className="shrink-0 sm:hidden">
-                <ChannelActionsMenu
-                  host={selectedServer.server.host}
-                  serverId={selectedServer.server.id}
-                  channel={selectedChannel}
-                  canDeleteChannel={canDeleteChannel}
-                  forceVisible
-                  onDeleteChannel={(channel) => {
-                    void onDeleteChannel(channel);
-                  }}
+            </div>
+          ) : (
+            <div className="flex min-h-9 items-center justify-between gap-3">
+              <h1 className="text-xl font-semibold text-foreground">
+                Choose a channel
+              </h1>
+              {membersPane && !isMembersPaneOpen ? (
+                <MembersPaneToggle
+                  isOpen={false}
+                  onToggle={handleToggleMembersPane}
                 />
+              ) : null}
+            </div>
+          )}
+        </header>
+
+        <div className="relative flex min-h-0 min-w-0 flex-1 flex-col bg-background">
+          {sidebarError ? (
+            <div className="flex flex-1 items-center justify-center px-6">
+              <div className="max-w-md rounded-3xl border border-destructive/20 bg-destructive/5 p-6 text-center">
+                <ServerCrash className="mx-auto size-10 text-destructive" />
+                <h2 className="mt-4 text-lg font-semibold">
+                  Unable to load your servers
+                </h2>
+                <p className="mt-2 text-sm text-muted-foreground">
+                  {sidebarError}
+                </p>
               </div>
             </div>
+          ) : isSidebarLoading ? (
+            <div className="flex flex-1 items-center justify-center px-6">
+              <div className="rounded-3xl border border-border/70 bg-background/80 px-6 py-5 text-center shadow-sm backdrop-blur">
+                <p className="text-sm font-medium text-foreground">
+                  Loading your servers...
+                </p>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  Fetching channels and getting your workspace ready.
+                </p>
+              </div>
+            </div>
+          ) : hydratedServerCount === 0 ? (
+            <div className="flex flex-1 items-center justify-center px-6">
+              <div className="max-w-md rounded-3xl border border-border/70 bg-background/80 p-6 text-center shadow-sm backdrop-blur">
+                <h2 className="text-lg font-semibold">No servers yet</h2>
+                <p className="mt-2 text-sm text-muted-foreground">
+                  Join or create a server to start browsing channels and
+                  messages.
+                </p>
+              </div>
+            </div>
+          ) : !selectedServer || !selectedChannel ? (
+            <div className="flex flex-1 items-center justify-center px-6">
+              <div className="max-w-md rounded-3xl border border-border/70 bg-background/80 p-6 text-center shadow-sm backdrop-blur">
+                <h2 className="text-lg font-semibold">No channel selected</h2>
+                <p className="mt-2 text-sm text-muted-foreground">
+                  Pick a channel in the sidebar to load its conversation.
+                </p>
+              </div>
+            </div>
+          ) : messagesError ? (
+            <div className="flex flex-1 items-center justify-center px-6">
+              <div className="max-w-md rounded-3xl border border-destructive/20 bg-destructive/5 p-6 text-center">
+                <h2 className="text-lg font-semibold">
+                  Unable to load messages
+                </h2>
+                <p className="mt-2 text-sm text-muted-foreground">
+                  {messagesError}
+                </p>
+              </div>
+            </div>
+          ) : isMessagesLoading && selectedMessages.length === 0 ? (
+            <div className="flex flex-1 items-center justify-center px-6">
+              <div className="rounded-3xl border border-border/70 bg-background/80 px-6 py-5 text-center shadow-sm backdrop-blur">
+                <p className="text-sm font-medium text-foreground">
+                  Loading #{selectedChannel.title}
+                </p>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  Pulling the latest messages from the channel.
+                </p>
+              </div>
+            </div>
+          ) : selectedMessages.length === 0 ? (
+            <div className="flex flex-1 items-center justify-center px-6">
+              <div className="max-w-md rounded-3xl border border-border/70 bg-background/80 p-6 text-center shadow-sm backdrop-blur">
+                <h2 className="text-lg font-semibold">No messages yet</h2>
+                <p className="mt-2 text-sm text-muted-foreground">
+                  This channel is quiet right now. Once someone posts, messages
+                  will appear here.
+                </p>
+              </div>
+            </div>
+          ) : (
+            <MessageList
+              host={selectedServer.server.host}
+              serverId={selectedServer.server.id}
+              channelId={selectedChannel.id}
+              messages={selectedMessages}
+              scrollContainerRef={scrollContainerRef}
+              onScroll={handleMessagesScroll}
+              activeAccount={activeAccount}
+              canModerateMessages={canModerateMessages}
+              onDeleteMessage={onDeleteMessage}
+            />
+          )}
 
-            <Badge
-              variant="outline"
-              className="hidden self-start rounded-full px-3 py-1 sm:inline-flex"
-            >
-              {selectedMessages.length} message
-              {selectedMessages.length === 1 ? "" : "s"}
-            </Badge>
-          </div>
-        ) : (
-          <div>
-            <h1 className="text-xl font-semibold text-foreground">
-              Choose a channel
-            </h1>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Select a server and channel to open the conversation.
-            </p>
-          </div>
-        )}
-      </header>
-
-      <div className="relative flex min-h-0 flex-1 flex-col bg-background">
-        {sidebarError ? (
-          <div className="flex flex-1 items-center justify-center px-6">
-            <div className="max-w-md rounded-3xl border border-destructive/20 bg-destructive/5 p-6 text-center">
-              <ServerCrash className="mx-auto size-10 text-destructive" />
-              <h2 className="mt-4 text-lg font-semibold">
-                Unable to load your servers
-              </h2>
-              <p className="mt-2 text-sm text-muted-foreground">
-                {sidebarError}
-              </p>
-            </div>
-          </div>
-        ) : isSidebarLoading ? (
-          <div className="flex flex-1 items-center justify-center px-6">
-            <div className="rounded-3xl border border-border/70 bg-background/80 px-6 py-5 text-center shadow-sm backdrop-blur">
-              <p className="text-sm font-medium text-foreground">
-                Loading your servers...
-              </p>
-              <p className="mt-1 text-sm text-muted-foreground">
-                Fetching channels and getting your workspace ready.
-              </p>
-            </div>
-          </div>
-        ) : hydratedServerCount === 0 ? (
-          <div className="flex flex-1 items-center justify-center px-6">
-            <div className="max-w-md rounded-3xl border border-border/70 bg-background/80 p-6 text-center shadow-sm backdrop-blur">
-              <h2 className="text-lg font-semibold">No servers yet</h2>
-              <p className="mt-2 text-sm text-muted-foreground">
-                Join or create a server to start browsing channels and messages.
-              </p>
-            </div>
-          </div>
-        ) : !selectedServer || !selectedChannel ? (
-          <div className="flex flex-1 items-center justify-center px-6">
-            <div className="max-w-md rounded-3xl border border-border/70 bg-background/80 p-6 text-center shadow-sm backdrop-blur">
-              <h2 className="text-lg font-semibold">No channel selected</h2>
-              <p className="mt-2 text-sm text-muted-foreground">
-                Pick a channel in the sidebar to load its conversation.
-              </p>
-            </div>
-          </div>
-        ) : messagesError ? (
-          <div className="flex flex-1 items-center justify-center px-6">
-            <div className="max-w-md rounded-3xl border border-destructive/20 bg-destructive/5 p-6 text-center">
-              <h2 className="text-lg font-semibold">Unable to load messages</h2>
-              <p className="mt-2 text-sm text-muted-foreground">
-                {messagesError}
-              </p>
-            </div>
-          </div>
-        ) : isMessagesLoading && selectedMessages.length === 0 ? (
-          <div className="flex flex-1 items-center justify-center px-6">
-            <div className="rounded-3xl border border-border/70 bg-background/80 px-6 py-5 text-center shadow-sm backdrop-blur">
-              <p className="text-sm font-medium text-foreground">
-                Loading #{selectedChannel.title}
-              </p>
-              <p className="mt-1 text-sm text-muted-foreground">
-                Pulling the latest messages from the channel.
-              </p>
-            </div>
-          </div>
-        ) : selectedMessages.length === 0 ? (
-          <div className="flex flex-1 items-center justify-center px-6">
-            <div className="max-w-md rounded-3xl border border-border/70 bg-background/80 p-6 text-center shadow-sm backdrop-blur">
-              <h2 className="text-lg font-semibold">No messages yet</h2>
-              <p className="mt-2 text-sm text-muted-foreground">
-                This channel is quiet right now. Once someone posts, messages
-                will appear here.
-              </p>
-            </div>
-          </div>
-        ) : (
-          <MessageList
-            host={selectedServer.server.host}
-            serverId={selectedServer.server.id}
-            channelId={selectedChannel.id}
-            messages={selectedMessages}
-            scrollContainerRef={scrollContainerRef}
-            onScroll={handleMessagesScroll}
-            activeAccount={activeAccount}
-            canModerateMessages={canModerateMessages}
-            onDeleteMessage={onDeleteMessage}
-          />
-        )}
-
-        {canCompose ? (
-          <div className="border-t border-border/70 bg-background px-4 py-2 sm:px-6">
-            <button
-              type="button"
-              className="group mb-1 flex h-2 w-full cursor-row-resize items-start justify-center"
-              onPointerDown={handleComposerResizeStart}
-              aria-label="Resize message input"
-            >
-              <span className="h-1.5 w-10 rounded-full bg-border/80 transition-colors group-hover:bg-muted-foreground/50" />
-            </button>
-            <form
-              className="flex items-end gap-3 rounded-3xl bg-muted/55 px-4 py-3 transition-colors focus-within:bg-muted/70"
-              onSubmit={handleFormSubmit}
-            >
-              <Textarea
-                ref={textareaRef}
-                value={draft}
-                onChange={(event) => {
-                  setDraft(event.target.value);
-                }}
-                onKeyDown={(event) => {
-                  void handleKeyDown(event);
-                }}
-                placeholder={`Message #${selectedChannel.title}`}
-                className="min-h-12 resize-none border-0 bg-transparent px-0 py-0.5 text-sm shadow-none focus-visible:ring-0 dark:bg-transparent"
-                style={{ height: `${composerHeight}px` }}
-                disabled={isSending}
-              />
-              <Button
-                type="submit"
-                size="icon"
-                className="mb-0.5 size-10 rounded-2xl sm:hidden"
-                disabled={isSendDisabled}
-                aria-label={isSending ? "Sending message" : "Send message"}
+          {canCompose ? (
+            <div className="border-t border-border/70 bg-background px-4 py-2 sm:px-6">
+              <button
+                type="button"
+                className="group mb-1 flex h-2 w-full cursor-row-resize items-start justify-center"
+                onPointerDown={handleComposerResizeStart}
+                aria-label="Resize message input"
               >
-                <SendHorizonal className="size-4" />
-              </Button>
-            </form>
-          </div>
-        ) : null}
-
-        {sendError ? (
-          <div className="pointer-events-none absolute bottom-24 right-4 z-10 sm:right-6">
-            <div className="pointer-events-auto max-w-sm rounded-2xl border border-destructive/25 bg-background/95 px-4 py-3 shadow-lg backdrop-blur">
-              <p className="text-sm font-semibold text-destructive">
-                Unable to send message
-              </p>
-              <p className="mt-1 text-sm text-muted-foreground">{sendError}</p>
+                <span className="h-1.5 w-10 rounded-full bg-border/80 transition-colors group-hover:bg-muted-foreground/50" />
+              </button>
+              <form
+                className="flex items-end gap-3 rounded-3xl bg-muted/55 px-4 py-3 transition-colors focus-within:bg-muted/70"
+                onSubmit={handleFormSubmit}
+              >
+                <Textarea
+                  ref={textareaRef}
+                  value={draft}
+                  onChange={(event) => {
+                    setDraft(event.target.value);
+                  }}
+                  onKeyDown={(event) => {
+                    void handleKeyDown(event);
+                  }}
+                  placeholder={`Message #${selectedChannel.title}`}
+                  className="min-h-12 resize-none border-0 bg-transparent px-0 py-0.5 text-sm shadow-none focus-visible:ring-0 dark:bg-transparent"
+                  style={{ height: `${composerHeight}px` }}
+                  disabled={isSending}
+                />
+                <Button
+                  type="submit"
+                  size="icon"
+                  className="mb-0.5 size-10 rounded-2xl sm:hidden"
+                  disabled={isSendDisabled}
+                  aria-label={isSending ? "Sending message" : "Send message"}
+                >
+                  <SendHorizonal className="size-4" />
+                </Button>
+              </form>
             </div>
+          ) : null}
+
+          {sendError ? (
+            <div className="pointer-events-none absolute bottom-24 right-4 z-10 sm:right-6">
+              <div className="pointer-events-auto max-w-sm rounded-2xl border border-destructive/25 bg-background/95 px-4 py-3 shadow-lg backdrop-blur">
+                <p className="text-sm font-semibold text-destructive">
+                  Unable to send message
+                </p>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  {sendError}
+                </p>
+              </div>
+            </div>
+          ) : null}
+        </div>
+      </section>
+
+      {isMembersPaneShown ? (
+        <aside
+          aria-labelledby="members-pane-title"
+          className="flex w-60 shrink-0 flex-col border-l border-border/70 bg-background"
+        >
+          <div className="flex items-center justify-between gap-2 border-b border-border/70 py-4 pr-6 pl-4">
+            <p
+              id="members-pane-title"
+              className="text-sm font-semibold text-foreground"
+            >
+              Members
+            </p>
+            <MembersPaneToggle isOpen onToggle={handleToggleMembersPane} />
           </div>
-        ) : null}
-      </div>
-    </section>
+          <div className="min-h-0 flex-1 overflow-y-auto px-2 py-4">
+            {membersPane}
+          </div>
+        </aside>
+      ) : null}
+    </div>
   );
 }

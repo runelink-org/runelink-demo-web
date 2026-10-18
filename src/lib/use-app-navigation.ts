@@ -118,7 +118,15 @@ export function useAppNavigation() {
       const isValidSettingsRoute =
         currentRoute.screen === "server-settings" &&
         servers.some((server) => server.server.id === currentRoute.serverId);
-      if (currentRoute.screen !== "auth" && !isValidSettingsRoute) {
+      const isValidMembersRoute =
+        currentRoute.screen === "channel-members" &&
+        currentRoute.serverId === nextSelection.serverId &&
+        currentRoute.channelId === nextSelection.channelId;
+      if (
+        currentRoute.screen !== "auth" &&
+        !isValidSettingsRoute &&
+        !isValidMembersRoute
+      ) {
         navigate(
           getContentRoute(nextSelection.serverId, nextSelection.channelId),
           "replace"
@@ -157,6 +165,7 @@ export function useAppNavigation() {
         navigationState.selectChannel(route.serverId, null);
         break;
       case "channel":
+      case "channel-members":
         navigationState.selectChannel(route.serverId, route.channelId);
         break;
       case "server-settings":
