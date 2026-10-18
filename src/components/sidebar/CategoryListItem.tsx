@@ -32,7 +32,7 @@ export function CategoryListItem({
         type="button"
         className={cn(
           "flex w-full min-w-0 cursor-pointer items-center gap-1.5 rounded-xl px-2 pt-3 pb-1.5 pr-12 text-left",
-          "text-xs font-semibold tracking-[0.12em] text-sidebar-foreground/60 uppercase transition-colors hover:text-sidebar-foreground",
+          "text-sm font-medium text-sidebar-foreground/60 transition-colors hover:text-sidebar-foreground",
           "focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:outline-none"
         )}
         aria-expanded={!isCollapsed}
