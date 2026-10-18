@@ -7,6 +7,7 @@ export type AppRoute =
   | { screen: "auth" }
   | { screen: "server"; serverId: string }
   | { screen: "channel"; serverId: string; channelId: string }
+  | { screen: "channel-members"; serverId: string; channelId: string }
   | { screen: "server-settings"; serverId: string };
 
 export function getContentRoute(
@@ -45,14 +46,13 @@ export function parseAppRoute(pathname: string): AppRoute | null {
   }
 
   const channelMatch = pathname.match(
-    /^\/servers\/([^/]+)\/channels\/([^/]+)\/?$/
+    /^\/servers\/([^/]+)\/channels\/([^/]+)(\/members)?\/?$/
   );
   if (channelMatch) {
     const serverId = parseId(channelMatch[1] ?? "");
     const channelId = parseId(channelMatch[2] ?? "");
-    return serverId && channelId
-      ? { screen: "channel", serverId, channelId }
-      : null;
+    const screen = channelMatch[3] ? "channel-members" : "channel";
+    return serverId && channelId ? { screen, serverId, channelId } : null;
   }
 
   const settingsMatch = pathname.match(/^\/servers\/([^/]+)\/settings\/?$/);
@@ -80,6 +80,8 @@ export function getAppRoutePath(route: AppRoute): string {
       return `/servers/${route.serverId}`;
     case "channel":
       return `/servers/${route.serverId}/channels/${route.channelId}`;
+    case "channel-members":
+      return `/servers/${route.serverId}/channels/${route.channelId}/members`;
     case "server-settings":
       return `/servers/${route.serverId}/settings`;
   }

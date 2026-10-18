@@ -1,7 +1,11 @@
-import type { ServerMember, ServerRole } from "@runelink/sdk";
-import { CircleDashed } from "lucide-react";
+import type { ServerMember } from "@runelink/sdk";
 import { Badge } from "@/components/ui/badge";
-import { MemberActionsMenu } from "@/components/server-settings/MemberActionsMenu";
+import { MemberActionsMenu } from "@/components/members/MemberActionsMenu";
+import {
+  MEMBER_STATUS,
+  ROLE_LABELS,
+  ROLE_TEXT_CLASS_NAMES,
+} from "@/components/members/member-display";
 import {
   Table,
   TableBody,
@@ -29,15 +33,6 @@ function formatServerTimestamp(value: Date): string {
     hour: "numeric",
     minute: "2-digit",
   }).format(value);
-}
-
-const ROLE_LABELS: Record<ServerRole, string> = {
-  admin: "Admin",
-  member: "Member",
-};
-
-function formatRoleLabel(role: ServerRole): string {
-  return ROLE_LABELS[role];
 }
 
 export function ServerMembersTable({
@@ -123,17 +118,17 @@ export function ServerMembersTable({
                     variant="secondary"
                     className={
                       member.role === "admin"
-                        ? "rounded-full border border-violet-200 bg-violet-100 text-violet-700 dark:border-violet-400/30 dark:bg-violet-400/15 dark:text-violet-200"
+                        ? `rounded-full border border-violet-200 bg-violet-100 dark:border-violet-400/30 dark:bg-violet-400/15 ${ROLE_TEXT_CLASS_NAMES.admin}`
                         : "rounded-full"
                     }
                   >
-                    {formatRoleLabel(member.role)}
+                    {ROLE_LABELS[member.role]}
                   </Badge>
                 </TableCell>
                 <TableCell>
                   <span className="text-muted-foreground inline-flex items-center gap-1.5 text-sm">
-                    <CircleDashed className="size-3.5" />
-                    Offline
+                    <MEMBER_STATUS.Icon className="size-3.5" />
+                    {MEMBER_STATUS.label}
                   </span>
                 </TableCell>
                 <TableCell className="whitespace-nowrap text-sm text-muted-foreground">
@@ -144,8 +139,7 @@ export function ServerMembersTable({
                     serverId={serverId}
                     serverHost={serverHost}
                     member={member}
-                    canKickMembers={canModerateMembers && !isActiveAccount}
-                    canManageMemberRoles={canModerateMembers}
+                    canModerateMembers={canModerateMembers}
                   />
                 </TableCell>
               </TableRow>

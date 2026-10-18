@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { DeleteServerDialog } from "@/components/sidebar/DeleteServerDialog";
 import { LeaveServerDialog } from "@/components/sidebar/LeaveServerDialog";
 import { Button } from "@/components/ui/button";
+import { compareMemberNames } from "@/components/members/member-display";
 import { ServerMembersTable } from "@/components/server-settings/ServerMembersTable";
 import { getActiveAccount, useAuthStore } from "@/lib/auth-store";
 import { useMembershipsStore } from "@/lib/memberships-store";
@@ -58,9 +59,7 @@ export function ServerSettingsPage({
         return left.role === "admin" ? -1 : 1;
       }
 
-      return left.user.name.localeCompare(right.user.name, undefined, {
-        sensitivity: "base",
-      });
+      return compareMemberNames(left, right);
     });
   }, [members]);
   const activeServerMember = useMemo(() => {
