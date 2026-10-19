@@ -39,7 +39,7 @@ export function ChannelListItem({
       <Button
         variant="ghost"
         className={cn(
-          "h-auto w-full min-w-0 cursor-pointer justify-start rounded-2xl px-3 py-3 pr-12 text-left hover:bg-transparent dark:hover:bg-transparent",
+          "h-auto w-full min-w-0 cursor-pointer justify-start rounded-2xl px-3 py-3 text-left transition-colors group-hover:pr-10 group-has-[[data-slot=dropdown-menu-trigger]:focus-visible]:pr-10 hover:bg-transparent dark:hover:bg-transparent",
           isSelected
             ? "text-foreground dark:text-sidebar-foreground"
             : "text-sidebar-foreground/80 hover:text-sidebar-foreground"

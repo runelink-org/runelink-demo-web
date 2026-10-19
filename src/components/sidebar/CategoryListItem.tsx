@@ -34,7 +34,7 @@ export function CategoryListItem({
       <button
         type="button"
         className={cn(
-          "flex w-full min-w-0 cursor-pointer items-center gap-1.5 rounded-xl px-2 pt-3 pb-1.5 pr-12 text-left",
+          "flex w-full min-w-0 cursor-pointer items-center gap-1.5 rounded-xl px-2 pt-3 pb-1.5 text-left group-hover:pr-10 group-has-[[data-slot=dropdown-menu-trigger]:focus-visible]:pr-10",
           "text-sm font-medium text-sidebar-foreground/60 transition-colors hover:text-sidebar-foreground",
           "focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:outline-none"
         )}
