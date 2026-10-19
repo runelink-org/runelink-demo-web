@@ -1,3 +1,4 @@
+import { formatMessagePreview } from "@/lib/message-preview";
 import type { ActiveMessage, Message } from "@runelink/sdk";
 import { MessageActionsMenu } from "./MessageActionsMenu";
 
@@ -43,7 +44,7 @@ export function MessageListItem({
       <article
         id={`message-${message.id}`}
         tabIndex={-1}
-        className="group relative rounded-2xl border border-transparent px-3 py-1.5 pr-9 transition hover:border-border/70 hover:bg-background/80"
+        className="group relative rounded-2xl border border-transparent px-3 py-1.5 pr-9 transition-colors hover:bg-muted"
       >
         {message.reply_to ? (
           <div className="relative mb-1 flex h-5 min-w-0 items-center gap-2 pl-[52px] text-xs text-muted-foreground">
@@ -68,7 +69,7 @@ export function MessageListItem({
                   {replyTarget.author?.name ?? "Unknown user"}
                 </span>
                 <span className="truncate">
-                  {replyTarget.body.split(/\r?\n/, 1)[0]}
+                  {formatMessagePreview(replyTarget.body)}
                 </span>
               </button>
             ) : (
@@ -105,7 +106,7 @@ export function MessageListItem({
           ) : null}
           {!isCompact ? (
             <div className="group/avatar relative shrink-0">
-              <div className="flex size-10 cursor-default select-none items-center justify-center rounded-2xl bg-primary/10 text-sm font-semibold text-primary">
+              <div className="flex size-10 cursor-default select-none items-center justify-center rounded-full bg-primary/10 text-sm font-semibold text-primary">
                 {authorName.slice(0, 2).toUpperCase()}
               </div>
               {message.author ? (
