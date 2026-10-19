@@ -1,3 +1,4 @@
+import { formatMessagePreview } from "@/lib/message-preview";
 import type {
   ActiveMessage,
   Message,
@@ -859,7 +860,7 @@ export function MessagesPane({
                   </span>
                   <span className="min-w-0 flex-1 truncate">
                     {replyTarget.deleted_at === null
-                      ? replyTarget.body.split(/\r?\n/, 1)[0]
+                      ? formatMessagePreview(replyTarget.body)
                       : "Original message was deleted. Cancel to send without replying."}
                   </span>
                   <Button
