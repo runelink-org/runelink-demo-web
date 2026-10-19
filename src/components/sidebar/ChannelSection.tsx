@@ -120,15 +120,6 @@ export function ChannelSection({
 }: ChannelSectionProps) {
   const backgroundMenu = useContextActionsMenu();
 
-  function isTreeBackground(target: EventTarget): boolean {
-    return Boolean(
-      selectedServer &&
-      canManageChannels &&
-      target instanceof Element &&
-      !target.closest("[data-channel-row], button")
-    );
-  }
-
   const [collapsedIds, setCollapsedIds] = useState<ReadonlySet<string>>(
     () => new Set()
   );
@@ -265,11 +256,11 @@ export function ChannelSection({
     <div
       {...backgroundMenu.targetProps}
       onContextMenu={(event) => {
-        if (isTreeBackground(event.target))
+        if (selectedServer && canManageChannels)
           backgroundMenu.targetProps.onContextMenu?.(event);
       }}
       onTouchStart={(event) => {
-        if (isTreeBackground(event.target))
+        if (selectedServer && canManageChannels)
           backgroundMenu.targetProps.onTouchStart?.(event);
       }}
       className="flex min-h-0 flex-1 flex-col"
@@ -297,9 +288,7 @@ export function ChannelSection({
           </div>
         ) : channels.length === 0 ? (
           <div className="flex items-center justify-between gap-2 px-2">
-            <p className="text-sm text-sidebar-foreground/70">
-              Add first channel
-            </p>
+            <p className="text-sm text-sidebar-foreground/70">Add channel</p>
             <span className="inline-flex" title={createChannelTooltip}>
               <Button
                 type="button"
