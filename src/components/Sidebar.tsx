@@ -252,7 +252,7 @@ export function Sidebar({
     <aside
       className={[
         "relative z-20 flex h-dvh shrink-0 border-r border-sidebar-border bg-sidebar/95 backdrop-blur",
-        accountRailOnly ? "w-20" : "w-full md:w-auto",
+        accountRailOnly ? "w-20" : "w-full sm:w-auto",
       ].join(" ")}
     >
       <div className="flex w-20 flex-col items-center gap-4 border-r border-sidebar-border/80 px-3 py-4">
@@ -329,7 +329,7 @@ export function Sidebar({
 
       {accountRailOnly ? null : (
         <div
-          className="flex min-w-0 flex-1 flex-col bg-sidebar md:flex-none"
+          className="flex min-w-0 flex-1 flex-col bg-sidebar sm:flex-none"
           style={{ width: `${channelPanelWidth}px` }}
         >
           <div className="border-b border-sidebar-border/80 px-4 py-4">
@@ -411,7 +411,7 @@ export function Sidebar({
       {accountRailOnly ? null : (
         <button
           type="button"
-          className="group relative hidden w-3 shrink-0 cursor-col-resize items-stretch justify-center bg-sidebar/40 transition hover:bg-sidebar-accent/60 md:flex"
+          className="group relative hidden w-3 shrink-0 cursor-col-resize items-stretch justify-center bg-sidebar/40 transition hover:bg-sidebar-accent/60 sm:flex"
           aria-label="Resize channels sidebar"
           onPointerDown={handleResizeStart}
         >
