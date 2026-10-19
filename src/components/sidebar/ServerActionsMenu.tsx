@@ -61,6 +61,7 @@ export function ServerActionsMenu({
     <DropdownMenu {...contextMenu?.menuProps}>
       {contextOnly ? null : (
         <DropdownMenuTrigger
+          {...contextMenu?.targetProps}
           render={
             <button
               type="button"
