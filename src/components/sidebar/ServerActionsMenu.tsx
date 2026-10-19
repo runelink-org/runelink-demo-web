@@ -1,5 +1,5 @@
-import type { Server } from "@runelink/sdk";
-import { Cog, Copy, Ellipsis, LogOut } from "lucide-react";
+import type { Server, ServerChannelKind } from "@runelink/sdk";
+import { Cog, Copy, Ellipsis, FolderPlus, Hash, LogOut } from "lucide-react";
 import { toast } from "sonner";
 import {
   DropdownMenu,
@@ -8,16 +8,21 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { formatServerCliPath } from "@/lib/cli-path";
+import type { useContextActionsMenu } from "@/lib/use-context-actions-menu";
 
 type ServerActionsMenuProps = {
+  contextMenu?: ReturnType<typeof useContextActionsMenu>;
   server: Server;
   onOpenServerSettings: (server: Server) => void;
+  onCreateChannel?: (kind: ServerChannelKind) => void;
   onLeaveServer: (server: Server) => void;
 };
 
 export function ServerActionsMenu({
+  contextMenu,
   server,
   onOpenServerSettings,
+  onCreateChannel,
   onLeaveServer,
 }: ServerActionsMenuProps) {
   async function handleCopyServerId(serverId: string) {
@@ -49,7 +54,7 @@ export function ServerActionsMenu({
   }
 
   return (
-    <DropdownMenu>
+    <DropdownMenu {...contextMenu?.menuProps}>
       <DropdownMenuTrigger
         render={
           <button
@@ -62,9 +67,10 @@ export function ServerActionsMenu({
         <Ellipsis className="size-4" />
       </DropdownMenuTrigger>
       <DropdownMenuContent
-        align="end"
+        anchor={contextMenu?.anchor}
+        align={contextMenu?.anchor ? "start" : "end"}
         side="bottom"
-        sideOffset={8}
+        sideOffset={contextMenu?.anchor ? 0 : 8}
         className="w-72"
       >
         <DropdownMenuItem
@@ -74,8 +80,26 @@ export function ServerActionsMenu({
           }}
         >
           <Cog className="size-4" />
-          <span className="font-medium">Server Settings</span>
+          <span className="font-medium">Server settings</span>
         </DropdownMenuItem>
+        {onCreateChannel ? (
+          <>
+            <DropdownMenuItem
+              className="cursor-pointer gap-3 rounded-xl px-3 py-2"
+              onClick={() => onCreateChannel("text")}
+            >
+              <Hash className="size-4" />
+              <span className="font-medium">Create channel</span>
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              className="cursor-pointer gap-3 rounded-xl px-3 py-2"
+              onClick={() => onCreateChannel("category")}
+            >
+              <FolderPlus className="size-4" />
+              <span className="font-medium">Create category</span>
+            </DropdownMenuItem>
+          </>
+        ) : null}
         <DropdownMenuItem
           className="cursor-pointer gap-3 rounded-xl px-3 py-2"
           onClick={() => {
