@@ -50,11 +50,13 @@ export function useContextActionsMenu(moveThreshold = 10) {
     onContextMenu: (event) => {
       if (!isInsideTarget(event)) return;
       event.preventDefault();
+      event.stopPropagation();
       cancelLongPress();
       openMenuAt(event.clientX, event.clientY);
     },
     onTouchStart: (event) => {
       if (!isInsideTarget(event)) return;
+      event.stopPropagation();
       cancelLongPress();
       didLongPress.current = false;
       if (event.touches.length !== 1) return;

@@ -140,7 +140,8 @@ export function CreateChannelDialog({
                 aria-checked={kind === value}
                 className={cn(
                   "justify-start gap-2",
-                  kind === value && "border-primary bg-primary/10"
+                  kind === value &&
+                    "border-primary bg-primary/10 dark:border-primary dark:bg-primary/10 dark:hover:bg-primary/15"
                 )}
                 disabled={isCreating}
                 onClick={() => {
