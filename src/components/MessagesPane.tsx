@@ -743,7 +743,10 @@ export function MessagesPane({
           )}
         </header>
 
-        <div className="relative flex min-h-0 min-w-0 flex-1 flex-col bg-background">
+        <div
+          className="relative flex min-h-0 min-w-0 flex-1 flex-col bg-background"
+          onContextMenu={(event) => event.preventDefault()}
+        >
           {sidebarError ? (
             <div className="flex flex-1 items-center justify-center px-6">
               <div className="max-w-md rounded-3xl border border-destructive/20 bg-destructive/5 p-6 text-center">
