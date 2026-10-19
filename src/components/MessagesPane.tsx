@@ -256,6 +256,7 @@ function MessageList({
     <>
       <div
         ref={scrollContainerRef}
+        data-message-scroll
         onScroll={onScroll}
         className="flex flex-1 flex-col gap-1 overflow-y-auto px-4 py-5 sm:px-6"
       >
