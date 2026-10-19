@@ -1,4 +1,9 @@
-import type { Message, ServerWithChannels, UserRef } from "@runelink/sdk";
+import type {
+  ActiveMessage,
+  Message,
+  ServerWithChannels,
+  UserRef,
+} from "@runelink/sdk";
 import {
   useCallback,
   type FormEvent,
@@ -17,6 +22,7 @@ import {
   SendHorizonal,
   ServerCrash,
   Users,
+  X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
@@ -46,7 +52,7 @@ type MessagesPaneProps = {
   canModerateMessages: boolean;
   canDeleteChannel: boolean;
   onDeselectChannel: () => void;
-  onSendMessage: (body: string) => Promise<void>;
+  onSendMessage: (body: string, replyTo: string | null) => Promise<void>;
   onDeleteChannel: (
     channel: ServerWithChannels["channels"][number]
   ) => Promise<void>;
@@ -180,7 +186,7 @@ function clampComposerHeight(value: number): number {
 }
 
 function shouldCompactMessage(current: Message, previous?: Message): boolean {
-  if (!previous) {
+  if (!previous || current.reply_to) {
     return false;
   }
 
@@ -211,6 +217,7 @@ function MessageList({
   activeAccount,
   canModerateMessages,
   onDeleteMessage,
+  onReply,
 }: {
   host: string;
   serverId: string;
@@ -221,9 +228,28 @@ function MessageList({
   activeAccount: UserRef | null;
   canModerateMessages: boolean;
   onDeleteMessage: (message: Message) => Promise<void>;
+  onReply: (message: ActiveMessage) => void;
 }) {
   const [messagePendingDelete, setMessagePendingDelete] =
     useState<Message | null>(null);
+
+  const activeMessages = messages.filter(
+    (message): message is ActiveMessage => message.deleted_at === null
+  );
+  const messagesById = new Map(
+    messages.map((message) => [message.id, message])
+  );
+
+  function jumpToMessage(id: string) {
+    const element = document.getElementById(`message-${id}`);
+    if (!element) return;
+    element.scrollIntoView({ block: "center", behavior: "smooth" });
+    element.focus({ preventScroll: true });
+    element.animate(
+      [{ backgroundColor: "var(--muted)" }, { backgroundColor: "transparent" }],
+      { duration: 1400 }
+    );
+  }
 
   return (
     <>
@@ -232,9 +258,12 @@ function MessageList({
         onScroll={onScroll}
         className="flex flex-1 flex-col gap-1 overflow-y-auto px-4 py-5 sm:px-6"
       >
-        {messages.map((message, index) => {
+        {activeMessages.map((message, index) => {
           const authorName = message.author?.name ?? "Unknown user";
-          const isCompact = shouldCompactMessage(message, messages[index - 1]);
+          const isCompact = shouldCompactMessage(
+            message,
+            activeMessages[index - 1]
+          );
           const leadingMessageOffset = !isCompact && index > 0;
           const canDeleteMessage =
             canModerateMessages ||
@@ -259,6 +288,13 @@ function MessageList({
                   ? formatFullTimestamp(message.author.created_at)
                   : null
               }
+              replyTarget={
+                message.reply_to
+                  ? messagesById.get(message.reply_to)
+                  : undefined
+              }
+              onReply={onReply}
+              onJumpToMessage={jumpToMessage}
               canDeleteMessage={canDeleteMessage}
               onDeleteMessage={(nextMessage) => {
                 setMessagePendingDelete(nextMessage);
@@ -308,6 +344,17 @@ export function MessagesPane({
   );
   const isMembersPaneShown = !!membersPane && isMembersPaneOpen;
   const [draft, setDraft] = useState("");
+  const [replySelection, setReplySelection] = useState<{
+    channelKey: string | null;
+    messageId: string;
+  } | null>(null);
+  const replyTarget =
+    replySelection?.channelKey === selectedChannelKey
+      ? selectedMessages.find(
+          (message) => message.id === replySelection?.messageId
+        )
+      : undefined;
+
   const [isSending, setIsSending] = useState(false);
   const [sendError, setSendError] = useState<string | null>(null);
   const [composerHeight, setComposerHeight] = useState(DEFAULT_COMPOSER_HEIGHT);
@@ -324,7 +371,11 @@ export function MessagesPane({
   const setScrollTop = useMessageScrollStore((state) => state.setScrollTop);
 
   const canCompose = !!selectedServer && !!selectedChannel && !sidebarError;
-  const isSendDisabled = !canCompose || isSending || draft.trim().length === 0;
+  const isSendDisabled =
+    !canCompose ||
+    isSending ||
+    draft.trim().length === 0 ||
+    (replyTarget !== undefined && replyTarget.deleted_at !== null);
 
   const isAtBottom = useCallback((element: HTMLDivElement): boolean => {
     const threshold = 32;
@@ -521,12 +572,19 @@ export function MessagesPane({
       return;
     }
 
+    if (replyTarget && replyTarget.deleted_at !== null) {
+      setSendError(
+        "The original message was deleted. Cancel the reply or choose another message."
+      );
+      return;
+    }
     setIsSending(true);
     setSendError(null);
 
     try {
-      await onSendMessage(nextBody);
+      await onSendMessage(nextBody, replyTarget?.id ?? null);
       setDraft("");
+      setReplySelection(null);
     } catch (error) {
       setSendError(
         error instanceof Error ? error.message : "Failed to send message"
@@ -537,7 +595,15 @@ export function MessagesPane({
   }
 
   async function handleKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
-    if (event.key !== "Enter" || event.shiftKey) {
+    if (event.key === "Escape") {
+      setReplySelection(null);
+      return;
+    }
+    if (
+      event.key !== "Enter" ||
+      event.shiftKey ||
+      event.nativeEvent.isComposing
+    ) {
       return;
     }
 
@@ -740,7 +806,9 @@ export function MessagesPane({
                 </p>
               </div>
             </div>
-          ) : selectedMessages.length === 0 ? (
+          ) : !selectedMessages.some(
+              (message) => message.deleted_at === null
+            ) ? (
             <div className="flex flex-1 items-center justify-center px-6">
               <div className="max-w-md rounded-3xl border border-border/70 bg-background/80 p-6 text-center shadow-sm backdrop-blur">
                 <h2 className="text-lg font-semibold">No messages yet</h2>
@@ -761,6 +829,13 @@ export function MessagesPane({
               activeAccount={activeAccount}
               canModerateMessages={canModerateMessages}
               onDeleteMessage={onDeleteMessage}
+              onReply={(message) => {
+                setReplySelection({
+                  channelKey: selectedChannelKey,
+                  messageId: message.id,
+                });
+                textareaRef.current?.focus();
+              }}
             />
           )}
 
@@ -774,6 +849,31 @@ export function MessagesPane({
               >
                 <span className="h-1.5 w-10 rounded-full bg-border/80 transition-colors group-hover:bg-muted-foreground/50" />
               </button>
+              {replyTarget ? (
+                <div className="mb-2 flex min-w-0 items-center gap-2 rounded-xl bg-muted/55 px-4 py-2 text-xs text-muted-foreground">
+                  <span className="shrink-0">
+                    Replying to{" "}
+                    <span className="font-medium text-foreground">
+                      {replyTarget.author?.name ?? "Unknown user"}
+                    </span>
+                  </span>
+                  <span className="min-w-0 flex-1 truncate">
+                    {replyTarget.deleted_at === null
+                      ? replyTarget.body.split(/\r?\n/, 1)[0]
+                      : "Original message was deleted. Cancel to send without replying."}
+                  </span>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="size-6 shrink-0"
+                    aria-label="Cancel reply"
+                    onClick={() => setReplySelection(null)}
+                  >
+                    <X className="size-3.5" />
+                  </Button>
+                </div>
+              ) : null}
               <form
                 className="flex items-end gap-3 rounded-3xl bg-muted/55 px-4 py-3 transition-colors focus-within:bg-muted/70"
                 onSubmit={handleFormSubmit}

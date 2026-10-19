@@ -64,7 +64,8 @@ export function DeleteMessageDialog({
         <AlertDialogHeader>
           <AlertDialogTitle>Delete message?</AlertDialogTitle>
           <AlertDialogDescription>
-            This permanently removes the selected message from the channel.
+            This permanently clears the message text. Replies to it will show
+            that the original message was deleted.
           </AlertDialogDescription>
         </AlertDialogHeader>
 

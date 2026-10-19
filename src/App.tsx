@@ -121,6 +121,9 @@ export function App() {
   const errorByTextChannelId = useMessagesStore(
     (state) => state.errorByTextChannelId
   );
+  const hasFetchedMessagesByTextChannelId = useMessagesStore(
+    (state) => state.hasFetchedByTextChannelId
+  );
   const fetchMessagesByTextChannel = useMessagesStore(
     (state) => state.fetchMessagesByTextChannel
   );
@@ -497,7 +500,7 @@ export function App() {
     ? (isLoadingByTextChannelId[selectedTextChannelId] ?? false)
     : false;
   const hasFetchedSelectedMessages = selectedTextChannelId
-    ? selectedTextChannelId in messagesByTextChannelId
+    ? (hasFetchedMessagesByTextChannelId[selectedTextChannelId] ?? false)
     : false;
   const messagesError = selectedTextChannelId
     ? (errorByTextChannelId[selectedTextChannelId] ?? null)
@@ -517,7 +520,9 @@ export function App() {
     void fetchMessagesByTextChannel(
       selectedTextChannelId,
       getTargetHost(selectedServer.server.host, activeAccount.host)
-    );
+    ).catch(() => {
+      /* The store exposes the error in the message pane. */
+    });
   }, [
     activeAccount,
     connectionStatus,
@@ -624,7 +629,7 @@ export function App() {
     backOrReplace(getContentRoute(selectedServerId, selectedChannelId));
   }
 
-  async function handleSendMessage(body: string) {
+  async function handleSendMessage(body: string, replyTo: string | null) {
     if (!activeAccount || !selectedServer || !selectedTextChannelId) {
       return;
     }
@@ -633,6 +638,7 @@ export function App() {
       {
         author: activeAccount,
         body,
+        reply_to: replyTo,
       },
       getTargetHost(selectedServer.server.host, activeAccount.host)
     );

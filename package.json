@@ -9,7 +9,8 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "format": "prettier --write \"src/**/*.{ts,tsx,js,jsx,json,css,html}\"",
-    "format:check": "prettier --check \"src/**/*.{ts,tsx,js,jsx,json,css,html}\""
+    "format:check": "prettier --check \"src/**/*.{ts,tsx,js,jsx,json,css,html}\"",
+    "test": "node --experimental-strip-types --test tests/*.test.mjs"
   },
   "dependencies": {
     "@base-ui/react": "^1.2.0",
