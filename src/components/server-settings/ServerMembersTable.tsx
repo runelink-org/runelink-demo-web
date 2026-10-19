@@ -94,7 +94,7 @@ export function ServerMembersTable({
               >
                 <TableCell>
                   <div className="flex min-w-0 items-center gap-3">
-                    <div className="flex size-10 shrink-0 items-center justify-center rounded-2xl bg-primary/10 text-xs font-semibold text-primary">
+                    <div className="flex size-10 shrink-0 select-none items-center justify-center rounded-full bg-primary/10 text-xs font-semibold text-primary">
                       {initials}
                     </div>
                     <div className="min-w-0">

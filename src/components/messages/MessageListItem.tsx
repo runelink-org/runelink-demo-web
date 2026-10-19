@@ -60,7 +60,7 @@ export function MessageListItem({
                 aria-label={`Jump to message from ${replyTarget.author?.name ?? "Unknown user"}`}
               >
                 <span
-                  className="flex size-4 shrink-0 items-center justify-center rounded-full bg-primary/10 text-[8px] font-semibold text-primary"
+                  className="flex size-4 shrink-0 select-none items-center justify-center rounded-full bg-primary/10 text-[8px] font-semibold text-primary"
                   aria-hidden="true"
                 >
                   {(replyTarget.author?.name ?? "?").slice(0, 2).toUpperCase()}

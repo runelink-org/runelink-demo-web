@@ -101,7 +101,7 @@ export function ServerRailButton({
         />
         <span
           className={cn(
-            "pointer-events-none",
+            "pointer-events-none select-none",
             isSelected ? "text-primary-foreground" : "text-sidebar-foreground"
           )}
         >

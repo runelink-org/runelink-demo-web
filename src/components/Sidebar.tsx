@@ -267,9 +267,6 @@ export function Sidebar({
               className="hidden size-12 drop-shadow-sm dark:block"
             />
           </>
-          <p className="text-[11px] font-semibold tracking-[0.18em] text-sidebar-foreground/70 uppercase">
-            Rune
-          </p>
         </div>
 
         <div className="flex min-h-0 flex-1 flex-col items-center gap-3 overflow-y-auto pb-1">
@@ -334,10 +331,7 @@ export function Sidebar({
           style={{ width: `${channelPanelWidth}px` }}
         >
           <div className="border-b border-sidebar-border/80 px-4 py-4">
-            <p className="text-xs font-semibold tracking-[0.2em] text-sidebar-foreground/55 uppercase">
-              Server
-            </p>
-            <div className="mt-2 flex min-w-0 items-center justify-between gap-2">
+            <div className="flex min-w-0 items-center justify-between gap-2">
               <h2 className="min-w-0 flex-1 truncate text-lg font-semibold text-sidebar-foreground">
                 {selectedServer?.server.title ?? "Choose a server"}
               </h2>
