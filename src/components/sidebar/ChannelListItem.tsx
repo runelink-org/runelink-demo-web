@@ -2,6 +2,7 @@ import type { ServerChannel } from "@runelink/sdk";
 import { Hash } from "lucide-react";
 import { ChannelActionsMenu } from "@/components/sidebar/ChannelActionsMenu";
 import { Button } from "@/components/ui/button";
+import { useContextActionsMenu } from "@/lib/use-context-actions-menu";
 import { cn } from "@/lib/utils";
 
 type ChannelListItemProps = {
@@ -23,8 +24,11 @@ export function ChannelListItem({
   onSelect,
   onDeleteChannel,
 }: ChannelListItemProps) {
+  // Cancel the long press as soon as the tree starts a drag at 5px.
+  const contextMenu = useContextActionsMenu(5);
   return (
     <div
+      {...contextMenu.targetProps}
       className={cn(
         "group relative rounded-2xl border transition-colors",
         isSelected
@@ -60,6 +64,7 @@ export function ChannelListItem({
       </Button>
 
       <ChannelActionsMenu
+        contextMenu={contextMenu}
         host={host}
         serverId={serverId}
         channel={channel}
