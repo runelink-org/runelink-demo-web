@@ -1,9 +1,8 @@
 import type { ActiveMessage } from "@runelink/sdk";
-import { useRef } from "react";
+import { useRef, type ComponentProps } from "react";
 import { Copy, Ellipsis, Reply, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import {
-  DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
@@ -12,6 +11,7 @@ import { formatMessageCliPath } from "@/lib/cli-path";
 import { cn } from "@/lib/utils";
 
 type MessageActionsMenuProps = {
+  anchor?: ComponentProps<typeof DropdownMenuContent>["anchor"];
   host: string;
   serverId: string;
   channelId: string;
@@ -22,6 +22,7 @@ type MessageActionsMenuProps = {
 };
 
 export function MessageActionsMenu({
+  anchor,
   host,
   serverId,
   channelId,
@@ -47,7 +48,7 @@ export function MessageActionsMenu({
   }
 
   return (
-    <DropdownMenu>
+    <>
       <DropdownMenuTrigger
         render={
           <button
@@ -64,9 +65,10 @@ export function MessageActionsMenu({
         <Ellipsis className="size-4" />
       </DropdownMenuTrigger>
       <DropdownMenuContent
-        align="end"
+        anchor={anchor}
+        align={anchor ? "start" : "end"}
         side="bottom"
-        sideOffset={8}
+        sideOffset={anchor ? 0 : 8}
         className="w-52"
         finalFocus={() => {
           if (!replyOnCloseRef.current) return true;
@@ -133,6 +135,6 @@ export function MessageActionsMenu({
           <span className="font-medium">Delete message</span>
         </DropdownMenuItem>
       </DropdownMenuContent>
-    </DropdownMenu>
+    </>
   );
 }
