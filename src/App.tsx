@@ -1,5 +1,6 @@
 import type {
   Message,
+  Server,
   ServerChannel,
   ServerChannelKind,
   ServerChannelMove,
@@ -363,13 +364,18 @@ export function App() {
   const activeUser = activeAccount
     ? (userByRefKey[userRefKey(activeAccount)] ?? null)
     : null;
-  const selectedMembership = selectedServerId
-    ? (activeMemberships?.find(
-        (membership) => membership.server.id === selectedServerId
-      ) ?? null)
-    : null;
-  const canDeleteSelectedServer =
-    activeUser?.role === "admin" || selectedMembership?.role === "admin";
+  function canManageServer(server: Server): boolean {
+    return (
+      activeUser?.role === "admin" ||
+      activeMemberships?.some(
+        (membership) =>
+          membership.server.id === server.id && membership.role === "admin"
+      ) === true
+    );
+  }
+  const canDeleteSelectedServer = selectedServer
+    ? canManageServer(selectedServer.server)
+    : false;
   const canModerateSelectedMessages = canDeleteSelectedServer;
   const isSelectedServerHydrating = selectedServer
     ? !(selectedServer.server.id in serverWithChannelsById) ||
@@ -657,22 +663,23 @@ export function App() {
   }
 
   async function handleCreateChannel(
+    server: Server,
     kind: ServerChannelKind,
     title: string,
     parentChannelId: string | null
   ) {
-    if (!activeAccount || !selectedServer) {
+    if (!activeAccount) {
       return;
     }
     const channel = await createChannel(
-      selectedServer.server.id,
+      server.id,
       {
         kind,
         title,
         description: null,
         parent_channel_id: parentChannelId,
       },
-      getTargetHost(selectedServer.server.host, activeAccount.host)
+      getTargetHost(server.host, activeAccount.host)
     );
     if (channel.kind !== "text") {
       return;
@@ -681,7 +688,7 @@ export function App() {
     navigate(
       {
         screen: "channel",
-        serverId: selectedServer.server.id,
+        serverId: server.id,
         channelId: channel.id,
       },
       "push"
@@ -819,6 +826,7 @@ export function App() {
           onLeaveServer={handleLeaveServer}
           onDeleteServer={handleDeleteServer}
           canDeleteSelectedServer={canDeleteSelectedServer}
+          canManageServer={canManageServer}
           onCreateChannel={handleCreateChannel}
           onDeleteChannel={handleDeleteChannel}
           onMoveChannel={handleMoveChannel}

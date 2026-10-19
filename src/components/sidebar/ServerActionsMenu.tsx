@@ -13,15 +13,19 @@ import type { useContextActionsMenu } from "@/lib/use-context-actions-menu";
 type ServerActionsMenuProps = {
   contextMenu?: ReturnType<typeof useContextActionsMenu>;
   server: Server;
+  contextOnly?: boolean;
   onOpenServerSettings: (server: Server) => void;
-  onCreateChannel?: (kind: ServerChannelKind) => void;
+  canCreateChannels: boolean;
+  onCreateChannel: (server: Server, kind: ServerChannelKind) => void;
   onLeaveServer: (server: Server) => void;
 };
 
 export function ServerActionsMenu({
   contextMenu,
   server,
+  contextOnly = false,
   onOpenServerSettings,
+  canCreateChannels,
   onCreateChannel,
   onLeaveServer,
 }: ServerActionsMenuProps) {
@@ -55,17 +59,19 @@ export function ServerActionsMenu({
 
   return (
     <DropdownMenu {...contextMenu?.menuProps}>
-      <DropdownMenuTrigger
-        render={
-          <button
-            type="button"
-            className="flex size-8 cursor-pointer items-center justify-center rounded-xl text-sidebar-foreground/55 transition hover:bg-sidebar-accent hover:text-sidebar-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
-            aria-label="Open server menu"
-          />
-        }
-      >
-        <Ellipsis className="size-4" />
-      </DropdownMenuTrigger>
+      {contextOnly ? null : (
+        <DropdownMenuTrigger
+          render={
+            <button
+              type="button"
+              className="flex size-8 cursor-pointer items-center justify-center rounded-xl text-sidebar-foreground/55 transition hover:bg-sidebar-accent hover:text-sidebar-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+              aria-label="Open server menu"
+            />
+          }
+        >
+          <Ellipsis className="size-4" />
+        </DropdownMenuTrigger>
+      )}
       <DropdownMenuContent
         anchor={contextMenu?.anchor}
         align={contextMenu?.anchor ? "start" : "end"}
@@ -82,24 +88,22 @@ export function ServerActionsMenu({
           <Cog className="size-4" />
           <span className="font-medium">Server settings</span>
         </DropdownMenuItem>
-        {onCreateChannel ? (
-          <>
-            <DropdownMenuItem
-              className="cursor-pointer gap-3 rounded-xl px-3 py-2"
-              onClick={() => onCreateChannel("text")}
-            >
-              <Hash className="size-4" />
-              <span className="font-medium">Create channel</span>
-            </DropdownMenuItem>
-            <DropdownMenuItem
-              className="cursor-pointer gap-3 rounded-xl px-3 py-2"
-              onClick={() => onCreateChannel("category")}
-            >
-              <FolderPlus className="size-4" />
-              <span className="font-medium">Create category</span>
-            </DropdownMenuItem>
-          </>
-        ) : null}
+        <DropdownMenuItem
+          className="cursor-pointer gap-3 rounded-xl px-3 py-2"
+          disabled={!canCreateChannels}
+          onClick={() => onCreateChannel(server, "text")}
+        >
+          <Hash className="size-4" />
+          <span className="font-medium">Create channel</span>
+        </DropdownMenuItem>
+        <DropdownMenuItem
+          className="cursor-pointer gap-3 rounded-xl px-3 py-2"
+          disabled={!canCreateChannels}
+          onClick={() => onCreateChannel(server, "category")}
+        >
+          <FolderPlus className="size-4" />
+          <span className="font-medium">Create category</span>
+        </DropdownMenuItem>
         <DropdownMenuItem
           className="cursor-pointer gap-3 rounded-xl px-3 py-2"
           onClick={() => {

@@ -1,13 +1,19 @@
-import type { Server } from "@runelink/sdk";
+import type { Server, ServerChannelKind } from "@runelink/sdk";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { getServerMonogram } from "@/components/sidebar/server-display";
+import { ServerActionsMenu } from "@/components/sidebar/ServerActionsMenu";
+import { useContextActionsMenu } from "@/lib/use-context-actions-menu";
 import { cn } from "@/lib/utils";
 
 type ServerRailButtonProps = {
   isSelected: boolean;
   server: Server;
   onSelect: (serverId: string) => void;
+  onOpenServerSettings: (server: Server) => void;
+  canCreateChannels: boolean;
+  onCreateChannel: (server: Server, kind: ServerChannelKind) => void;
+  onLeaveServer: (server: Server) => void;
 };
 
 type TooltipPosition = {
@@ -19,7 +25,12 @@ export function ServerRailButton({
   isSelected,
   server,
   onSelect,
+  onOpenServerSettings,
+  canCreateChannels,
+  onCreateChannel,
+  onLeaveServer,
 }: ServerRailButtonProps) {
+  const contextMenu = useContextActionsMenu();
   const buttonRef = useRef<HTMLButtonElement | null>(null);
   const [isTooltipVisible, setIsTooltipVisible] = useState(false);
   const [tooltipPosition, setTooltipPosition] =
@@ -80,6 +91,7 @@ export function ServerRailButton({
   return (
     <>
       <button
+        {...contextMenu.targetProps}
         ref={buttonRef}
         type="button"
         className={cn(
@@ -109,7 +121,20 @@ export function ServerRailButton({
         </span>
       </button>
 
-      {isTooltipVisible && tooltipPosition && typeof document !== "undefined"
+      <ServerActionsMenu
+        contextOnly
+        contextMenu={contextMenu}
+        server={server}
+        onOpenServerSettings={onOpenServerSettings}
+        canCreateChannels={canCreateChannels}
+        onCreateChannel={onCreateChannel}
+        onLeaveServer={onLeaveServer}
+      />
+
+      {isTooltipVisible &&
+      !contextMenu.menuProps.open &&
+      tooltipPosition &&
+      typeof document !== "undefined"
         ? createPortal(
             <div
               className="pointer-events-none fixed z-[100] rounded-xl border border-sidebar-border/80 bg-sidebar px-4 py-3 shadow-lg shadow-black/8"

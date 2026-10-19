@@ -49,7 +49,9 @@ type SidebarProps = {
   onLeaveServer: (serverId: string, serverHost: string) => Promise<void>;
   onDeleteServer: (serverId: string, serverHost: string) => Promise<void>;
   canDeleteSelectedServer: boolean;
+  canManageServer: (server: Server) => boolean;
   onCreateChannel: (
+    server: Server,
     kind: ServerChannelKind,
     title: string,
     parentChannelId: string | null
@@ -115,16 +117,19 @@ export function Sidebar({
   onLeaveServer,
   onDeleteServer,
   canDeleteSelectedServer,
+  canManageServer,
   onCreateChannel,
   onDeleteChannel,
   onMoveChannel,
 }: SidebarProps) {
   const serverMenu = useContextActionsMenu();
+  const addServerMenu = useContextActionsMenu();
   const [channelPanelWidth, setChannelPanelWidth] = useState<number>(() =>
     loadStoredChannelPanelWidth()
   );
-  const [createChannelRequest, setCreateChannelRequest] =
-    useState<CreateChannelRequest | null>(null);
+  const [createChannelRequest, setCreateChannelRequest] = useState<
+    (CreateChannelRequest & { server: Server }) | null
+  >(null);
   const [channelPendingDelete, setChannelPendingDelete] =
     useState<ServerChannel | null>(null);
   const [serverPendingLeave, setServerPendingLeave] = useState<Server | null>(
@@ -150,6 +155,9 @@ export function Sidebar({
         (server) => server.server.id === effectiveSelectedServerId
       ) ?? null)
     : null;
+  const createChannelServer = createChannelRequest
+    ? servers.find(({ server }) => server.id === createChannelRequest.server.id)
+    : undefined;
   const joinedServerIds = new Set(servers.map((server) => server.server.id));
 
   useEffect(() => {
@@ -209,6 +217,14 @@ export function Sidebar({
     };
   }, [pendingSelection, selectedChannelId, selectedServerId]);
 
+  function openCreateChannel(
+    server: Server,
+    kind: ServerChannelKind,
+    parentChannelId: string | null = null
+  ) {
+    setCreateChannelRequest({ server, kind, parentChannelId });
+  }
+
   function handleResizeStart(event: React.PointerEvent<HTMLButtonElement>) {
     event.preventDefault();
 
@@ -255,7 +271,10 @@ export function Sidebar({
         accountRailOnly ? "w-20" : "w-full sm:w-auto",
       ].join(" ")}
     >
-      <div className="flex w-20 flex-col items-center gap-4 border-r border-sidebar-border/80 py-4">
+      <div
+        {...(accountRailOnly ? {} : addServerMenu.targetProps)}
+        className="flex w-20 flex-col items-center gap-4 border-r border-sidebar-border/80 py-4"
+      >
         <div className="flex flex-col items-center gap-2 text-center">
           <>
             <img
@@ -292,6 +311,10 @@ export function Sidebar({
                   key={server.id}
                   isSelected={isSelected}
                   server={server}
+                  onOpenServerSettings={onOpenServerSettings}
+                  canCreateChannels={canManageServer(server)}
+                  onCreateChannel={openCreateChannel}
+                  onLeaveServer={setServerPendingLeave}
                   onSelect={(nextServerId) => {
                     const nextChannelId =
                       selectedChannelIdByServerId[nextServerId] ?? null;
@@ -313,6 +336,7 @@ export function Sidebar({
 
           {accountRailOnly ? null : (
             <AddServerMenu
+              contextMenu={addServerMenu}
               activeHost={activeHost}
               joinedServerIds={joinedServerIds}
               onCreateServer={onCreateServer}
@@ -358,15 +382,8 @@ export function Sidebar({
                   contextMenu={serverMenu}
                   server={selectedServer.server}
                   onOpenServerSettings={onOpenServerSettings}
-                  onCreateChannel={
-                    canDeleteSelectedServer
-                      ? (kind) =>
-                          setCreateChannelRequest({
-                            kind,
-                            parentChannelId: null,
-                          })
-                      : undefined
-                  }
+                  canCreateChannels={canManageServer(selectedServer.server)}
+                  onCreateChannel={openCreateChannel}
                   onLeaveServer={(server) => {
                     setServerPendingLeave(server);
                   }}
@@ -390,7 +407,8 @@ export function Sidebar({
             isSelectedServerHydrating={isSelectedServerHydrating}
             canManageChannels={canDeleteSelectedServer}
             onOpenCreateChannel={(kind, parentChannelId) => {
-              setCreateChannelRequest({ kind, parentChannelId });
+              if (selectedServer)
+                openCreateChannel(selectedServer.server, kind, parentChannelId);
             }}
             onSelectChannel={(serverId, channel) => {
               scheduleSelectionCommit(
@@ -427,14 +445,23 @@ export function Sidebar({
 
       <CreateChannelDialog
         request={createChannelRequest}
-        serverTitle={selectedServer?.server.title ?? null}
-        channels={selectedServer?.channels ?? []}
+        serverTitle={createChannelRequest?.server.title ?? null}
+        channels={createChannelServer?.channels ?? []}
         onOpenChange={(open) => {
           if (!open) {
             setCreateChannelRequest(null);
           }
         }}
-        onCreateChannel={onCreateChannel}
+        onCreateChannel={(kind, title, parentChannelId) => {
+          if (!createChannelRequest)
+            throw new Error("No channel creation request.");
+          return onCreateChannel(
+            createChannelRequest.server,
+            kind,
+            title,
+            parentChannelId
+          );
+        }}
       />
 
       <DeleteChannelDialog
