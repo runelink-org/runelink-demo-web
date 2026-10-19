@@ -1,3 +1,4 @@
+import { mergeMessages } from "./message-cache";
 import { type Message, type NewMessage } from "@runelink/sdk";
 import { create } from "zustand";
 import { requestExpected } from "@/lib/runelink-request";
@@ -10,6 +11,7 @@ import {
 
 type MessagesState = {
   messagesByTextChannelId: Record<string, Message[]>;
+  hasFetchedByTextChannelId: Record<string, boolean>;
   isLoadingByTextChannelId: Record<string, boolean>;
   errorByTextChannelId: Record<string, string | null>;
   fetchMessagesByTextChannel: (
@@ -31,32 +33,22 @@ type MessagesState = {
 
 const initialState = {
   messagesByTextChannelId: {},
+  hasFetchedByTextChannelId: {},
   isLoadingByTextChannelId: {},
   errorByTextChannelId: {},
 };
-
-function upsertMessage(messages: Message[], nextMessage: Message): Message[] {
-  return sortMessages([
-    ...messages.filter((message) => message.id !== nextMessage.id),
-    nextMessage,
-  ]);
-}
-
-function removeMessage(messages: Message[], messageId: MessageId): Message[] {
-  return messages.filter((message) => message.id !== messageId);
-}
-
-function sortMessages(messages: Message[]): Message[] {
-  return [...messages].sort(
-    (left, right) => left.created_at.getTime() - right.created_at.getTime()
-  );
-}
 
 export const useMessagesStore = create<MessagesState>((set) => ({
   ...initialState,
 
   async fetchMessagesByTextChannel(textChannelId, targetHost = null) {
     set((state) => ({
+      // Register the channel before requesting history so updates received
+      // during the first fetch are retained and merged with its response.
+      messagesByTextChannelId: {
+        ...state.messagesByTextChannelId,
+        [textChannelId]: state.messagesByTextChannelId[textChannelId] ?? [],
+      },
       isLoadingByTextChannelId: {
         ...state.isLoadingByTextChannelId,
         [textChannelId]: true,
@@ -77,9 +69,16 @@ export const useMessagesStore = create<MessagesState>((set) => ({
       });
 
       set((state) => ({
+        hasFetchedByTextChannelId: {
+          ...state.hasFetchedByTextChannelId,
+          [textChannelId]: true,
+        },
         messagesByTextChannelId: {
           ...state.messagesByTextChannelId,
-          [textChannelId]: sortMessages(reply.data),
+          [textChannelId]: mergeMessages(
+            state.messagesByTextChannelId[textChannelId] ?? [],
+            reply.data
+          ),
         },
         isLoadingByTextChannelId: {
           ...state.isLoadingByTextChannelId,
@@ -120,9 +119,9 @@ export const useMessagesStore = create<MessagesState>((set) => ({
     set((state) => ({
       messagesByTextChannelId: {
         ...state.messagesByTextChannelId,
-        [textChannelId]: upsertMessage(
+        [textChannelId]: mergeMessages(
           state.messagesByTextChannelId[textChannelId] ?? [],
-          reply.data
+          [reply.data]
         ),
       },
     }));
@@ -131,7 +130,7 @@ export const useMessagesStore = create<MessagesState>((set) => ({
   },
 
   async deleteMessage(textChannelId, messageId, targetHost = null) {
-    await requestExpected("messages_delete", {
+    const reply = await requestExpected("messages_delete", {
       type: "messages_delete",
       data: {
         message_id: messageId,
@@ -142,9 +141,9 @@ export const useMessagesStore = create<MessagesState>((set) => ({
     set((state) => ({
       messagesByTextChannelId: {
         ...state.messagesByTextChannelId,
-        [textChannelId]: removeMessage(
+        [textChannelId]: mergeMessages(
           state.messagesByTextChannelId[textChannelId] ?? [],
-          messageId
+          [reply.data]
         ),
       },
     }));

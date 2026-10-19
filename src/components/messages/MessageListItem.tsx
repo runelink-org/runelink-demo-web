@@ -1,11 +1,11 @@
-import type { Message } from "@runelink/sdk";
+import type { ActiveMessage, Message } from "@runelink/sdk";
 import { MessageActionsMenu } from "./MessageActionsMenu";
 
 type MessageListItemProps = {
   host: string;
   serverId: string;
   channelId: string;
-  message: Message;
+  message: ActiveMessage;
   authorName: string;
   isCompact: boolean;
   leadingMessageOffset: boolean;
@@ -13,7 +13,10 @@ type MessageListItemProps = {
   fullTimestamp: string;
   authorJoinedAt: string | null;
   canDeleteMessage: boolean;
-  onDeleteMessage: (message: Message) => void;
+  replyTarget: Message | undefined;
+  onReply: (message: ActiveMessage) => void;
+  onJumpToMessage: (id: string) => void;
+  onDeleteMessage: (message: ActiveMessage) => void;
 };
 
 export function MessageListItem({
@@ -28,13 +31,55 @@ export function MessageListItem({
   fullTimestamp,
   authorJoinedAt,
   canDeleteMessage,
+  replyTarget,
+  onReply,
+  onJumpToMessage,
   onDeleteMessage,
 }: MessageListItemProps) {
   const isOneLine = !message.body.includes("\n");
 
   return (
     <div key={message.id} className={leadingMessageOffset ? "mt-3" : ""}>
-      <article className="group relative rounded-2xl border border-transparent px-3 py-1.5 pr-9 transition hover:border-border/70 hover:bg-background/80">
+      <article
+        id={`message-${message.id}`}
+        tabIndex={-1}
+        className="group relative rounded-2xl border border-transparent px-3 py-1.5 pr-9 transition hover:border-border/70 hover:bg-background/80"
+      >
+        {message.reply_to ? (
+          <div className="relative mb-1 flex h-5 min-w-0 items-center gap-2 pl-[52px] text-xs text-muted-foreground">
+            <span
+              aria-hidden="true"
+              className="absolute bottom-0 left-5 top-2 w-6 rounded-tl-lg border-l-2 border-t-2 border-muted-foreground/35"
+            />
+            {replyTarget?.deleted_at === null ? (
+              <button
+                type="button"
+                className="flex min-w-0 items-center gap-2 text-left hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                onClick={() => onJumpToMessage(replyTarget.id)}
+                aria-label={`Jump to message from ${replyTarget.author?.name ?? "Unknown user"}`}
+              >
+                <span
+                  className="flex size-4 shrink-0 items-center justify-center rounded-full bg-primary/10 text-[8px] font-semibold text-primary"
+                  aria-hidden="true"
+                >
+                  {(replyTarget.author?.name ?? "?").slice(0, 2).toUpperCase()}
+                </span>
+                <span className="shrink-0 font-medium">
+                  {replyTarget.author?.name ?? "Unknown user"}
+                </span>
+                <span className="truncate">
+                  {replyTarget.body.split(/\r?\n/, 1)[0]}
+                </span>
+              </button>
+            ) : (
+              <span className="truncate italic">
+                {replyTarget
+                  ? "Original message was deleted"
+                  : "Original message unavailable"}
+              </span>
+            )}
+          </div>
+        ) : null}
         <div
           className={`absolute right-1 z-10 flex w-8 justify-end ${
             isCompact && isOneLine
@@ -49,6 +94,7 @@ export function MessageListItem({
             message={message}
             canDeleteMessage={canDeleteMessage}
             onDeleteMessage={onDeleteMessage}
+            onReply={onReply}
           />
         </div>
         <div className="flex items-start gap-3">

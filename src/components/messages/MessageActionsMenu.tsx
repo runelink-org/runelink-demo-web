@@ -1,5 +1,5 @@
-import type { Message } from "@runelink/sdk";
-import { Copy, Ellipsis, Trash2 } from "lucide-react";
+import type { ActiveMessage } from "@runelink/sdk";
+import { Copy, Ellipsis, Reply, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import {
   DropdownMenu,
@@ -14,9 +14,10 @@ type MessageActionsMenuProps = {
   host: string;
   serverId: string;
   channelId: string;
-  message: Message;
+  message: ActiveMessage;
   canDeleteMessage: boolean;
-  onDeleteMessage: (message: Message) => void;
+  onReply: (message: ActiveMessage) => void;
+  onDeleteMessage: (message: ActiveMessage) => void;
 };
 
 export function MessageActionsMenu({
@@ -25,6 +26,7 @@ export function MessageActionsMenu({
   channelId,
   message,
   canDeleteMessage,
+  onReply,
   onDeleteMessage,
 }: MessageActionsMenuProps) {
   async function copyToClipboard(value: string, successLabel: string) {
@@ -64,6 +66,13 @@ export function MessageActionsMenu({
         sideOffset={8}
         className="w-52"
       >
+        <DropdownMenuItem
+          className="cursor-pointer gap-3 rounded-xl px-3 py-2"
+          onClick={() => onReply(message)}
+        >
+          <Reply className="size-4" />
+          <span className="font-medium">Reply</span>
+        </DropdownMenuItem>
         <DropdownMenuItem
           className="cursor-pointer gap-3 rounded-xl px-3 py-2"
           onClick={() => {

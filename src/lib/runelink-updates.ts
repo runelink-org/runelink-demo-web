@@ -1,3 +1,4 @@
+import { mergeMessages } from "./message-cache";
 import type {
   FullServerMembership,
   Message,
@@ -88,20 +89,6 @@ function removeMembership(
   serverId: string
 ): ServerMembership[] {
   return memberships.filter((membership) => membership.server.id !== serverId);
-}
-
-function upsertMessage(messages: Message[], nextMessage: Message): Message[] {
-  return sortMessages(upsertById(messages, nextMessage));
-}
-
-function removeMessage(messages: Message[], messageId: string): Message[] {
-  return messages.filter((message) => message.id !== messageId);
-}
-
-function sortMessages(messages: Message[]): Message[] {
-  return [...messages].sort(
-    (left, right) => left.created_at.getTime() - right.created_at.getTime()
-  );
 }
 
 function toServerMember(membership: FullServerMembership): ServerMember {
@@ -201,6 +188,10 @@ function removeServerChannelState(serverId: string): void {
 
 function removeMessageState(deletedTextChannelIds: string[]): void {
   useMessagesStore.setState((state) => ({
+    hasFetchedByTextChannelId: omitRecordKeys(
+      state.hasFetchedByTextChannelId,
+      deletedTextChannelIds
+    ),
     messagesByTextChannelId: omitRecordKeys(
       state.messagesByTextChannelId,
       deletedTextChannelIds
@@ -544,25 +535,9 @@ function handleMessageUpsert(message: Message): void {
   useMessagesStore.setState((state) => ({
     messagesByTextChannelId: {
       ...state.messagesByTextChannelId,
-      [textChannelId]: upsertMessage(
+      [textChannelId]: mergeMessages(
         state.messagesByTextChannelId[textChannelId] ?? [],
-        message
-      ),
-    },
-  }));
-}
-
-function handleMessageDeleted(textChannelId: string, messageId: string): void {
-  if (!isLoadedTextChannel(textChannelId)) {
-    return;
-  }
-
-  useMessagesStore.setState((state) => ({
-    messagesByTextChannelId: {
-      ...state.messagesByTextChannelId,
-      [textChannelId]: removeMessage(
-        state.messagesByTextChannelId[textChannelId] ?? [],
-        messageId
+        [message]
       ),
     },
   }));
@@ -597,9 +572,6 @@ export function handleRunelinkUpdate(update: WsUpdate): void {
       break;
     case "message_upserted":
       handleMessageUpsert(update.data);
-      break;
-    case "message_deleted":
-      handleMessageDeleted(update.data.text_channel_id, update.data.message_id);
       break;
   }
 }
