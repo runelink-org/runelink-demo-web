@@ -71,7 +71,7 @@ export function ServerMemberList({
                 className="group flex items-center gap-3 rounded-xl px-2 py-1.5 transition-colors hover:bg-muted"
               >
                 <div className="relative shrink-0">
-                  <div className="flex size-8 items-center justify-center rounded-full bg-primary/10 text-xs font-semibold text-primary">
+                  <div className="flex size-8 select-none items-center justify-center rounded-full bg-primary/10 text-xs font-semibold text-primary">
                     {member.user.name.slice(0, 2).toUpperCase()}
                   </div>
                   <Tooltip>
