@@ -1,4 +1,5 @@
 import type { ActiveMessage } from "@runelink/sdk";
+import { useRef } from "react";
 import { Copy, Ellipsis, Reply, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -29,6 +30,8 @@ export function MessageActionsMenu({
   onReply,
   onDeleteMessage,
 }: MessageActionsMenuProps) {
+  const replyOnCloseRef = useRef(false);
+
   async function copyToClipboard(value: string, successLabel: string) {
     if (typeof navigator === "undefined" || !navigator.clipboard) {
       toast.error("Clipboard is not available.");
@@ -65,10 +68,18 @@ export function MessageActionsMenu({
         side="bottom"
         sideOffset={8}
         className="w-52"
+        finalFocus={() => {
+          if (!replyOnCloseRef.current) return true;
+          replyOnCloseRef.current = false;
+          onReply(message);
+          return false;
+        }}
       >
         <DropdownMenuItem
           className="cursor-pointer gap-3 rounded-xl px-3 py-2"
-          onClick={() => onReply(message)}
+          onClick={() => {
+            replyOnCloseRef.current = true;
+          }}
         >
           <Reply className="size-4" />
           <span className="font-medium">Reply</span>

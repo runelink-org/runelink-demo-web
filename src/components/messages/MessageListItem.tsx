@@ -100,7 +100,7 @@ export function MessageListItem({
         </div>
         <div className="flex items-start gap-3">
           {isCompact ? (
-            <div className="flex w-10 shrink-0 cursor-default select-none items-center justify-end self-stretch whitespace-nowrap text-[10px] text-muted-foreground/90 opacity-0 transition group-hover:opacity-100">
+            <div className="flex w-10 shrink-0 cursor-text select-text items-center justify-end self-stretch whitespace-nowrap text-[10px] text-muted-foreground/90 opacity-0 transition group-hover:opacity-100">
               {compactTimestamp}
             </div>
           ) : null}
@@ -140,7 +140,7 @@ export function MessageListItem({
                 <span className="font-medium text-foreground">
                   {authorName}
                 </span>
-                <span className="cursor-default select-none text-[11px] text-muted-foreground">
+                <span className="cursor-text select-text text-[11px] text-muted-foreground">
                   {fullTimestamp}
                 </span>
               </div>
