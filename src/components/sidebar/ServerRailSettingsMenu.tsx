@@ -1,6 +1,7 @@
 import { Cog, MonitorSmartphone, Moon, Sun } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { useContextActionsMenu } from "@/lib/use-context-actions-menu";
 import {
   DropdownMenu,
   DropdownMenuCheckboxItem,
@@ -14,7 +15,8 @@ import { initializeThemeStore, resolveTheme, useThemeStore } from "@/lib/theme";
 
 export function ServerRailSettingsMenu() {
   const triggerRef = useRef<HTMLSpanElement | null>(null);
-  const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const contextMenu = useContextActionsMenu();
+  const isMenuOpen = contextMenu.menuProps.open;
   const [isTooltipVisible, setIsTooltipVisible] = useState(false);
   const [tooltipPosition, setTooltipPosition] = useState<{
     top: number;
@@ -82,16 +84,11 @@ export function ServerRailSettingsMenu() {
 
   return (
     <>
-      <DropdownMenu
-        open={isMenuOpen}
-        onOpenChange={(open) => {
-          setIsMenuOpen(open);
-          if (open) {
-            setIsTooltipVisible(false);
-          }
-        }}
-      >
-        <DropdownMenuTrigger render={<button type="button" />}>
+      <DropdownMenu {...contextMenu.menuProps}>
+        <DropdownMenuTrigger
+          {...contextMenu.targetProps}
+          render={<button type="button" />}
+        >
           <span
             ref={triggerRef}
             className="flex size-12 shrink-0 cursor-pointer items-center justify-center rounded-2xl border border-sidebar-border bg-sidebar-accent text-sidebar-foreground transition hover:border-sidebar-foreground/35 hover:bg-sidebar-accent/80"
@@ -145,7 +142,10 @@ export function ServerRailSettingsMenu() {
         </DropdownMenuContent>
       </DropdownMenu>
 
-      {isTooltipVisible && tooltipPosition && typeof document !== "undefined"
+      {isTooltipVisible &&
+      !isMenuOpen &&
+      tooltipPosition &&
+      typeof document !== "undefined"
         ? createPortal(
             <div
               className="pointer-events-none fixed z-[100] rounded-xl border border-sidebar-border/80 bg-sidebar px-4 py-3 shadow-lg shadow-black/8"

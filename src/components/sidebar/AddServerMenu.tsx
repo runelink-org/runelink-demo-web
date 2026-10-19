@@ -2,6 +2,7 @@ import type { Server } from "@runelink/sdk";
 import { Plus, Search } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import type { useContextActionsMenu } from "@/lib/use-context-actions-menu";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -12,6 +13,7 @@ import { CreateServerDialog } from "./CreateServerDialog";
 import { JoinServerDialog } from "./JoinServerDialog";
 
 type AddServerMenuProps = {
+  contextMenu: ReturnType<typeof useContextActionsMenu>;
   activeHost: string | null;
   joinedServerIds: Set<string>;
   onCreateServer: (
@@ -24,6 +26,7 @@ type AddServerMenuProps = {
 };
 
 export function AddServerMenu({
+  contextMenu,
   activeHost,
   joinedServerIds,
   onCreateServer,
@@ -31,7 +34,7 @@ export function AddServerMenu({
   onJoinServer,
 }: AddServerMenuProps) {
   const triggerRef = useRef<HTMLSpanElement | null>(null);
-  const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const isMenuOpen = contextMenu.menuProps.open;
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [isJoinDialogOpen, setIsJoinDialogOpen] = useState(false);
   const [isTooltipVisible, setIsTooltipVisible] = useState(false);
@@ -91,16 +94,11 @@ export function AddServerMenu({
 
   return (
     <>
-      <DropdownMenu
-        open={isMenuOpen}
-        onOpenChange={(open) => {
-          setIsMenuOpen(open);
-          if (open) {
-            setIsTooltipVisible(false);
-          }
-        }}
-      >
-        <DropdownMenuTrigger render={<button type="button" />}>
+      <DropdownMenu {...contextMenu.menuProps}>
+        <DropdownMenuTrigger
+          {...contextMenu.targetProps}
+          render={<button type="button" />}
+        >
           <span
             ref={triggerRef}
             className="flex size-12 shrink-0 cursor-pointer items-center justify-center rounded-2xl border border-dashed border-sidebar-border bg-sidebar-accent/45 text-sidebar-foreground/70 transition hover:border-primary/40 hover:bg-sidebar-accent hover:text-sidebar-foreground"
@@ -112,45 +110,51 @@ export function AddServerMenu({
           </span>
         </DropdownMenuTrigger>
         <DropdownMenuContent
-          side="right"
-          align="end"
-          sideOffset={10}
-          className="w-56 rounded-2xl p-2"
+          anchor={contextMenu.anchor}
+          side={contextMenu.anchor ? "bottom" : "right"}
+          align={contextMenu.anchor ? "start" : "end"}
+          sideOffset={contextMenu.anchor ? 0 : 10}
+          className={contextMenu.anchor ? "w-56" : "w-56 rounded-2xl p-2"}
         >
           <DropdownMenuItem
             className="cursor-pointer gap-3 rounded-xl px-3 py-2"
             onClick={() => {
-              setIsMenuOpen(false);
               setIsCreateDialogOpen(true);
             }}
           >
             <Plus className="size-4" />
             <div className="flex flex-col">
               <span className="font-medium">Create server</span>
-              <span className="text-xs text-muted-foreground">
-                Start a new server.
-              </span>
+              {!contextMenu.anchor ? (
+                <span className="text-xs text-muted-foreground">
+                  Start a new server.
+                </span>
+              ) : null}
             </div>
           </DropdownMenuItem>
           <DropdownMenuItem
             className="cursor-pointer gap-3 rounded-xl px-3 py-2"
             onClick={() => {
-              setIsMenuOpen(false);
               setIsJoinDialogOpen(true);
             }}
           >
             <Search className="size-4" />
             <div className="flex flex-col">
               <span className="font-medium">Join server</span>
-              <span className="text-xs text-muted-foreground">
-                Look up existing servers.
-              </span>
+              {!contextMenu.anchor ? (
+                <span className="text-xs text-muted-foreground">
+                  Look up existing servers.
+                </span>
+              ) : null}
             </div>
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
 
-      {isTooltipVisible && tooltipPosition && typeof document !== "undefined"
+      {isTooltipVisible &&
+      !isMenuOpen &&
+      tooltipPosition &&
+      typeof document !== "undefined"
         ? createPortal(
             <div
               className="pointer-events-none fixed z-[100] rounded-xl border border-sidebar-border/80 bg-sidebar px-4 py-3 shadow-lg shadow-black/8"

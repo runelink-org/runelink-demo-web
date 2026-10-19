@@ -10,6 +10,7 @@ import {
   UserCircle2,
 } from "lucide-react";
 import { useState } from "react";
+import { useContextActionsMenu } from "@/lib/use-context-actions-menu";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -48,6 +49,7 @@ export function ProfileSelector({
   onManageAccounts,
   onSelectAccount,
 }: ProfileSelectorProps) {
+  const contextMenu = useContextActionsMenu();
   const [openActionsKey, setOpenActionsKey] = useState<string | null>(null);
   const accounts = useAuthStore((state) => state.config.accounts);
   const accountAuthByKey = useAuthStore((state) => state.authCache.accounts);
@@ -86,8 +88,9 @@ export function ProfileSelector({
   const triggerLabel = activeAccount?.name.slice(0, 2).toUpperCase() ?? "AC";
 
   return (
-    <DropdownMenu>
+    <DropdownMenu {...contextMenu.menuProps}>
       <DropdownMenuTrigger
+        {...contextMenu.targetProps}
         render={
           <Button
             variant="outline"
@@ -116,7 +119,12 @@ export function ProfileSelector({
         ) : null}
       </DropdownMenuTrigger>
 
-      <DropdownMenuContent side="right" align="end" className="w-64">
+      <DropdownMenuContent
+        side="right"
+        align="end"
+        sideOffset={4}
+        className="w-64"
+      >
         <DropdownMenuGroup>
           <DropdownMenuLabel>
             {activeAccount
