@@ -96,7 +96,7 @@ export function ServerRailButton({
         aria-pressed={isSelected}
       >
         <span
-          className="pointer-events-none absolute -left-2 h-6 w-1 rounded-full bg-primary opacity-0 transition group-hover:opacity-60 data-[selected=true]:opacity-100"
+          className="pointer-events-none absolute -left-2 top-1/2 h-8 w-1 -translate-y-1/2 rounded-full bg-primary opacity-0 transition group-hover:opacity-60 data-[selected=true]:opacity-100"
           data-selected={isSelected}
         />
         <span

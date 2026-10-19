@@ -272,9 +272,13 @@ export function ChannelSection({
         if (isTreeBackground(event.target))
           backgroundMenu.targetProps.onTouchStart?.(event);
       }}
-      className="flex min-h-0 flex-1 flex-col px-3 py-3"
+      className="flex min-h-0 flex-1 flex-col"
     >
-      <div className="min-h-0 flex-1 overflow-y-auto pb-6" data-channel-tree>
+      <div
+        className="min-h-0 flex-1 overflow-y-auto px-3 pt-3 pb-9"
+        data-channel-tree
+        data-sidebar-scroll
+      >
         {error ? (
           <div className="rounded-2xl border border-destructive/15 bg-destructive/5 px-4 py-3 text-sm text-sidebar-foreground/80">
             {error}

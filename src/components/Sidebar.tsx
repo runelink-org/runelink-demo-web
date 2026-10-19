@@ -255,7 +255,7 @@ export function Sidebar({
         accountRailOnly ? "w-20" : "w-full sm:w-auto",
       ].join(" ")}
     >
-      <div className="flex w-20 flex-col items-center gap-4 border-r border-sidebar-border/80 px-3 py-4">
+      <div className="flex w-20 flex-col items-center gap-4 border-r border-sidebar-border/80 py-4">
         <div className="flex flex-col items-center gap-2 text-center">
           <>
             <img
@@ -271,7 +271,10 @@ export function Sidebar({
           </>
         </div>
 
-        <div className="flex min-h-0 flex-1 flex-col items-center gap-3 overflow-y-auto pb-1">
+        <div
+          className="flex min-h-0 w-full flex-1 flex-col items-center gap-3 overflow-y-auto px-3 pb-1"
+          data-sidebar-scroll
+        >
           {accountRailOnly ? null : isLoading ? (
             <div className="flex size-12 items-center justify-center rounded-2xl border border-sidebar-border bg-sidebar-accent text-sidebar-foreground/70">
               <LoaderCircle className="size-4 animate-spin" />
