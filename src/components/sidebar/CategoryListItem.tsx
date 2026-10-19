@@ -1,6 +1,7 @@
 import type { ServerChannel, ServerChannelKind } from "@runelink/sdk";
 import { ChevronDown, ChevronRight } from "lucide-react";
 import { ChannelActionsMenu } from "@/components/sidebar/ChannelActionsMenu";
+import { useContextActionsMenu } from "@/lib/use-context-actions-menu";
 import { cn } from "@/lib/utils";
 
 type CategoryListItemProps = {
@@ -24,10 +25,12 @@ export function CategoryListItem({
   onCreateChild,
   onDeleteChannel,
 }: CategoryListItemProps) {
+  // Cancel the long press as soon as the tree starts a drag at 5px.
+  const contextMenu = useContextActionsMenu(5);
   const Chevron = isCollapsed ? ChevronRight : ChevronDown;
 
   return (
-    <div className="group relative rounded-xl">
+    <div {...contextMenu.targetProps} className="group relative rounded-xl">
       <button
         type="button"
         className={cn(
@@ -43,6 +46,7 @@ export function CategoryListItem({
       </button>
 
       <ChannelActionsMenu
+        contextMenu={contextMenu}
         host={host}
         serverId={serverId}
         channel={channel}

@@ -9,9 +9,11 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { formatChannelCliPath } from "@/lib/cli-path";
+import type { useContextActionsMenu } from "@/lib/use-context-actions-menu";
 import { cn } from "@/lib/utils";
 
 type ChannelActionsMenuProps = {
+  contextMenu?: ReturnType<typeof useContextActionsMenu>;
   host: string;
   serverId: string;
   channel: ServerChannel;
@@ -24,6 +26,7 @@ type ChannelActionsMenuProps = {
 };
 
 export function ChannelActionsMenu({
+  contextMenu,
   host,
   serverId,
   channel,
@@ -69,7 +72,7 @@ export function ChannelActionsMenu({
   }
 
   return (
-    <DropdownMenu>
+    <DropdownMenu {...contextMenu?.menuProps}>
       <DropdownMenuTrigger
         render={
           <button
@@ -89,9 +92,10 @@ export function ChannelActionsMenu({
         <Ellipsis className="size-4" />
       </DropdownMenuTrigger>
       <DropdownMenuContent
-        align="end"
+        anchor={contextMenu?.anchor}
+        align={contextMenu?.anchor ? "start" : "end"}
         side="bottom"
-        sideOffset={8}
+        sideOffset={contextMenu?.anchor ? 0 : 8}
         className="w-64"
       >
         {onCreateChild ? (
