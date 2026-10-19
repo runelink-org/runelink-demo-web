@@ -4,12 +4,18 @@ import type {
   ServerChannelMove,
   ServerWithChannels,
 } from "@runelink/sdk";
-import { Plus } from "lucide-react";
+import { FolderPlus, Hash, Plus } from "lucide-react";
 import { useRef, useState } from "react";
 import { toast } from "sonner";
 import { CategoryListItem } from "@/components/sidebar/CategoryListItem";
 import { ChannelListItem } from "@/components/sidebar/ChannelListItem";
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+} from "@/components/ui/dropdown-menu";
+import { useContextActionsMenu } from "@/lib/use-context-actions-menu";
 import {
   ancestorIds,
   type ChannelRow,
@@ -112,6 +118,17 @@ export function ChannelSection({
   onDeleteChannel,
   onMoveChannel,
 }: ChannelSectionProps) {
+  const backgroundMenu = useContextActionsMenu();
+
+  function isTreeBackground(target: EventTarget): boolean {
+    return Boolean(
+      selectedServer &&
+      canManageChannels &&
+      target instanceof Element &&
+      !target.closest("[data-channel-row], button")
+    );
+  }
+
   const [collapsedIds, setCollapsedIds] = useState<ReadonlySet<string>>(
     () => new Set()
   );
@@ -140,11 +157,9 @@ export function ChannelSection({
     }
   }
 
-  const createChannelTooltip = selectedServer
-    ? canManageChannels
-      ? "Create channel"
-      : "Only server admins can create channels."
-    : "Select a server first.";
+  const createChannelTooltip = canManageChannels
+    ? "Create channel"
+    : "Only server admins can create channels.";
 
   function toggleCollapsed(channel: ServerChannel, isCollapsed: boolean) {
     setCollapsedIds((current) => {
@@ -247,30 +262,18 @@ export function ChannelSection({
   }
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col px-3 py-3">
-      <div className="mb-2 px-2">
-        <div className="flex items-center justify-between gap-2">
-          <p className="text-xs font-semibold tracking-[0.2em] text-sidebar-foreground/55 uppercase">
-            Channels
-          </p>
-          <span className="inline-flex" title={createChannelTooltip}>
-            <Button
-              type="button"
-              size="icon"
-              variant="ghost"
-              className="size-7 rounded-xl text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground"
-              onClick={() => {
-                onOpenCreateChannel("text", null);
-              }}
-              disabled={!selectedServer || !canManageChannels}
-              aria-label={createChannelTooltip}
-            >
-              <Plus className="size-4" />
-            </Button>
-          </span>
-        </div>
-      </div>
-
+    <div
+      {...backgroundMenu.targetProps}
+      onContextMenu={(event) => {
+        if (isTreeBackground(event.target))
+          backgroundMenu.targetProps.onContextMenu?.(event);
+      }}
+      onTouchStart={(event) => {
+        if (isTreeBackground(event.target))
+          backgroundMenu.targetProps.onTouchStart?.(event);
+      }}
+      className="flex min-h-0 flex-1 flex-col px-3 py-3"
+    >
       <div className="min-h-0 flex-1 overflow-y-auto pb-6" data-channel-tree>
         {error ? (
           <div className="rounded-2xl border border-destructive/15 bg-destructive/5 px-4 py-3 text-sm text-sidebar-foreground/80">
@@ -289,8 +292,23 @@ export function ChannelSection({
             Loading channels...
           </div>
         ) : channels.length === 0 ? (
-          <div className="rounded-2xl border border-dashed border-sidebar-border bg-sidebar-accent/50 px-4 py-3 text-sm text-sidebar-foreground/70">
-            This server does not have any channels yet.
+          <div className="flex items-center justify-between gap-2 px-2">
+            <p className="text-sm text-sidebar-foreground/70">
+              Add first channel
+            </p>
+            <span className="inline-flex" title={createChannelTooltip}>
+              <Button
+                type="button"
+                size="icon"
+                variant="ghost"
+                className="size-7 rounded-xl text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground"
+                onClick={() => onOpenCreateChannel("text", null)}
+                disabled={!canManageChannels}
+                aria-label={createChannelTooltip}
+              >
+                <Plus className="size-4" />
+              </Button>
+            </span>
           </div>
         ) : (
           <div className="relative" role="tree">
@@ -385,6 +403,29 @@ export function ChannelSection({
           </div>
         )}
       </div>
+      <DropdownMenu {...backgroundMenu.menuProps}>
+        <DropdownMenuContent
+          anchor={backgroundMenu.anchor}
+          align="start"
+          sideOffset={0}
+          className="w-64"
+        >
+          <DropdownMenuItem
+            className="cursor-pointer gap-3 rounded-xl px-3 py-2"
+            onClick={() => onOpenCreateChannel("text", null)}
+          >
+            <Hash className="size-4" />
+            <span className="font-medium">Create channel</span>
+          </DropdownMenuItem>
+          <DropdownMenuItem
+            className="cursor-pointer gap-3 rounded-xl px-3 py-2"
+            onClick={() => onOpenCreateChannel("category", null)}
+          >
+            <FolderPlus className="size-4" />
+            <span className="font-medium">Create category</span>
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
     </div>
   );
 }

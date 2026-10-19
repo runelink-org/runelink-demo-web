@@ -22,6 +22,7 @@ import { ServerRailSettingsMenu } from "@/components/sidebar/ServerRailSettingsM
 import { ServerActionsMenu } from "@/components/sidebar/ServerActionsMenu";
 import { ServerRailButton } from "@/components/sidebar/ServerRailButton";
 import { Separator } from "@/components/ui/separator";
+import { useContextActionsMenu } from "@/lib/use-context-actions-menu";
 
 type SidebarProps = {
   servers: ServerWithChannels[];
@@ -118,6 +119,7 @@ export function Sidebar({
   onDeleteChannel,
   onMoveChannel,
 }: SidebarProps) {
+  const serverMenu = useContextActionsMenu();
   const [channelPanelWidth, setChannelPanelWidth] = useState<number>(() =>
     loadStoredChannelPanelWidth()
   );
@@ -332,13 +334,36 @@ export function Sidebar({
         >
           <div className="border-b border-sidebar-border/80 px-4 py-4">
             <div className="flex min-w-0 items-center justify-between gap-2">
-              <h2 className="min-w-0 flex-1 truncate text-lg font-semibold text-sidebar-foreground">
-                {selectedServer?.server.title ?? "Choose a server"}
+              <h2
+                {...(selectedServer ? serverMenu.targetProps : {})}
+                className="min-w-0 flex-1 truncate text-lg font-semibold text-sidebar-foreground"
+              >
+                {selectedServer ? (
+                  <button
+                    type="button"
+                    className="block w-full cursor-pointer truncate rounded-sm text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+                    onClick={() => onOpenServerSettings(selectedServer.server)}
+                  >
+                    {selectedServer.server.title}
+                  </button>
+                ) : (
+                  "Choose a server"
+                )}
               </h2>
               {selectedServer ? (
                 <ServerActionsMenu
+                  contextMenu={serverMenu}
                   server={selectedServer.server}
                   onOpenServerSettings={onOpenServerSettings}
+                  onCreateChannel={
+                    canDeleteSelectedServer
+                      ? (kind) =>
+                          setCreateChannelRequest({
+                            kind,
+                            parentChannelId: null,
+                          })
+                      : undefined
+                  }
                   onLeaveServer={(server) => {
                     setServerPendingLeave(server);
                   }}
