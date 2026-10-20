@@ -256,12 +256,10 @@ export function ChannelSection({
     <div
       {...backgroundMenu.targetProps}
       onContextMenu={(event) => {
-        if (selectedServer && canManageChannels)
-          backgroundMenu.targetProps.onContextMenu?.(event);
+        if (selectedServer) backgroundMenu.targetProps.onContextMenu?.(event);
       }}
       onTouchStart={(event) => {
-        if (selectedServer && canManageChannels)
-          backgroundMenu.targetProps.onTouchStart?.(event);
+        if (selectedServer) backgroundMenu.targetProps.onTouchStart?.(event);
       }}
       className="flex min-h-0 flex-1 flex-col"
     >
@@ -405,6 +403,7 @@ export function ChannelSection({
         >
           <DropdownMenuItem
             className="cursor-pointer gap-3 rounded-xl px-3 py-2"
+            disabled={!canManageChannels}
             onClick={() => onOpenCreateChannel("text", null)}
           >
             <Hash className="size-4" />
@@ -412,6 +411,7 @@ export function ChannelSection({
           </DropdownMenuItem>
           <DropdownMenuItem
             className="cursor-pointer gap-3 rounded-xl px-3 py-2"
+            disabled={!canManageChannels}
             onClick={() => onOpenCreateChannel("category", null)}
           >
             <FolderPlus className="size-4" />
