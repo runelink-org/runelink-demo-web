@@ -6,8 +6,6 @@ import { MessageActionsMenu } from "./MessageActionsMenu";
 
 type MessageListItemProps = {
   host: string;
-  serverId: string;
-  channelId: string;
   message: ActiveMessage;
   authorName: string;
   isCompact: boolean;
@@ -24,8 +22,6 @@ type MessageListItemProps = {
 
 export function MessageListItem({
   host,
-  serverId,
-  channelId,
   message,
   authorName,
   isCompact,
@@ -98,8 +94,6 @@ export function MessageListItem({
             <MessageActionsMenu
               anchor={contextMenu.anchor}
               host={host}
-              serverId={serverId}
-              channelId={channelId}
               message={message}
               canDeleteMessage={canDeleteMessage}
               onDeleteMessage={onDeleteMessage}

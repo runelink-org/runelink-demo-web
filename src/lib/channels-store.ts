@@ -25,11 +25,6 @@ type ChannelsState = {
     serverId: ServerId,
     targetHost?: TargetHost
   ) => Promise<ServerChannel[]>;
-  fetchChannelById: (
-    serverId: ServerId,
-    channelId: ChannelId,
-    targetHost?: TargetHost
-  ) => Promise<ServerChannel>;
   createChannel: (
     serverId: ServerId,
     newChannel: NewServerChannel,
@@ -195,68 +190,6 @@ export const useChannelsStore = create<ChannelsState>((set) => ({
     }
   },
 
-  async fetchChannelById(serverId, channelId, targetHost = null) {
-    set((state) => ({
-      isLoadingByServerId: {
-        ...state.isLoadingByServerId,
-        [serverId]: true,
-      },
-      errorByServerId: {
-        ...state.errorByServerId,
-        [serverId]: null,
-      },
-    }));
-
-    try {
-      const reply = await requestExpected("channels_get_by_id", {
-        type: "channels_get_by_id",
-        data: {
-          server_id: serverId,
-          channel_id: channelId,
-          target_host: targetHost,
-        },
-      });
-
-      set((state) => ({
-        channelsByServerId: {
-          ...state.channelsByServerId,
-          [serverId]: upsertChannel(
-            state.channelsByServerId[serverId] ?? [],
-            reply.data
-          ),
-        },
-        channelById: {
-          ...state.channelById,
-          [reply.data.id]: reply.data,
-        },
-        isLoadingByServerId: {
-          ...state.isLoadingByServerId,
-          [serverId]: false,
-        },
-        errorByServerId: {
-          ...state.errorByServerId,
-          [serverId]: null,
-        },
-      }));
-
-      return reply.data;
-    } catch (error) {
-      const message =
-        error instanceof Error ? error.message : "Failed to load channel";
-      set((state) => ({
-        isLoadingByServerId: {
-          ...state.isLoadingByServerId,
-          [serverId]: false,
-        },
-        errorByServerId: {
-          ...state.errorByServerId,
-          [serverId]: message,
-        },
-      }));
-      throw error;
-    }
-  },
-
   async createChannel(serverId, newChannel, targetHost = null) {
     set((state) => ({
       isLoadingByServerId: {
@@ -335,7 +268,6 @@ export const useChannelsStore = create<ChannelsState>((set) => ({
       await requestExpected("channels_delete", {
         type: "channels_delete",
         data: {
-          server_id: serverId,
           channel_id: channelId,
           target_host: targetHost,
         },
@@ -404,7 +336,6 @@ export const useChannelsStore = create<ChannelsState>((set) => ({
     const reply = await requestExpected("channels_move", {
       type: "channels_move",
       data: {
-        server_id: serverId,
         channel_id: channelId,
         channel_move: channelMove,
         target_host: targetHost,

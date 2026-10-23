@@ -1,6 +1,6 @@
 import type { ServerChannel, ServerChannelKind } from "@runelink/sdk";
 import { Copy, Ellipsis, FolderPlus, Hash, Trash2 } from "lucide-react";
-import { toast } from "sonner";
+import { CopyMoreSubmenu, type CopyOption } from "@/components/CopyMoreSubmenu";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -8,14 +8,14 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { formatChannelCliPath } from "@/lib/cli-path";
+import { copyToClipboard } from "@/lib/clipboard";
+import { formatChannelCliPath, formatTextChannelCliPath } from "@/lib/cli-path";
 import type { useContextActionsMenu } from "@/lib/use-context-actions-menu";
 import { cn } from "@/lib/utils";
 
 type ChannelActionsMenuProps = {
   contextMenu?: ReturnType<typeof useContextActionsMenu>;
   host: string;
-  serverId: string;
   channel: ServerChannel;
   canDeleteChannel: boolean;
   onDeleteChannel: (channel: ServerChannel) => void;
@@ -25,10 +25,35 @@ type ChannelActionsMenuProps = {
   forceVisible?: boolean;
 };
 
+function getCopyOptions(host: string, channel: ServerChannel): CopyOption[] {
+  const path: CopyOption = {
+    label: "Path for CLI",
+    value: formatChannelCliPath(host, channel.id),
+    successLabel: "Copied CLI path.",
+  };
+  switch (channel.kind) {
+    case "text":
+      return [
+        {
+          label: "Raw text channel ID",
+          value: channel.text_channel_id,
+          successLabel: `Copied raw text channel ID: ${channel.text_channel_id}`,
+        },
+        path,
+        {
+          label: "Raw path for CLI",
+          value: formatTextChannelCliPath(host, channel.text_channel_id),
+          successLabel: "Copied raw CLI path.",
+        },
+      ];
+    case "category":
+      return [path];
+  }
+}
+
 export function ChannelActionsMenu({
   contextMenu,
   host,
-  serverId,
   channel,
   canDeleteChannel,
   onDeleteChannel,
@@ -37,40 +62,7 @@ export function ChannelActionsMenu({
   forceVisible = false,
 }: ChannelActionsMenuProps) {
   const isCategory = channel.kind === "category";
-  async function handleCopyChannelId(channelId: string) {
-    if (typeof navigator === "undefined" || !navigator.clipboard) {
-      toast.error("Clipboard is not available.");
-      return;
-    }
-
-    try {
-      await navigator.clipboard.writeText(channelId);
-      toast.success(`Copied channel ID: ${channelId}`);
-    } catch {
-      toast.error("Failed to copy channel ID.");
-    }
-  }
-
-  async function handleCopyChannelCliPath(
-    host: string,
-    serverId: string,
-    channelId: string
-  ) {
-    if (typeof navigator === "undefined" || !navigator.clipboard) {
-      toast.error("Clipboard is not available.");
-      return;
-    }
-
-    try {
-      await navigator.clipboard.writeText(
-        formatChannelCliPath(host, serverId, channelId)
-      );
-      toast.success("Copied CLI path.");
-    } catch {
-      toast.error("Failed to copy CLI path.");
-    }
-  }
-
+  const idLabel = isCategory ? "category ID" : "channel ID";
   return (
     <DropdownMenu {...contextMenu?.menuProps}>
       <DropdownMenuTrigger
@@ -124,21 +116,16 @@ export function ChannelActionsMenu({
         <DropdownMenuItem
           className="cursor-pointer gap-3 rounded-xl px-3 py-2"
           onClick={() => {
-            void handleCopyChannelId(channel.id);
+            void copyToClipboard(
+              channel.id,
+              `Copied ${idLabel}: ${channel.id}`
+            );
           }}
         >
           <Copy className="size-4" />
-          <span className="font-medium">Copy channel ID</span>
+          <span className="font-medium">Copy {idLabel}</span>
         </DropdownMenuItem>
-        <DropdownMenuItem
-          className="cursor-pointer gap-3 rounded-xl px-3 py-2"
-          onClick={() => {
-            void handleCopyChannelCliPath(host, serverId, channel.id);
-          }}
-        >
-          <Copy className="size-4" />
-          <span className="font-medium">Copy path for CLI</span>
-        </DropdownMenuItem>
+        <CopyMoreSubmenu options={getCopyOptions(host, channel)} />
         <DropdownMenuItem
           variant="destructive"
           disabled={!canDeleteChannel}

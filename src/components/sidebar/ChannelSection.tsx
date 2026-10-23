@@ -357,7 +357,6 @@ export function ChannelSection({
                   {channel.kind === "category" ? (
                     <CategoryListItem
                       host={selectedServer.server.host}
-                      serverId={selectedServer.server.id}
                       channel={channel}
                       isCollapsed={isCollapsed}
                       canManageChannels={canManageChannels}
@@ -372,7 +371,6 @@ export function ChannelSection({
                   ) : (
                     <ChannelListItem
                       host={selectedServer.server.host}
-                      serverId={selectedServer.server.id}
                       channel={channel}
                       isSelected={channel.id === selectedChannelId}
                       canDeleteChannel={canManageChannels}
