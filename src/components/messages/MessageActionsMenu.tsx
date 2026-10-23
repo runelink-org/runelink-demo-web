@@ -1,20 +1,19 @@
 import type { ActiveMessage } from "@runelink/sdk";
 import { useRef, type ComponentProps } from "react";
 import { Copy, Ellipsis, Reply, Trash2 } from "lucide-react";
-import { toast } from "sonner";
+import { CopyMoreSubmenu } from "@/components/CopyMoreSubmenu";
 import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { copyToClipboard } from "@/lib/clipboard";
 import { formatMessageCliPath } from "@/lib/cli-path";
 import { cn } from "@/lib/utils";
 
 type MessageActionsMenuProps = {
   anchor?: ComponentProps<typeof DropdownMenuContent>["anchor"];
   host: string;
-  serverId: string;
-  channelId: string;
   message: ActiveMessage;
   canDeleteMessage: boolean;
   onReply: (message: ActiveMessage) => void;
@@ -24,28 +23,12 @@ type MessageActionsMenuProps = {
 export function MessageActionsMenu({
   anchor,
   host,
-  serverId,
-  channelId,
   message,
   canDeleteMessage,
   onReply,
   onDeleteMessage,
 }: MessageActionsMenuProps) {
   const replyOnCloseRef = useRef(false);
-
-  async function copyToClipboard(value: string, successLabel: string) {
-    if (typeof navigator === "undefined" || !navigator.clipboard) {
-      toast.error("Clipboard is not available.");
-      return;
-    }
-
-    try {
-      await navigator.clipboard.writeText(value);
-      toast.success(successLabel);
-    } catch {
-      toast.error("Failed to copy.");
-    }
-  }
 
   return (
     <>
@@ -95,30 +78,20 @@ export function MessageActionsMenu({
           <Copy className="size-4" />
           <span className="font-medium">Copy text</span>
         </DropdownMenuItem>
-        <DropdownMenuItem
-          className="cursor-pointer gap-3 rounded-xl px-3 py-2"
-          onClick={() => {
-            void copyToClipboard(
-              message.id,
-              `Copied message ID: ${message.id}`
-            );
-          }}
-        >
-          <Copy className="size-4" />
-          <span className="font-medium">Copy message ID</span>
-        </DropdownMenuItem>
-        <DropdownMenuItem
-          className="cursor-pointer gap-3 rounded-xl px-3 py-2"
-          onClick={() => {
-            void copyToClipboard(
-              formatMessageCliPath(host, serverId, channelId, message.id),
-              "Copied CLI path."
-            );
-          }}
-        >
-          <Copy className="size-4" />
-          <span className="font-medium">Copy path for CLI</span>
-        </DropdownMenuItem>
+        <CopyMoreSubmenu
+          options={[
+            {
+              label: "Message ID",
+              value: message.id,
+              successLabel: `Copied message ID: ${message.id}`,
+            },
+            {
+              label: "Path for CLI",
+              value: formatMessageCliPath(host, message.id),
+              successLabel: "Copied CLI path.",
+            },
+          ]}
+        />
         <DropdownMenuItem
           variant="destructive"
           disabled={!canDeleteMessage}

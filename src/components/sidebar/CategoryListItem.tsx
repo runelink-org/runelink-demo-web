@@ -6,7 +6,6 @@ import { cn } from "@/lib/utils";
 
 type CategoryListItemProps = {
   host: string;
-  serverId: string;
   channel: ServerChannel;
   isCollapsed: boolean;
   canManageChannels: boolean;
@@ -17,7 +16,6 @@ type CategoryListItemProps = {
 
 export function CategoryListItem({
   host,
-  serverId,
   channel,
   isCollapsed,
   canManageChannels,
@@ -48,7 +46,6 @@ export function CategoryListItem({
       <ChannelActionsMenu
         contextMenu={contextMenu}
         host={host}
-        serverId={serverId}
         channel={channel}
         canDeleteChannel={canManageChannels}
         className="absolute right-2 bottom-0"

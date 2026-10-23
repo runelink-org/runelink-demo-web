@@ -210,8 +210,6 @@ function shouldCompactMessage(current: Message, previous?: Message): boolean {
 
 function MessageList({
   host,
-  serverId,
-  channelId,
   messages,
   scrollContainerRef,
   onScroll,
@@ -221,8 +219,6 @@ function MessageList({
   onReply,
 }: {
   host: string;
-  serverId: string;
-  channelId: string;
   messages: Message[];
   scrollContainerRef: RefObject<HTMLDivElement | null>;
   onScroll: () => void;
@@ -277,8 +273,6 @@ function MessageList({
             <MessageListItem
               key={message.id}
               host={host}
-              serverId={serverId}
-              channelId={channelId}
               message={message}
               authorName={authorName}
               isCompact={isCompact}
@@ -717,7 +711,6 @@ export function MessagesPane({
                 <div className="sm:hidden">
                   <ChannelActionsMenu
                     host={selectedServer.server.host}
-                    serverId={selectedServer.server.id}
                     channel={selectedChannel}
                     canDeleteChannel={canDeleteChannel}
                     forceVisible
@@ -826,8 +819,6 @@ export function MessagesPane({
           ) : (
             <MessageList
               host={selectedServer.server.host}
-              serverId={selectedServer.server.id}
-              channelId={selectedChannel.id}
               messages={selectedMessages}
               scrollContainerRef={scrollContainerRef}
               onScroll={handleMessagesScroll}
