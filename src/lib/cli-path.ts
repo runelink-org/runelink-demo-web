@@ -1,47 +1,23 @@
-type CliPathSegment = {
-  flag: string;
-  value: string;
-};
-
-function quoteCliValue(value: string): string {
-  return JSON.stringify(value);
-}
-
-function formatCliPath(segments: CliPathSegment[]): string {
-  return segments
-    .map(({ flag, value }) => `--${flag}=${quoteCliValue(value)}`)
-    .join(" ");
+// CLI arguments that locate a resource by its host and ID
+function formatCliPath(host: string, idFlag: string, id: string): string {
+  return `--host=${JSON.stringify(host)} --${idFlag}=${JSON.stringify(id)}`;
 }
 
 export function formatServerCliPath(host: string, serverId: string): string {
-  return formatCliPath([
-    { flag: "host", value: host },
-    { flag: "server-id", value: serverId },
-  ]);
+  return formatCliPath(host, "server-id", serverId);
 }
 
-export function formatChannelCliPath(
-  host: string,
-  serverId: string,
-  channelId: string
-): string {
-  return formatCliPath([
-    { flag: "host", value: host },
-    { flag: "server-id", value: serverId },
-    { flag: "channel-id", value: channelId },
-  ]);
+export function formatChannelCliPath(host: string, channelId: string): string {
+  return formatCliPath(host, "channel-id", channelId);
 }
 
-export function formatMessageCliPath(
+export function formatTextChannelCliPath(
   host: string,
-  serverId: string,
-  channelId: string,
-  messageId: string
+  textChannelId: string
 ): string {
-  return formatCliPath([
-    { flag: "host", value: host },
-    { flag: "server-id", value: serverId },
-    { flag: "channel-id", value: channelId },
-    { flag: "message-id", value: messageId },
-  ]);
+  return formatCliPath(host, "text-channel-id", textChannelId);
+}
+
+export function formatMessageCliPath(host: string, messageId: string): string {
+  return formatCliPath(host, "message-id", messageId);
 }

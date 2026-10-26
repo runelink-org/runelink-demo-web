@@ -7,7 +7,6 @@ import { cn } from "@/lib/utils";
 
 type ChannelListItemProps = {
   host: string;
-  serverId: string;
   channel: ServerChannel;
   isSelected: boolean;
   canDeleteChannel: boolean;
@@ -17,7 +16,6 @@ type ChannelListItemProps = {
 
 export function ChannelListItem({
   host,
-  serverId,
   channel,
   isSelected,
   canDeleteChannel,
@@ -66,7 +64,6 @@ export function ChannelListItem({
       <ChannelActionsMenu
         contextMenu={contextMenu}
         host={host}
-        serverId={serverId}
         channel={channel}
         canDeleteChannel={canDeleteChannel}
         className="absolute top-1/2 right-2 -translate-y-1/2"
