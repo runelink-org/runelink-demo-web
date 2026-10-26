@@ -1,6 +1,6 @@
 import type { Server, ServerChannelKind } from "@runelink/sdk";
 import { Cog, Copy, Ellipsis, FolderPlus, Hash, LogOut } from "lucide-react";
-import { CopyMoreSubmenu } from "@/components/CopyMoreSubmenu";
+import { CopyOtherSubmenu } from "@/components/CopyOtherSubmenu";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -87,7 +87,7 @@ export function ServerActionsMenu({
           <Copy className="size-4" />
           <span className="font-medium">Copy server ID</span>
         </DropdownMenuItem>
-        <CopyMoreSubmenu
+        <CopyOtherSubmenu
           options={[
             {
               label: "Path for CLI",

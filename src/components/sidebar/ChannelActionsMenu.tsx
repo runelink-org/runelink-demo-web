@@ -1,6 +1,9 @@
 import type { ServerChannel, ServerChannelKind } from "@runelink/sdk";
 import { Copy, Ellipsis, FolderPlus, Hash, Trash2 } from "lucide-react";
-import { CopyMoreSubmenu, type CopyOption } from "@/components/CopyMoreSubmenu";
+import {
+  CopyOtherSubmenu,
+  type CopyOption,
+} from "@/components/CopyOtherSubmenu";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -26,11 +29,7 @@ type ChannelActionsMenuProps = {
 };
 
 function getCopyOptions(host: string, channel: ServerChannel): CopyOption[] {
-  const path: CopyOption = {
-    label: "Path for CLI",
-    value: formatChannelCliPath(host, channel.id),
-    successLabel: "Copied CLI path.",
-  };
+  const path = formatChannelCliPath(host, channel.id);
   switch (channel.kind) {
     case "text":
       return [
@@ -39,15 +38,25 @@ function getCopyOptions(host: string, channel: ServerChannel): CopyOption[] {
           value: channel.text_channel_id,
           successLabel: `Copied raw text channel ID: ${channel.text_channel_id}`,
         },
-        path,
         {
-          label: "Raw path for CLI",
+          label: "Path for CLI (server channel)",
+          value: path,
+          successLabel: "Copied CLI path (server channel).",
+        },
+        {
+          label: "Path for CLI (text channel)",
           value: formatTextChannelCliPath(host, channel.text_channel_id),
-          successLabel: "Copied raw CLI path.",
+          successLabel: "Copied CLI path (text channel).",
         },
       ];
     case "category":
-      return [path];
+      return [
+        {
+          label: "Path for CLI",
+          value: path,
+          successLabel: "Copied CLI path.",
+        },
+      ];
   }
 }
 
@@ -125,7 +134,7 @@ export function ChannelActionsMenu({
           <Copy className="size-4" />
           <span className="font-medium">Copy {idLabel}</span>
         </DropdownMenuItem>
-        <CopyMoreSubmenu options={getCopyOptions(host, channel)} />
+        <CopyOtherSubmenu options={getCopyOptions(host, channel)} />
         <DropdownMenuItem
           variant="destructive"
           disabled={!canDeleteChannel}

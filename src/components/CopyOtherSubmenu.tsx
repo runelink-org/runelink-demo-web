@@ -14,12 +14,12 @@ export type CopyOption = {
 };
 
 // Less common copy actions, kept out of the top level of a menu
-export function CopyMoreSubmenu({ options }: { options: CopyOption[] }) {
+export function CopyOtherSubmenu({ options }: { options: CopyOption[] }) {
   return (
     <DropdownMenuSub>
       <DropdownMenuSubTrigger className="cursor-pointer gap-3 rounded-xl px-3 py-2">
         <Copy className="size-4" />
-        <span className="font-medium">Copy more</span>
+        <span className="font-medium">Copy other</span>
       </DropdownMenuSubTrigger>
       <DropdownMenuSubContent className="w-56">
         {options.map((option) => (

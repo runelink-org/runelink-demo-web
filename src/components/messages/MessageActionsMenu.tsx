@@ -1,7 +1,7 @@
 import type { ActiveMessage } from "@runelink/sdk";
 import { useRef, type ComponentProps } from "react";
 import { Copy, Ellipsis, Reply, Trash2 } from "lucide-react";
-import { CopyMoreSubmenu } from "@/components/CopyMoreSubmenu";
+import { CopyOtherSubmenu } from "@/components/CopyOtherSubmenu";
 import {
   DropdownMenuContent,
   DropdownMenuItem,
@@ -78,7 +78,7 @@ export function MessageActionsMenu({
           <Copy className="size-4" />
           <span className="font-medium">Copy text</span>
         </DropdownMenuItem>
-        <CopyMoreSubmenu
+        <CopyOtherSubmenu
           options={[
             {
               label: "Message ID",
