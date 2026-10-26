@@ -141,7 +141,7 @@ function getKnownTextChannelIdsForServer(serverId: string): string[] {
         ...(channelState.channelsByServerId[serverId] ?? []),
         ...(serverState.serverWithChannelsById[serverId]?.channels ?? []),
       ].flatMap((channel) =>
-        channel.text_channel_id ? [channel.text_channel_id] : []
+        channel.kind === "text" ? [channel.text_channel_id] : []
       )
     )
   );
@@ -511,16 +511,15 @@ function handleChannelDeleted(serverId: string, channelId: string): void {
     return;
   }
 
-  const textChannelId = (
+  const channel =
     useChannelsStore.getState().channelById[channelId] ??
     useServersStore
       .getState()
       .serverWithChannelsById[serverId]?.channels.find(
         (channel) => channel.id === channelId
-      )
-  )?.text_channel_id;
-  if (textChannelId) {
-    removeMessageState([textChannelId]);
+      );
+  if (channel?.kind === "text") {
+    removeMessageState([channel.text_channel_id]);
   }
   removeChannelStoreState(serverId, channelId);
   removeChannelNavigationState(serverId, channelId);

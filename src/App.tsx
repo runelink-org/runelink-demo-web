@@ -498,7 +498,8 @@ export function App() {
     selectedServerId && selectedChannelId
       ? serverChannelKey(selectedServerId, selectedChannelId)
       : null;
-  const selectedTextChannelId = selectedChannel?.text_channel_id ?? null;
+  const selectedTextChannelId =
+    selectedChannel?.kind === "text" ? selectedChannel.text_channel_id : null;
   const selectedMessages = selectedTextChannelId
     ? (messagesByTextChannelId[selectedTextChannelId] ?? [])
     : [];
