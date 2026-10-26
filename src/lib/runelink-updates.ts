@@ -515,9 +515,9 @@ function handleChannelDeleted(serverId: string, channelId: string): void {
     useChannelsStore.getState().channelById[channelId] ??
     useServersStore
       .getState()
-      .serverWithChannelsById[
-        serverId
-      ]?.channels.find((channel) => channel.id === channelId)
+      .serverWithChannelsById[serverId]?.channels.find(
+        (channel) => channel.id === channelId
+      )
   )?.text_channel_id;
   if (textChannelId) {
     removeMessageState([textChannelId]);
