@@ -3,6 +3,7 @@ import {
   RunelinkIncompatibleHostError,
   RunelinkRequestError,
   TokenResponseSchema,
+  getWsUrl,
   type TokenResponse,
   type UserRef,
   type WsReply,
@@ -18,6 +19,10 @@ import {
   subscribeToAuthSession,
 } from "@/lib/auth-session-bridge";
 import { handleRunelinkUpdate } from "@/lib/runelink-updates";
+import {
+  HostUnreachableError,
+  resolveHostTransport,
+} from "@/lib/host-transport";
 
 export type AccountConnectionStatus =
   | "disconnected"
@@ -41,6 +46,7 @@ type RunelinkConnectionStore = {
 
 let currentConnection: RunelinkConnection | null = null;
 let currentConnectionHost: string | null = null;
+let transportResolution: AbortController | null = null;
 let currentStatusCleanup: (() => void) | null = null;
 let currentErrorCleanup: (() => void) | null = null;
 let currentUpdateCleanup: (() => void) | null = null;
@@ -119,12 +125,6 @@ function clearAuthRetryTimer(): void {
   authRetryTimer = null;
 }
 
-function getTransportSecurityMode(): "secure-only" | "prefer-secure" {
-  return window.location.protocol === "https:"
-    ? "secure-only"
-    : "prefer-secure";
-}
-
 export const useRunelinkConnectionStore = create<RunelinkConnectionStore>(
   (set) => ({
     initialized: false,
@@ -170,6 +170,8 @@ function setAuthenticatedStatus(userRef: UserRef): void {
 }
 
 function teardownConnection(): void {
+  transportResolution?.abort();
+  transportResolution = null;
   clearAuthRetryTimer();
   currentStatusCleanup?.();
   currentErrorCleanup?.();
@@ -311,10 +313,35 @@ async function replaceConnection(host: string): Promise<RunelinkConnection> {
   teardownConnection();
   replaceInProgress = true;
 
-  const connection = new RunelinkConnection(host, {
-    autoReconnect: true,
-    transportSecurity: getTransportSecurityMode(),
-  });
+  const resolution = new AbortController();
+  transportResolution = resolution;
+  let secure: boolean;
+  try {
+    secure = await resolveHostTransport(host, resolution.signal);
+  } catch (error) {
+    if (transportResolution === resolution) {
+      replaceInProgress = false;
+      useRunelinkConnectionStore.setState({
+        status: "disconnected",
+        lastError: error instanceof Error ? error.message : "Unable to connect",
+        connectedAccount: null,
+      });
+    }
+    throw error;
+  }
+  resolution.signal.throwIfAborted();
+  transportResolution = null;
+
+  // Explicit URL mode prevents the SDK from silently falling back to ws://.
+  // Browser WebSockets reject redirects during their handshake.
+  const connection = new RunelinkConnection(
+    getWsUrl(host, secure),
+    {
+      autoReconnect: true,
+      transportSecurity: "secure-only",
+    },
+    "url"
+  );
 
   currentConnection = connection;
   currentConnectionHost = host;
@@ -758,6 +785,7 @@ export function cancelPendingAuthentication(): void {
   if (!explicitAuthenticationInProgress) {
     return;
   }
+  transportResolution?.abort();
   currentConnection?.disconnect();
 }
 
@@ -784,9 +812,22 @@ async function syncConnectionToActiveAccount(): Promise<void> {
     currentConnectionHost !== activeAccount.host ||
     (currentConnectionAuthenticated && !connectionMatches(activeAccount));
 
-  const connection = await ensureSocketForHost(activeAccount.host, {
-    forceReplace: shouldReplaceConnection,
-  });
+  let connection: RunelinkConnection;
+  try {
+    connection = await ensureSocketForHost(activeAccount.host, {
+      forceReplace: shouldReplaceConnection,
+    });
+  } catch (error) {
+    if (
+      error instanceof HostUnreachableError &&
+      generation === syncGeneration &&
+      isActiveSession(activeAccount, activeAuth) &&
+      !explicitAuthenticationInProgress
+    ) {
+      scheduleAuthRetry(error.message);
+    }
+    return;
+  }
   if (generation !== syncGeneration || connection !== currentConnection) {
     return;
   }
