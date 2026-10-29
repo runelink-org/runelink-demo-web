@@ -23,7 +23,7 @@ type ChannelActionsMenuProps = {
   channel: ServerChannel;
   canDeleteChannel: boolean;
   onDeleteChannel: (channel: ServerChannel) => void;
-  onRename: (channel: ServerChannel) => void;
+  onEditChannel: (channel: ServerChannel) => void;
   // Passed for categories when the user can create channels
   onCreateChild?: (kind: ServerChannelKind) => void;
   className?: string;
@@ -68,12 +68,12 @@ export function ChannelActionsMenu({
   channel,
   canDeleteChannel,
   onDeleteChannel,
-  onRename,
+  onEditChannel,
   onCreateChild,
   className,
   forceVisible = false,
 }: ChannelActionsMenuProps) {
-  const renameOnCloseRef = useRef(false);
+  const editOnCloseRef = useRef(false);
   const isCategory = channel.kind === "category";
   const idLabel = isCategory ? "category ID" : "channel ID";
   return (
@@ -104,9 +104,9 @@ export function ChannelActionsMenu({
           sideOffset={contextMenu?.anchor ? 0 : 8}
           className="w-64"
           finalFocus={() => {
-            if (!renameOnCloseRef.current) return true;
-            renameOnCloseRef.current = false;
-            onRename(channel);
+            if (!editOnCloseRef.current) return true;
+            editOnCloseRef.current = false;
+            onEditChannel(channel);
             return false;
           }}
         >
@@ -137,11 +137,13 @@ export function ChannelActionsMenu({
             <DropdownMenuItem
               className="cursor-pointer gap-3 rounded-xl px-3 py-2"
               onClick={() => {
-                renameOnCloseRef.current = true;
+                editOnCloseRef.current = true;
               }}
             >
               <Pencil className="size-4" />
-              <span className="font-medium">Rename</span>
+              <span className="font-medium">
+                Edit {isCategory ? "category" : "channel"}
+              </span>
             </DropdownMenuItem>
           ) : null}
           <DropdownMenuItem

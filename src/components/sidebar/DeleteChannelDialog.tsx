@@ -1,3 +1,5 @@
+import { getAuthSessionSnapshot } from "@/lib/auth-session-bridge";
+import { sameUserRef } from "@/lib/account-storage";
 import type { ServerChannel } from "@runelink/sdk";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -32,14 +34,23 @@ export function DeleteChannelDialog({
       return;
     }
 
+    const account = getAuthSessionSnapshot().activeAccount;
+    if (!account) {
+      setError("Select an account before deleting a channel.");
+      return;
+    }
+    const isCurrentAccount = () =>
+      sameUserRef(account, getAuthSessionSnapshot().activeAccount);
     setIsDeleting(true);
     setError(null);
 
     try {
       await onDeleteChannel(channel);
+      if (!isCurrentAccount()) return;
       toast.success(`Deleted ${noun}: ${channel.title}`);
       onOpenChange(false);
     } catch (nextError) {
+      if (!isCurrentAccount()) return;
       toast.error(`Failed to delete ${noun}.`);
       setError(
         nextError instanceof Error

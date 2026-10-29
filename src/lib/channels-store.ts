@@ -1,3 +1,5 @@
+import { getAuthSessionSnapshot } from "./auth-session-bridge";
+import { sameUserRef } from "./account-storage";
 import { newestResource } from "./resource-version";
 import {
   type NewServerChannel,
@@ -270,6 +272,11 @@ export const useChannelsStore = create<ChannelsState>((set) => ({
   },
 
   async deleteChannel(serverId, channelId, targetHost = null) {
+    const account = getAuthSessionSnapshot().activeAccount;
+    if (!account)
+      throw new Error("Select an account before deleting a channel.");
+    const isCurrentAccount = () =>
+      sameUserRef(account, getAuthSessionSnapshot().activeAccount);
     set((state) => ({
       isLoadingByServerId: {
         ...state.isLoadingByServerId,
@@ -290,6 +297,7 @@ export const useChannelsStore = create<ChannelsState>((set) => ({
         },
       });
 
+      if (!isCurrentAccount()) return;
       set((state) => {
         const nextChannelById = { ...state.channelById };
         delete nextChannelById[channelId];
@@ -333,6 +341,7 @@ export const useChannelsStore = create<ChannelsState>((set) => ({
         };
       });
     } catch (error) {
+      if (!isCurrentAccount()) throw error;
       const message =
         error instanceof Error ? error.message : "Failed to delete channel";
       set((state) => ({

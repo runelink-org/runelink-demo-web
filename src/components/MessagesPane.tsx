@@ -1,4 +1,3 @@
-import { InlineChannelRename } from "@/components/sidebar/InlineChannelRename";
 import { formatMessagePreview } from "@/lib/message-preview";
 import type {
   ActiveMessage,
@@ -59,6 +58,7 @@ type MessagesPaneProps = {
   onDeleteChannel: (
     channel: ServerWithChannels["channels"][number]
   ) => Promise<void>;
+  onEditChannel: (channel: ServerChannel) => void;
   onDeleteMessage: (message: Message) => Promise<void>;
   // Shown beside the messages when passed, which App does on wide screens
   membersPane: ReactNode;
@@ -330,6 +330,7 @@ export function MessagesPane({
   onDeselectChannel,
   onSendMessage,
   onDeleteChannel,
+  onEditChannel,
   onDeleteMessage,
   membersPane,
   onOpenMembers,
@@ -341,11 +342,6 @@ export function MessagesPane({
     loadStoredMembersPaneWidth()
   );
   const isMembersPaneShown = !!membersPane && isMembersPaneOpen;
-  const [renamingChannel, setRenamingChannel] = useState<ServerChannel | null>(
-    null
-  );
-  if (renamingChannel && renamingChannel.id !== selectedChannel?.id)
-    setRenamingChannel(null);
   const [draft, setDraft] = useState("");
   const [replySelection, setReplySelection] = useState<{
     channelKey: string | null;
@@ -690,19 +686,9 @@ export function MessagesPane({
                   <ArrowLeft className="size-4" />
                 </Button>
                 <Hash className="size-5 shrink-0 text-muted-foreground" />
-                {renamingChannel ? (
-                  <InlineChannelRename
-                    key={renamingChannel.id}
-                    channel={renamingChannel}
-                    host={selectedServer.server.host}
-                    className="h-7 text-xl font-semibold md:text-xl"
-                    onClose={() => setRenamingChannel(null)}
-                  />
-                ) : (
-                  <h1 className="truncate text-xl font-semibold text-foreground">
-                    {selectedChannel.title}
-                  </h1>
-                )}
+                <h1 className="truncate text-xl font-semibold text-foreground">
+                  {selectedChannel.title}
+                </h1>
               </div>
 
               <div className="flex shrink-0 items-center gap-1">
@@ -725,20 +711,18 @@ export function MessagesPane({
                     <Users className="size-4" />
                   </Button>
                 )}
-                {!renamingChannel ? (
-                  <div className="sm:hidden">
-                    <ChannelActionsMenu
-                      host={selectedServer.server.host}
-                      channel={selectedChannel}
-                      canDeleteChannel={canDeleteChannel}
-                      forceVisible
-                      onRename={setRenamingChannel}
-                      onDeleteChannel={(channel) => {
-                        void onDeleteChannel(channel);
-                      }}
-                    />
-                  </div>
-                ) : null}
+                <div className="sm:hidden">
+                  <ChannelActionsMenu
+                    host={selectedServer.server.host}
+                    channel={selectedChannel}
+                    canDeleteChannel={canDeleteChannel}
+                    forceVisible
+                    onEditChannel={onEditChannel}
+                    onDeleteChannel={(channel) => {
+                      void onDeleteChannel(channel);
+                    }}
+                  />
+                </div>
               </div>
             </div>
           ) : (
