@@ -1,5 +1,5 @@
 import type { Message } from "@runelink/sdk";
-import { useState } from "react";
+import { useRef, useState, type RefObject } from "react";
 import { toast } from "sonner";
 import {
   AlertDialog,
@@ -16,13 +16,17 @@ type DeleteMessageDialogProps = {
   message: Message | null;
   onOpenChange: (open: boolean) => void;
   onDeleteMessage: (message: Message) => Promise<void>;
+  composerRef: RefObject<HTMLTextAreaElement | null>;
 };
 
 export function DeleteMessageDialog({
   message,
   onOpenChange,
   onDeleteMessage,
+  composerRef,
 }: DeleteMessageDialogProps) {
+  const deleteButtonRef = useRef<HTMLButtonElement>(null);
+  const deletedRef = useRef(false);
   const [error, setError] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
@@ -36,6 +40,7 @@ export function DeleteMessageDialog({
 
     try {
       await onDeleteMessage(message);
+      deletedRef.current = true;
       toast.success("Deleted message.");
       onOpenChange(false);
     } catch (nextError) {
@@ -60,7 +65,15 @@ export function DeleteMessageDialog({
         }
       }}
     >
-      <AlertDialogContent size="sm">
+      <AlertDialogContent
+        size="sm"
+        initialFocus={deleteButtonRef}
+        finalFocus={() => {
+          if (!deletedRef.current) return true;
+          deletedRef.current = false;
+          return composerRef.current;
+        }}
+      >
         <AlertDialogHeader>
           <AlertDialogTitle>Delete Message?</AlertDialogTitle>
           <AlertDialogDescription>
@@ -76,7 +89,7 @@ export function DeleteMessageDialog({
           <AlertDialogAction
             type="button"
             variant="destructive"
-            autoFocus
+            ref={deleteButtonRef}
             disabled={isDeleting}
             onClick={() => {
               void handleConfirm();

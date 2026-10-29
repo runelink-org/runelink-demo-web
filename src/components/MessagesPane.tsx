@@ -214,6 +214,7 @@ function MessageList({
   host,
   messages,
   scrollContainerRef,
+  composerRef,
   onScroll,
   activeAccount,
   canModerateMessages,
@@ -226,6 +227,7 @@ function MessageList({
   host: string;
   messages: Message[];
   scrollContainerRef: RefObject<HTMLDivElement | null>;
+  composerRef: RefObject<HTMLTextAreaElement | null>;
   onScroll: () => void;
   activeAccount: UserRef | null;
   canModerateMessages: boolean;
@@ -313,6 +315,7 @@ function MessageList({
         })}
       </div>
       <DeleteMessageDialog
+        composerRef={composerRef}
         message={messagePendingDelete}
         onOpenChange={(open) => {
           if (!open) {
@@ -879,6 +882,7 @@ export function MessagesPane({
               host={selectedServer.server.host}
               messages={selectedMessages}
               scrollContainerRef={scrollContainerRef}
+              composerRef={textareaRef}
               onScroll={handleMessagesScroll}
               activeAccount={activeAccount}
               canModerateMessages={canModerateMessages}
@@ -891,7 +895,11 @@ export function MessagesPane({
               onCancelEdit={() =>
                 textareaRef.current?.focus({ preventScroll: true })
               }
-              onDeleteMessage={onDeleteMessage}
+              onDeleteMessage={async (message) => {
+                await onDeleteMessage(message);
+                if (editingMessage?.id === message.id) setEditSelection(null);
+                textareaRef.current?.focus({ preventScroll: true });
+              }}
               onReply={(message) => {
                 setReplySelection({
                   channelKey: selectedChannelKey,

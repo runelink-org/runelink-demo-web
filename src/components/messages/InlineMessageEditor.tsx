@@ -16,10 +16,12 @@ export function InlineMessageEditor({
   message,
   host,
   onClose,
+  onDelete,
 }: {
   message: ActiveMessage;
   host: string;
   onClose: (reason: "cancel" | "saved") => void;
+  onDelete: () => void;
 }) {
   const [body, setBody] = useState(message.body);
   const [error, setError] = useState<string | null>(null);
@@ -27,12 +29,16 @@ export function InlineMessageEditor({
   const [account] = useState(() => getActiveAccount(useAuthStore.getState()));
 
   async function save() {
-    if (!account || isSaving || !body.trim()) return;
+    if (!account || isSaving) return;
     const active = getActiveAccount(useAuthStore.getState());
     if (active?.name !== account.name || active?.host !== account.host) {
       setError(
         "The active account changed. Cancel and reopen the editor to try again."
       );
+      return;
+    }
+    if (!body.trim()) {
+      onDelete();
       return;
     }
     setIsSaving(true);
@@ -113,7 +119,7 @@ export function InlineMessageEditor({
           type="submit"
           variant="link"
           className="h-auto p-0 text-xs"
-          disabled={isSaving || !body.trim()}
+          disabled={isSaving}
         >
           {isSaving ? "saving..." : "save"}
         </Button>
