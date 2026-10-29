@@ -1,3 +1,4 @@
+import { compareResourceVersions } from "./resource-version";
 import { mergeMessages } from "./message-cache";
 import type {
   FullServerMembership,
@@ -463,6 +464,10 @@ function handleMembershipDeleted(serverId: string, userRef: UserRef): void {
 }
 
 function handleServerUpsert(server: Server): void {
+  const previous =
+    useServersStore.getState().serverById[server.id] ??
+    useServersStore.getState().serverWithChannelsById[server.id]?.server;
+  if (previous && compareResourceVersions(previous, server) > 0) return;
   if (!isLoadedServer(server.id)) {
     return;
   }

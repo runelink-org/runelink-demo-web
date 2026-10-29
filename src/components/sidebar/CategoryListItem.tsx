@@ -1,3 +1,5 @@
+import { useState } from "react";
+import { InlineChannelRename } from "./InlineChannelRename";
 import type { ServerChannel, ServerChannelKind } from "@runelink/sdk";
 import { ChevronDown, ChevronRight } from "lucide-react";
 import { ChannelActionsMenu } from "@/components/sidebar/ChannelActionsMenu";
@@ -23,35 +25,64 @@ export function CategoryListItem({
   onCreateChild,
   onDeleteChannel,
 }: CategoryListItemProps) {
+  const [renaming, setRenaming] = useState<ServerChannel | null>(null);
   // Cancel the long press as soon as the tree starts a drag at 5px.
   const contextMenu = useContextActionsMenu(5);
   const Chevron = isCollapsed ? ChevronRight : ChevronDown;
 
   return (
-    <div {...contextMenu.targetProps} className="group relative rounded-xl">
-      <button
-        type="button"
-        className={cn(
-          "flex w-full min-w-0 cursor-pointer items-center gap-1.5 rounded-xl px-2 pt-3 pb-1.5 text-left group-hover:pr-10 group-has-[[data-slot=dropdown-menu-trigger]:focus-visible]:pr-10",
-          "text-sm font-medium text-sidebar-foreground/60 transition-colors hover:text-sidebar-foreground",
-          "focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:outline-none"
-        )}
-        aria-expanded={!isCollapsed}
-        onClick={onToggleCollapsed}
-      >
-        <Chevron className="size-3.5 shrink-0" />
-        <span className="truncate">{channel.title}</span>
-      </button>
-
-      <ChannelActionsMenu
-        contextMenu={contextMenu}
-        host={host}
-        channel={channel}
-        canDeleteChannel={canManageChannels}
-        className="absolute right-2 bottom-0"
-        onDeleteChannel={onDeleteChannel}
-        onCreateChild={canManageChannels ? onCreateChild : undefined}
-      />
+    <div
+      {...(renaming ? {} : contextMenu.targetProps)}
+      data-channel-renaming={renaming ? "" : undefined}
+      onContextMenu={(event) => {
+        if (renaming) event.stopPropagation();
+        else contextMenu.targetProps.onContextMenu?.(event);
+      }}
+      onTouchStart={(event) => {
+        if (renaming) event.stopPropagation();
+        else contextMenu.targetProps.onTouchStart?.(event);
+      }}
+      className={cn(
+        "group relative rounded-xl hover:bg-primary/6 dark:hover:bg-muted/60",
+        renaming && "bg-primary/6 dark:bg-muted/60"
+      )}
+    >
+      {renaming ? (
+        <div className="flex min-w-0 items-center gap-1.5 px-2 pt-3 pb-1.5 text-sidebar-foreground">
+          <Chevron className="size-3.5 shrink-0" />
+          <InlineChannelRename
+            channel={renaming}
+            host={host}
+            onClose={() => setRenaming(null)}
+          />
+        </div>
+      ) : (
+        <button
+          type="button"
+          className={cn(
+            "flex w-full min-w-0 cursor-pointer items-center gap-1.5 rounded-xl px-2 pt-3 pb-1.5 text-left group-hover:pr-10 group-has-[[data-slot=dropdown-menu-trigger]:focus-visible]:pr-10",
+            "text-sm font-medium text-sidebar-foreground/60 transition-colors hover:text-sidebar-foreground",
+            "focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:outline-none"
+          )}
+          aria-expanded={!isCollapsed}
+          onClick={onToggleCollapsed}
+        >
+          <Chevron className="size-3.5 shrink-0" />
+          <span className="truncate">{channel.title}</span>
+        </button>
+      )}
+      {!renaming ? (
+        <ChannelActionsMenu
+          contextMenu={contextMenu}
+          host={host}
+          channel={channel}
+          canDeleteChannel={canManageChannels}
+          className="absolute right-2 bottom-0"
+          onDeleteChannel={onDeleteChannel}
+          onRename={setRenaming}
+          onCreateChild={canManageChannels ? onCreateChild : undefined}
+        />
+      ) : null}
     </div>
   );
 }

@@ -1,6 +1,7 @@
+import { getActiveAccount, useAuthStore } from "@/lib/auth-store";
 import type { ActiveMessage } from "@runelink/sdk";
 import { useRef, type ComponentProps } from "react";
-import { Copy, Ellipsis, Reply, Trash2 } from "lucide-react";
+import { Copy, Ellipsis, Pencil, Reply, Trash2 } from "lucide-react";
 import { CopyOtherSubmenu } from "@/components/CopyOtherSubmenu";
 import {
   DropdownMenuContent,
@@ -17,6 +18,7 @@ type MessageActionsMenuProps = {
   message: ActiveMessage;
   canDeleteMessage: boolean;
   onReply: (message: ActiveMessage) => void;
+  onEdit: (message: ActiveMessage) => void;
   onDeleteMessage: (message: ActiveMessage) => void;
 };
 
@@ -26,9 +28,15 @@ export function MessageActionsMenu({
   message,
   canDeleteMessage,
   onReply,
+  onEdit,
   onDeleteMessage,
 }: MessageActionsMenuProps) {
-  const replyOnCloseRef = useRef(false);
+  const activeAccount = useAuthStore(getActiveAccount);
+  const canEdit =
+    !!message.author &&
+    message.author.name === activeAccount?.name &&
+    message.author.host === activeAccount?.host;
+  const actionOnCloseRef = useRef<"reply" | "edit" | null>(null);
 
   return (
     <>
@@ -54,16 +62,28 @@ export function MessageActionsMenu({
         sideOffset={anchor ? 0 : 8}
         className="w-52"
         finalFocus={() => {
-          if (!replyOnCloseRef.current) return true;
-          replyOnCloseRef.current = false;
-          onReply(message);
-          return false;
+          const action = actionOnCloseRef.current;
+          actionOnCloseRef.current = null;
+          if (action === "edit") onEdit(message);
+          else if (action === "reply") onReply(message);
+          return action === null;
         }}
       >
+        {canEdit ? (
+          <DropdownMenuItem
+            className="cursor-pointer gap-3 rounded-xl px-3 py-2"
+            onClick={() => {
+              actionOnCloseRef.current = "edit";
+            }}
+          >
+            <Pencil className="size-4" />
+            <span className="font-medium">Edit message</span>
+          </DropdownMenuItem>
+        ) : null}
         <DropdownMenuItem
           className="cursor-pointer gap-3 rounded-xl px-3 py-2"
           onClick={() => {
-            replyOnCloseRef.current = true;
+            actionOnCloseRef.current = "reply";
           }}
         >
           <Reply className="size-4" />
