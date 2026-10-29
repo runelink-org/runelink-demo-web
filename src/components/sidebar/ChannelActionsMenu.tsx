@@ -1,5 +1,6 @@
+import { useRef } from "react";
 import type { ServerChannel, ServerChannelKind } from "@runelink/sdk";
-import { Copy, Ellipsis, FolderPlus, Hash, Trash2 } from "lucide-react";
+import { Copy, Ellipsis, FolderPlus, Hash, Pencil, Trash2 } from "lucide-react";
 import {
   CopyOtherSubmenu,
   type CopyOption,
@@ -22,6 +23,7 @@ type ChannelActionsMenuProps = {
   channel: ServerChannel;
   canDeleteChannel: boolean;
   onDeleteChannel: (channel: ServerChannel) => void;
+  onRename: (channel: ServerChannel) => void;
   // Passed for categories when the user can create channels
   onCreateChild?: (kind: ServerChannelKind) => void;
   className?: string;
@@ -66,93 +68,114 @@ export function ChannelActionsMenu({
   channel,
   canDeleteChannel,
   onDeleteChannel,
+  onRename,
   onCreateChild,
   className,
   forceVisible = false,
 }: ChannelActionsMenuProps) {
+  const renameOnCloseRef = useRef(false);
   const isCategory = channel.kind === "category";
   const idLabel = isCategory ? "category ID" : "channel ID";
   return (
-    <DropdownMenu {...contextMenu?.menuProps}>
-      <DropdownMenuTrigger
-        render={
-          <button
-            type="button"
-            className={cn(
-              "flex size-8 shrink-0 cursor-pointer items-center justify-center rounded-xl text-sidebar-foreground/55 transition",
-              forceVisible
-                ? "opacity-100"
-                : "opacity-0 group-hover:opacity-100",
-              "hover:bg-sidebar-accent hover:text-sidebar-foreground focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40",
-              className
-            )}
-            aria-label={`Open ${channel.title} menu`}
-          />
-        }
-      >
-        <Ellipsis className="size-4" />
-      </DropdownMenuTrigger>
-      <DropdownMenuContent
-        anchor={contextMenu?.anchor}
-        align={contextMenu?.anchor ? "start" : "end"}
-        side="bottom"
-        sideOffset={contextMenu?.anchor ? 0 : 8}
-        className="w-64"
-      >
-        {onCreateChild ? (
-          <>
-            <DropdownMenuItem
-              className="cursor-pointer gap-3 rounded-xl px-3 py-2"
-              onClick={() => {
-                onCreateChild("text");
-              }}
-            >
-              <Hash className="size-4" />
-              <span className="font-medium">Create channel</span>
-            </DropdownMenuItem>
-            <DropdownMenuItem
-              className="cursor-pointer gap-3 rounded-xl px-3 py-2"
-              onClick={() => {
-                onCreateChild("category");
-              }}
-            >
-              <FolderPlus className="size-4" />
-              <span className="font-medium">Create category</span>
-            </DropdownMenuItem>
-            <DropdownMenuSeparator />
-          </>
-        ) : null}
-        <DropdownMenuItem
-          className="cursor-pointer gap-3 rounded-xl px-3 py-2"
-          onClick={() => {
-            void copyToClipboard(
-              channel.id,
-              `Copied ${idLabel}: ${channel.id}`
-            );
+    <>
+      <DropdownMenu {...contextMenu?.menuProps}>
+        <DropdownMenuTrigger
+          render={
+            <button
+              type="button"
+              className={cn(
+                "flex size-8 shrink-0 cursor-pointer items-center justify-center rounded-xl text-sidebar-foreground/55 transition",
+                forceVisible
+                  ? "opacity-100"
+                  : "opacity-0 group-hover:opacity-100",
+                "hover:bg-sidebar-accent hover:text-sidebar-foreground focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40",
+                className
+              )}
+              aria-label={`Open ${channel.title} menu`}
+            />
+          }
+        >
+          <Ellipsis className="size-4" />
+        </DropdownMenuTrigger>
+        <DropdownMenuContent
+          anchor={contextMenu?.anchor}
+          align={contextMenu?.anchor ? "start" : "end"}
+          side="bottom"
+          sideOffset={contextMenu?.anchor ? 0 : 8}
+          className="w-64"
+          finalFocus={() => {
+            if (!renameOnCloseRef.current) return true;
+            renameOnCloseRef.current = false;
+            onRename(channel);
+            return false;
           }}
         >
-          <Copy className="size-4" />
-          <span className="font-medium">Copy {idLabel}</span>
-        </DropdownMenuItem>
-        <CopyOtherSubmenu options={getCopyOptions(host, channel)} />
-        <DropdownMenuItem
-          variant="destructive"
-          disabled={!canDeleteChannel}
-          className="cursor-pointer gap-3 rounded-xl px-3 py-2"
-          onClick={() => {
-            if (!canDeleteChannel) {
-              return;
-            }
+          {onCreateChild ? (
+            <>
+              <DropdownMenuItem
+                className="cursor-pointer gap-3 rounded-xl px-3 py-2"
+                onClick={() => {
+                  onCreateChild("text");
+                }}
+              >
+                <Hash className="size-4" />
+                <span className="font-medium">Create channel</span>
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                className="cursor-pointer gap-3 rounded-xl px-3 py-2"
+                onClick={() => {
+                  onCreateChild("category");
+                }}
+              >
+                <FolderPlus className="size-4" />
+                <span className="font-medium">Create category</span>
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+            </>
+          ) : null}
+          {canDeleteChannel ? (
+            <DropdownMenuItem
+              className="cursor-pointer gap-3 rounded-xl px-3 py-2"
+              onClick={() => {
+                renameOnCloseRef.current = true;
+              }}
+            >
+              <Pencil className="size-4" />
+              <span className="font-medium">Rename</span>
+            </DropdownMenuItem>
+          ) : null}
+          <DropdownMenuItem
+            className="cursor-pointer gap-3 rounded-xl px-3 py-2"
+            onClick={() => {
+              void copyToClipboard(
+                channel.id,
+                `Copied ${idLabel}: ${channel.id}`
+              );
+            }}
+          >
+            <Copy className="size-4" />
+            <span className="font-medium">Copy {idLabel}</span>
+          </DropdownMenuItem>
+          <CopyOtherSubmenu options={getCopyOptions(host, channel)} />
+          <DropdownMenuItem
+            variant="destructive"
+            disabled={!canDeleteChannel}
+            className="cursor-pointer gap-3 rounded-xl px-3 py-2"
+            onClick={() => {
+              if (!canDeleteChannel) {
+                return;
+              }
 
-            onDeleteChannel(channel);
-          }}
-        >
-          <Trash2 className="size-4" />
-          <span className="font-medium">
-            {isCategory ? "Delete category" : "Delete channel"}
-          </span>
-        </DropdownMenuItem>
-      </DropdownMenuContent>
-    </DropdownMenu>
+              onDeleteChannel(channel);
+            }}
+          >
+            <Trash2 className="size-4" />
+            <span className="font-medium">
+              {isCategory ? "Delete category" : "Delete channel"}
+            </span>
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+    </>
   );
 }

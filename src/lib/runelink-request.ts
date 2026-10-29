@@ -33,17 +33,20 @@ type ExpectedReplyTypeByRequestType = {
   memberships_get_by_user_and_server: "memberships_get_by_user_and_server";
   memberships_upsert: "memberships_upsert";
   memberships_delete: "memberships_delete";
+  servers_update: "servers_update";
   servers_create: "servers_create";
   servers_get_all: "servers_get_all";
   servers_get_by_id: "servers_get_by_id";
   servers_get_with_channels: "servers_get_with_channels";
   servers_delete: "servers_delete";
+  channels_update: "channels_update";
   channels_create: "channels_create";
   channels_get_all: "channels_get_all";
   channels_get_by_server: "channels_get_by_server";
   channels_get_by_id: "channels_get_by_id";
   channels_delete: "channels_delete";
   channels_move: "channels_move";
+  messages_update: "messages_update";
   messages_create: "messages_create";
   messages_get_all: "messages_get_all";
   messages_get_by_server: "messages_get_by_server";
@@ -73,17 +76,20 @@ const expectedReplyTypeByRequestType = {
   memberships_get_by_user_and_server: "memberships_get_by_user_and_server",
   memberships_upsert: "memberships_upsert",
   memberships_delete: "memberships_delete",
+  servers_update: "servers_update",
   servers_create: "servers_create",
   servers_get_all: "servers_get_all",
   servers_get_by_id: "servers_get_by_id",
   servers_get_with_channels: "servers_get_with_channels",
   servers_delete: "servers_delete",
+  channels_update: "channels_update",
   channels_create: "channels_create",
   channels_get_all: "channels_get_all",
   channels_get_by_server: "channels_get_by_server",
   channels_get_by_id: "channels_get_by_id",
   channels_delete: "channels_delete",
   channels_move: "channels_move",
+  messages_update: "messages_update",
   messages_create: "messages_create",
   messages_get_all: "messages_get_all",
   messages_get_by_server: "messages_get_by_server",

@@ -648,8 +648,9 @@ async function waitForAuthenticatedConnection(): Promise<RunelinkConnection> {
 }
 
 export async function requestRunelink(message: WsRequest): Promise<WsReply> {
+  const generation = syncGeneration;
   const connection = await waitForAuthenticatedConnection();
-  if (connection !== currentConnection) {
+  if (generation !== syncGeneration || connection !== currentConnection) {
     throw new Error("RuneLink connection changed before request could be sent");
   }
   return connection.send(message);

@@ -1,3 +1,5 @@
+import { newestResource } from "./resource-version";
+import { newestChannels } from "./channels-store";
 import {
   type NewServer,
   type Server,
@@ -65,19 +67,24 @@ export const useServersStore = create<ServersState>((set) => ({
         data: { target_host: targetHost },
       });
 
-      const serverById = Object.fromEntries(
-        reply.data.map((server) => [server.id, server])
-      );
-
-      set((state) => ({
-        servers: reply.data,
-        serverById: {
-          ...state.serverById,
-          ...serverById,
-        },
-        isLoading: false,
-        error: null,
-      }));
+      set((state) => {
+        const servers = reply.data.map((server) =>
+          newestResource(
+            server,
+            state.serverById[server.id] ??
+              state.serverWithChannelsById[server.id]?.server
+          )
+        );
+        return {
+          servers,
+          serverById: {
+            ...state.serverById,
+            ...Object.fromEntries(servers.map((server) => [server.id, server])),
+          },
+          isLoading: false,
+          error: null,
+        };
+      });
 
       return reply.data;
     } catch (error) {
@@ -100,15 +107,19 @@ export const useServersStore = create<ServersState>((set) => ({
         },
       });
 
-      set((state) => ({
-        servers: upsertServer(state.servers, reply.data),
-        serverById: {
-          ...state.serverById,
-          [reply.data.id]: reply.data,
-        },
-        isLoading: false,
-        error: null,
-      }));
+      set((state) => {
+        const server = newestResource(
+          reply.data,
+          state.serverById[reply.data.id] ??
+            state.serverWithChannelsById[reply.data.id]?.server
+        );
+        return {
+          servers: upsertServer(state.servers, server),
+          serverById: { ...state.serverById, [server.id]: server },
+          isLoading: false,
+          error: null,
+        };
+      });
 
       return reply.data;
     } catch (error) {
@@ -131,19 +142,24 @@ export const useServersStore = create<ServersState>((set) => ({
         },
       });
 
-      set((state) => ({
-        servers: upsertServer(state.servers, reply.data.server),
-        serverById: {
-          ...state.serverById,
-          [reply.data.server.id]: reply.data.server,
-        },
-        serverWithChannelsById: {
-          ...state.serverWithChannelsById,
-          [reply.data.server.id]: reply.data,
-        },
-        isLoading: false,
-        error: null,
-      }));
+      set((state) => {
+        const previous = state.serverWithChannelsById[serverId];
+        const server = newestResource(
+          reply.data.server,
+          state.serverById[serverId] ?? previous?.server
+        );
+        const channels = newestChannels(reply.data.channels);
+        return {
+          servers: upsertServer(state.servers, server),
+          serverById: { ...state.serverById, [serverId]: server },
+          serverWithChannelsById: {
+            ...state.serverWithChannelsById,
+            [serverId]: { server, channels },
+          },
+          isLoading: false,
+          error: null,
+        };
+      });
 
       return reply.data;
     } catch (error) {
@@ -168,15 +184,19 @@ export const useServersStore = create<ServersState>((set) => ({
         },
       });
 
-      set((state) => ({
-        servers: upsertServer(state.servers, reply.data),
-        serverById: {
-          ...state.serverById,
-          [reply.data.id]: reply.data,
-        },
-        isLoading: false,
-        error: null,
-      }));
+      set((state) => {
+        const server = newestResource(
+          reply.data,
+          state.serverById[reply.data.id] ??
+            state.serverWithChannelsById[reply.data.id]?.server
+        );
+        return {
+          servers: upsertServer(state.servers, server),
+          serverById: { ...state.serverById, [server.id]: server },
+          isLoading: false,
+          error: null,
+        };
+      });
 
       return reply.data;
     } catch (error) {

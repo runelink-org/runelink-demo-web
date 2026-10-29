@@ -1,3 +1,4 @@
+import { newestResource } from "./resource-version";
 import {
   type NewServerChannel,
   type ServerChannel,
@@ -77,6 +78,19 @@ function removeChannel(
   return channels.filter((channel) => channel.id !== channelId);
 }
 
+export function newestChannels(channels: ServerChannel[]): ServerChannel[] {
+  const byId = useChannelsStore.getState().channelById;
+  const servers = useServersStore.getState().serverWithChannelsById;
+  return channels.map((channel) =>
+    newestResource(
+      newestResource(channel, byId[channel.id]),
+      servers[channel.server_id]?.channels.find(
+        (cached) => cached.id === channel.id
+      )
+    )
+  );
+}
+
 function groupChannelsByServer(
   channels: ServerChannel[]
 ): Record<string, ServerChannel[]> {
@@ -99,9 +113,10 @@ export const useChannelsStore = create<ChannelsState>((set) => ({
         data: { target_host: targetHost },
       });
 
-      const groupedChannels = groupChannelsByServer(reply.data);
+      const channels = newestChannels(reply.data);
+      const groupedChannels = groupChannelsByServer(channels);
       const channelById = Object.fromEntries(
-        reply.data.map((channel) => [channel.id, channel])
+        channels.map((channel) => [channel.id, channel])
       );
 
       set((state) => ({
@@ -147,14 +162,15 @@ export const useChannelsStore = create<ChannelsState>((set) => ({
         },
       });
 
+      const channels = newestChannels(reply.data);
       const channelById = Object.fromEntries(
-        reply.data.map((channel) => [channel.id, channel])
+        channels.map((channel) => [channel.id, channel])
       );
 
       set((state) => ({
         channelsByServerId: {
           ...state.channelsByServerId,
-          [serverId]: reply.data,
+          [serverId]: channels,
         },
         channelById: {
           ...state.channelById,
@@ -212,17 +228,18 @@ export const useChannelsStore = create<ChannelsState>((set) => ({
         },
       });
 
+      const channel = newestChannels([reply.data])[0];
       set((state) => ({
         channelsByServerId: {
           ...state.channelsByServerId,
           [serverId]: upsertChannel(
             state.channelsByServerId[serverId] ?? [],
-            reply.data
+            channel
           ),
         },
         channelById: {
           ...state.channelById,
-          [reply.data.id]: reply.data,
+          [channel.id]: channel,
         },
         isLoadingByServerId: {
           ...state.isLoadingByServerId,
@@ -356,6 +373,7 @@ export function applyChannelUpserts(
   serverId: ServerId,
   channels: ServerChannel[]
 ): void {
+  channels = newestChannels(channels);
   useChannelsStore.setState((state) => ({
     channelsByServerId: {
       ...state.channelsByServerId,

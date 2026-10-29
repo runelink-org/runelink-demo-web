@@ -176,7 +176,9 @@ export function ChannelSection({
       !canManageChannels ||
       event.button !== 0 ||
       // Pressing the actions menu opens it rather than dragging
-      (event.target as Element).closest("[aria-haspopup]")
+      (event.target as Element).closest(
+        "[aria-haspopup], [data-channel-renaming]"
+      )
     ) {
       return;
     }

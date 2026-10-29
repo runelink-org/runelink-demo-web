@@ -1,3 +1,6 @@
+import { useState } from "react";
+import { InlineMessageEditor } from "./InlineMessageEditor";
+import { cn } from "@/lib/utils";
 import { useContextActionsMenu } from "@/lib/use-context-actions-menu";
 import { DropdownMenu } from "@/components/ui/dropdown-menu";
 import { formatMessagePreview } from "@/lib/message-preview";
@@ -35,6 +38,7 @@ export function MessageListItem({
   onJumpToMessage,
   onDeleteMessage,
 }: MessageListItemProps) {
+  const [editing, setEditing] = useState<ActiveMessage | null>(null);
   const contextMenu = useContextActionsMenu();
   const isOneLine = !message.body.includes("\n");
 
@@ -44,8 +48,11 @@ export function MessageListItem({
         <article
           id={`message-${message.id}`}
           tabIndex={-1}
-          {...contextMenu.targetProps}
-          className="group relative rounded-2xl border border-transparent px-3 py-1.5 pr-9 transition-colors hover:bg-muted"
+          {...(editing ? {} : contextMenu.targetProps)}
+          className={cn(
+            "group relative rounded-2xl border border-transparent px-3 py-1.5 pr-9 transition-colors hover:bg-muted",
+            editing && "bg-muted pr-3"
+          )}
         >
           {message.reply_to ? (
             <div className="relative mb-1 flex h-5 min-w-0 items-center gap-2 pl-[52px] text-xs text-muted-foreground">
@@ -84,22 +91,25 @@ export function MessageListItem({
               )}
             </div>
           ) : null}
-          <div
-            className={`absolute right-1 z-10 flex w-8 justify-end ${
-              isCompact && isOneLine
-                ? "inset-y-0 items-center"
-                : "top-1.5 h-8 items-start"
-            }`}
-          >
-            <MessageActionsMenu
-              anchor={contextMenu.anchor}
-              host={host}
-              message={message}
-              canDeleteMessage={canDeleteMessage}
-              onDeleteMessage={onDeleteMessage}
-              onReply={onReply}
-            />
-          </div>
+          {!editing ? (
+            <div
+              className={`absolute right-1 z-10 flex w-8 justify-end ${
+                isCompact && isOneLine
+                  ? "inset-y-0 items-center"
+                  : "top-1.5 h-8 items-start"
+              }`}
+            >
+              <MessageActionsMenu
+                anchor={contextMenu.anchor}
+                host={host}
+                message={message}
+                canDeleteMessage={canDeleteMessage}
+                onDeleteMessage={onDeleteMessage}
+                onReply={onReply}
+                onEdit={setEditing}
+              />
+            </div>
+          ) : null}
           <div className="flex items-start gap-3">
             {isCompact ? (
               <div className="flex w-10 shrink-0 cursor-text select-text items-center justify-end self-stretch whitespace-nowrap text-[10px] text-muted-foreground/90 opacity-0 transition group-hover:opacity-100">
@@ -147,13 +157,35 @@ export function MessageListItem({
                   </span>
                 </div>
               ) : null}
-              <p
-                className={`whitespace-pre-wrap break-words text-sm leading-6 text-foreground/90 ${
-                  isCompact ? "" : "mt-1"
-                }`}
-              >
-                {message.body}
-              </p>
+              {editing ? (
+                <InlineMessageEditor
+                  message={editing}
+                  host={host}
+                  onClose={(reason) => {
+                    setEditing(null);
+                    if (reason === "cancel")
+                      document
+                        .getElementById(`message-${message.id}`)
+                        ?.focus({ preventScroll: true });
+                  }}
+                />
+              ) : (
+                <p
+                  className={`whitespace-pre-wrap break-words text-sm leading-6 text-foreground/90 ${
+                    isCompact ? "" : "mt-1"
+                  }`}
+                >
+                  {message.body}
+                  {message.edited_at ? (
+                    <span
+                      className="ml-2 text-xs text-muted-foreground"
+                      title={`Edited ${message.edited_at.toLocaleString()}`}
+                    >
+                      (edited)
+                    </span>
+                  ) : null}
+                </p>
+              )}
             </div>
           </div>
         </article>
