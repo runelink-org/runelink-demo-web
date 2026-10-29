@@ -165,6 +165,7 @@ export function MessageListItem({
                 <InlineMessageEditor
                   message={editing}
                   host={host}
+                  onDelete={() => onDeleteMessage(message)}
                   onClose={(reason) => {
                     onEdit(null);
                     if (reason === "cancel") onCancelEdit();

@@ -36,7 +36,7 @@ export function MessageActionsMenu({
     !!message.author &&
     message.author.name === activeAccount?.name &&
     message.author.host === activeAccount?.host;
-  const actionOnCloseRef = useRef<"reply" | "edit" | null>(null);
+  const actionOnCloseRef = useRef<"reply" | "edit" | "delete" | null>(null);
 
   return (
     <>
@@ -66,6 +66,7 @@ export function MessageActionsMenu({
           actionOnCloseRef.current = null;
           if (action === "edit") onEdit(message);
           else if (action === "reply") onReply(message);
+          else if (action === "delete") onDeleteMessage(message);
           return action === null;
         }}
       >
@@ -121,7 +122,7 @@ export function MessageActionsMenu({
               return;
             }
 
-            onDeleteMessage(message);
+            actionOnCloseRef.current = "delete";
           }}
         >
           <Trash2 className="size-4" />
