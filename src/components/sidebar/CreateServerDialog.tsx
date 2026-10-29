@@ -1,3 +1,4 @@
+import { useIsMounted } from "@/lib/use-is-mounted";
 import { useEffect, useRef, useState } from "react";
 import {
   AlertDialog,
@@ -24,26 +25,32 @@ type CreateServerDialogProps = {
   ) => Promise<void>;
 };
 
-export function CreateServerDialog({
+export function CreateServerDialog(props: CreateServerDialogProps) {
+  return (
+    <AlertDialog open={props.open} onOpenChange={props.onOpenChange}>
+      <AlertDialogContent>
+        <CreateServerDialogForm
+          key={`${props.open}:${props.activeHost}`}
+          {...props}
+        />
+      </AlertDialogContent>
+    </AlertDialog>
+  );
+}
+
+function CreateServerDialogForm({
   activeHost,
   open,
   onOpenChange,
   onCreateServer,
 }: CreateServerDialogProps) {
+  const isMounted = useIsMounted();
   const [host, setHost] = useState(activeHost ?? "");
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [isCreating, setIsCreating] = useState(false);
   const titleInputRef = useRef<HTMLInputElement | null>(null);
-
-  useEffect(() => {
-    if (!open) {
-      return;
-    }
-
-    setHost(activeHost ?? "");
-  }, [activeHost, open]);
 
   useEffect(() => {
     if (!open) {
@@ -80,89 +87,72 @@ export function CreateServerDialog({
 
     try {
       await onCreateServer(nextHost, nextTitle, description);
-      setHost(activeHost ?? "");
-      setTitle("");
-      setDescription("");
-      onOpenChange(false);
+      if (isMounted()) onOpenChange(false);
     } catch (nextError) {
+      if (!isMounted()) return;
       setError(
         nextError instanceof Error
           ? nextError.message
           : "Failed to create server"
       );
     } finally {
-      setIsCreating(false);
-    }
-  }
-
-  function handleOpenChange(nextOpen: boolean) {
-    onOpenChange(nextOpen);
-
-    if (!nextOpen) {
-      setError(null);
-      setHost(activeHost ?? "");
-      setTitle("");
-      setDescription("");
+      if (isMounted()) setIsCreating(false);
     }
   }
 
   return (
-    <AlertDialog open={open} onOpenChange={handleOpenChange}>
-      <AlertDialogContent>
-        <form className="space-y-4" onSubmit={handleSubmit}>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Create Server</AlertDialogTitle>
-            <AlertDialogDescription>
-              Start a new server that other users can join.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
+    <form className="space-y-4" onSubmit={handleSubmit}>
+      <AlertDialogHeader>
+        <AlertDialogTitle>Create Server</AlertDialogTitle>
+        <AlertDialogDescription>
+          Start a new server that other users can join.
+        </AlertDialogDescription>
+      </AlertDialogHeader>
 
-          <div className="space-y-2">
-            <Label htmlFor="server-host">Host</Label>
-            <Input
-              id="server-host"
-              value={host}
-              onChange={(event) => setHost(event.target.value)}
-              placeholder="runelink.chat"
-              disabled={isCreating}
-            />
-          </div>
+      <div className="space-y-2">
+        <Label htmlFor="server-host">Host</Label>
+        <Input
+          id="server-host"
+          value={host}
+          onChange={(event) => setHost(event.target.value)}
+          placeholder="runelink.chat"
+          disabled={isCreating}
+        />
+      </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="server-title">Name</Label>
-            <Input
-              id="server-title"
-              ref={titleInputRef}
-              value={title}
-              onChange={(event) => setTitle(event.target.value)}
-              placeholder="Game Night"
-              disabled={isCreating}
-              autoFocus
-            />
-          </div>
+      <div className="space-y-2">
+        <Label htmlFor="server-title">Name</Label>
+        <Input
+          id="server-title"
+          ref={titleInputRef}
+          value={title}
+          onChange={(event) => setTitle(event.target.value)}
+          placeholder="Game Night"
+          disabled={isCreating}
+          autoFocus
+        />
+      </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="server-description">Description</Label>
-            <Textarea
-              id="server-description"
-              value={description}
-              onChange={(event) => setDescription(event.target.value)}
-              placeholder="What kind of conversations happen here?"
-              className="min-h-24 resize-none"
-              disabled={isCreating}
-            />
-          </div>
+      <div className="space-y-2">
+        <Label htmlFor="server-description">Description</Label>
+        <Textarea
+          id="server-description"
+          value={description}
+          onChange={(event) => setDescription(event.target.value)}
+          placeholder="What kind of conversations happen here?"
+          className="min-h-24 resize-none"
+          disabled={isCreating}
+        />
+      </div>
 
-          {error ? <p className="text-sm text-destructive">{error}</p> : null}
+      {error ? <p className="text-sm text-destructive">{error}</p> : null}
 
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={isCreating}>Cancel</AlertDialogCancel>
-            <AlertDialogAction type="submit" disabled={isCreating}>
-              {isCreating ? "Creating..." : "Create Server"}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </form>
-      </AlertDialogContent>
-    </AlertDialog>
+      <AlertDialogFooter>
+        <AlertDialogCancel disabled={isCreating}>Cancel</AlertDialogCancel>
+        <AlertDialogAction type="submit" disabled={isCreating}>
+          {isCreating ? "Creating..." : "Create Server"}
+        </AlertDialogAction>
+      </AlertDialogFooter>
+    </form>
   );
 }
