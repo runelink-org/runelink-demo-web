@@ -58,7 +58,7 @@ export function CreateChannelDialog({
   const [isCreating, setIsCreating] = useState(false);
   const categories = categoryRows(channels);
   const parentItems = [
-    { value: ROOT_VALUE, label: "Server root" },
+    { value: ROOT_VALUE, label: "Server Root" },
     ...categories.map(({ channel }) => ({
       value: channel.id,
       label: channel.title,
@@ -69,6 +69,7 @@ export function CreateChannelDialog({
     ? parentValue
     : ROOT_VALUE;
   const noun = kind === "category" ? "category" : "channel";
+  const nounLabel = kind === "category" ? "Category" : "Channel";
 
   useEffect(() => {
     if (request) {
@@ -117,7 +118,7 @@ export function CreateChannelDialog({
       <AlertDialogContent>
         <form className="space-y-4" onSubmit={handleSubmit}>
           <AlertDialogHeader>
-            <AlertDialogTitle>Create {noun}</AlertDialogTitle>
+            <AlertDialogTitle>Create {nounLabel}</AlertDialogTitle>
             <AlertDialogDescription>
               {kind === "category"
                 ? `Group channels in ${serverTitle ?? "this server"}.`
@@ -128,7 +129,7 @@ export function CreateChannelDialog({
           <div className="grid grid-cols-2 gap-2" role="radiogroup">
             {(
               [
-                { value: "text", label: "Text channel", Icon: Hash },
+                { value: "text", label: "Text Channel", Icon: Hash },
                 { value: "category", label: "Category", Icon: FolderPlus },
               ] as const
             ).map(({ value, label, Icon }) => (
@@ -181,7 +182,7 @@ export function CreateChannelDialog({
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value={ROOT_VALUE}>Server root</SelectItem>
+                  <SelectItem value={ROOT_VALUE}>Server Root</SelectItem>
                   {categories.map(({ channel, depth }) => (
                     <SelectItem key={channel.id} value={channel.id}>
                       <span style={{ paddingLeft: depth * 12 }}>
@@ -199,7 +200,7 @@ export function CreateChannelDialog({
           <AlertDialogFooter>
             <AlertDialogCancel disabled={isCreating}>Cancel</AlertDialogCancel>
             <AlertDialogAction type="submit" disabled={isCreating}>
-              {isCreating ? "Creating..." : `Create ${noun}`}
+              {isCreating ? "Creating..." : `Create ${nounLabel}`}
             </AlertDialogAction>
           </AlertDialogFooter>
         </form>

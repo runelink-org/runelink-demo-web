@@ -77,7 +77,7 @@ export function MessageActionsMenu({
             }}
           >
             <Pencil className="size-4" />
-            <span className="font-medium">Edit message</span>
+            <span className="font-medium">Edit Message</span>
           </DropdownMenuItem>
         ) : null}
         <DropdownMenuItem
@@ -96,7 +96,7 @@ export function MessageActionsMenu({
           }}
         >
           <Copy className="size-4" />
-          <span className="font-medium">Copy text</span>
+          <span className="font-medium">Copy Text</span>
         </DropdownMenuItem>
         <CopyOtherSubmenu
           options={[
@@ -125,7 +125,7 @@ export function MessageActionsMenu({
           }}
         >
           <Trash2 className="size-4" />
-          <span className="font-medium">Delete message</span>
+          <span className="font-medium">Delete Message</span>
         </DropdownMenuItem>
       </DropdownMenuContent>
     </>

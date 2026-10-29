@@ -121,7 +121,7 @@ export function ServerRailSettingsMenu() {
               }}
             >
               <MonitorSmartphone className="size-4" />
-              <span className="font-medium">Match system theme</span>
+              <span className="font-medium">Match System Theme</span>
             </DropdownMenuCheckboxItem>
 
             <DropdownMenuCheckboxItem
@@ -136,7 +136,7 @@ export function ServerRailSettingsMenu() {
               ) : (
                 <Sun className="size-4" />
               )}
-              <span className="font-medium">Dark mode</span>
+              <span className="font-medium">Dark Mode</span>
             </DropdownMenuCheckboxItem>
           </DropdownMenuGroup>
         </DropdownMenuContent>

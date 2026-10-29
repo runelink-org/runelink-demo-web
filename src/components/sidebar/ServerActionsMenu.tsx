@@ -60,7 +60,7 @@ export function ServerActionsMenu({
           }}
         >
           <Cog className="size-4" />
-          <span className="font-medium">Server settings</span>
+          <span className="font-medium">Server Settings</span>
         </DropdownMenuItem>
         <DropdownMenuItem
           className="cursor-pointer gap-3 rounded-xl px-3 py-2"
@@ -68,7 +68,7 @@ export function ServerActionsMenu({
           onClick={() => onCreateChannel(server, "text")}
         >
           <Hash className="size-4" />
-          <span className="font-medium">Create channel</span>
+          <span className="font-medium">Create Channel</span>
         </DropdownMenuItem>
         <DropdownMenuItem
           className="cursor-pointer gap-3 rounded-xl px-3 py-2"
@@ -76,7 +76,7 @@ export function ServerActionsMenu({
           onClick={() => onCreateChannel(server, "category")}
         >
           <FolderPlus className="size-4" />
-          <span className="font-medium">Create category</span>
+          <span className="font-medium">Create Category</span>
         </DropdownMenuItem>
         <DropdownMenuItem
           className="cursor-pointer gap-3 rounded-xl px-3 py-2"
@@ -85,7 +85,7 @@ export function ServerActionsMenu({
           }}
         >
           <Copy className="size-4" />
-          <span className="font-medium">Copy server ID</span>
+          <span className="font-medium">Copy Server ID</span>
         </DropdownMenuItem>
         <CopyOtherSubmenu
           options={[
@@ -104,7 +104,7 @@ export function ServerActionsMenu({
           }}
         >
           <LogOut className="size-4" />
-          <span className="font-medium">Leave server</span>
+          <span className="font-medium">Leave Server</span>
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>

@@ -131,7 +131,7 @@ export function JoinServerDialog({
       <AlertDialogContent className="max-w-md sm:max-w-md">
         <div className="space-y-4">
           <AlertDialogHeader>
-            <AlertDialogTitle>Join server</AlertDialogTitle>
+            <AlertDialogTitle>Join Server</AlertDialogTitle>
             <AlertDialogDescription>
               Enter a host to view its public servers, then join the one you
               want.
@@ -140,7 +140,7 @@ export function JoinServerDialog({
 
           <form className="space-y-3" onSubmit={handleSearch}>
             <div className="space-y-2">
-              <Label htmlFor="join-server-host">Host name</Label>
+              <Label htmlFor="join-server-host">Host Name</Label>
               <div className="flex gap-2">
                 <div className="relative min-w-0 flex-1">
                   <Globe className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />

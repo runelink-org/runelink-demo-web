@@ -69,13 +69,13 @@ export function ProfileSelector({
     connectionStatus === "connected" && unsupportedCapabilities.length > 0;
   const warning = incompatibleHost
     ? {
-        label: "Incompatible host",
+        label: "Incompatible Host",
         detail: incompatibleHost,
         color: "text-destructive",
       }
     : isLimited
       ? {
-          label: "Connected (limited)",
+          label: "Connected (Limited)",
           detail: `${activeAccount?.host} doesn't support ${unsupportedCapabilities.join(", ")}`,
           color: "text-amber-500",
         }
@@ -146,7 +146,7 @@ export function ProfileSelector({
               <div className="flex min-w-0 flex-col">
                 <span>
                   {!activeAuth
-                    ? "Login required"
+                    ? "Login Required"
                     : (warning?.label ?? statusLabels[connectionStatus])}
                 </span>
                 {activeAuth && warning ? (
@@ -248,7 +248,7 @@ export function ProfileSelector({
                         }}
                       >
                         <Trash2 />
-                        Remove saved account
+                        Remove Saved Account
                       </DropdownMenuItem>
                     </DropdownMenuContent>
                   </DropdownMenu>
@@ -257,14 +257,14 @@ export function ProfileSelector({
             })}
           </DropdownMenuRadioGroup>
         ) : (
-          <DropdownMenuItem disabled>No stored accounts yet</DropdownMenuItem>
+          <DropdownMenuItem disabled>No Stored Accounts Yet</DropdownMenuItem>
         )}
 
         <DropdownMenuSeparator />
 
         <DropdownMenuItem onClick={onManageAccounts}>
           <Plus />
-          Add or log in account
+          Add or Log In Account
         </DropdownMenuItem>
 
         <DropdownMenuItem
@@ -272,7 +272,7 @@ export function ProfileSelector({
           disabled={!activeAccount || !activeAuth}
         >
           <LogOut />
-          Log out current account
+          Log Out Current Account
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>

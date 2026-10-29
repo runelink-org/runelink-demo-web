@@ -62,7 +62,7 @@ export function LeaveServerDialog({
     >
       <AlertDialogContent size="sm">
         <AlertDialogHeader>
-          <AlertDialogTitle>Leave server?</AlertDialogTitle>
+          <AlertDialogTitle>Leave Server?</AlertDialogTitle>
           <AlertDialogDescription>
             {server
               ? `You will leave ${server.title} and remove it from your sidebar.`
@@ -82,7 +82,7 @@ export function LeaveServerDialog({
               void handleConfirm();
             }}
           >
-            {isLeaving ? "Leaving..." : "Leave server"}
+            {isLeaving ? "Leaving..." : "Leave Server"}
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>

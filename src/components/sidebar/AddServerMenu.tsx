@@ -102,7 +102,7 @@ export function AddServerMenu({
           <span
             ref={triggerRef}
             className="flex size-12 shrink-0 cursor-pointer items-center justify-center rounded-2xl border border-dashed border-sidebar-border bg-sidebar-accent/45 text-sidebar-foreground/70 transition hover:border-primary/40 hover:bg-sidebar-accent hover:text-sidebar-foreground"
-            aria-label="Add server"
+            aria-label="Add Server"
             onMouseEnter={showTooltip}
             onMouseLeave={hideTooltip}
           >
@@ -124,7 +124,7 @@ export function AddServerMenu({
           >
             <Plus className="size-4" />
             <div className="flex flex-col">
-              <span className="font-medium">Create server</span>
+              <span className="font-medium">Create Server</span>
               {!contextMenu.anchor ? (
                 <span className="text-xs text-muted-foreground">
                   Start a new server.
@@ -140,7 +140,7 @@ export function AddServerMenu({
           >
             <Search className="size-4" />
             <div className="flex flex-col">
-              <span className="font-medium">Join server</span>
+              <span className="font-medium">Join Server</span>
               {!contextMenu.anchor ? (
                 <span className="text-xs text-muted-foreground">
                   Look up existing servers.

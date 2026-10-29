@@ -44,7 +44,7 @@ export function ChannelSettingsPage({
           </Button>
           <h1 className="min-w-0 truncate text-xl font-semibold text-foreground">
             <span className="font-medium text-muted-foreground">
-              {noun} settings
+              {noun} Settings
             </span>
             {channel ? (
               <>
@@ -68,8 +68,8 @@ export function ChannelSettingsPage({
             <div className="max-w-md rounded-3xl border border-border/70 bg-background/80 p-6 text-center shadow-sm">
               <h2 className="text-lg font-semibold">
                 {isLoading
-                  ? "Loading channel settings..."
-                  : "Channel unavailable"}
+                  ? "Loading Channel Settings..."
+                  : "Channel Unavailable"}
               </h2>
               {!isLoading ? (
                 <p className="mt-2 text-sm text-muted-foreground">
@@ -182,7 +182,7 @@ function ChannelSettingsForm({
         <h2 className="text-base font-semibold text-foreground">Overview</h2>
         <form className="mt-5 space-y-6" onSubmit={save}>
           <div className="space-y-2">
-            <Label htmlFor="channel-title">{label} title</Label>
+            <Label htmlFor="channel-title">{label} Title</Label>
             <Input
               id="channel-title"
               value={title}
@@ -195,7 +195,7 @@ function ChannelSettingsForm({
             />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="channel-description">{label} description</Label>
+            <Label htmlFor="channel-description">{label} Description</Label>
             <Textarea
               id="channel-description"
               value={description}
@@ -224,7 +224,7 @@ function ChannelSettingsForm({
               type="submit"
               disabled={!canManage || isSaving || !dirty || !submittedTitle}
             >
-              {isSaving ? "Saving..." : "Save changes"}
+              {isSaving ? "Saving..." : "Save Changes"}
             </Button>
             {dirty || error ? (
               <Button
@@ -246,12 +246,12 @@ function ChannelSettingsForm({
       </section>
       <section>
         <h2 className="text-base font-semibold text-destructive">
-          Danger zone
+          Danger Zone
         </h2>
         <div className="mt-5 overflow-hidden rounded-2xl border border-destructive/20 bg-destructive/5">
           <div className="flex items-center justify-between gap-4 px-4 py-4 sm:px-5">
             <p className="text-sm font-medium text-destructive">
-              Delete {noun}
+              Delete {label}
             </p>
             <Button
               type="button"
@@ -261,7 +261,7 @@ function ChannelSettingsForm({
               onClick={() => setIsDeleteOpen(true)}
             >
               <Trash2 className="size-4" />
-              Delete {noun}
+              Delete {label}
             </Button>
           </div>
         </div>

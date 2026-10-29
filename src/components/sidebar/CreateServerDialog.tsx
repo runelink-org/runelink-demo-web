@@ -111,7 +111,7 @@ export function CreateServerDialog({
       <AlertDialogContent>
         <form className="space-y-4" onSubmit={handleSubmit}>
           <AlertDialogHeader>
-            <AlertDialogTitle>Create server</AlertDialogTitle>
+            <AlertDialogTitle>Create Server</AlertDialogTitle>
             <AlertDialogDescription>
               Start a new server that other users can join.
             </AlertDialogDescription>
@@ -158,7 +158,7 @@ export function CreateServerDialog({
           <AlertDialogFooter>
             <AlertDialogCancel disabled={isCreating}>Cancel</AlertDialogCancel>
             <AlertDialogAction type="submit" disabled={isCreating}>
-              {isCreating ? "Creating..." : "Create server"}
+              {isCreating ? "Creating..." : "Create Server"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </form>

@@ -36,17 +36,17 @@ function getCopyOptions(host: string, channel: ServerChannel): CopyOption[] {
     case "text":
       return [
         {
-          label: "Raw text channel ID",
+          label: "Raw Text Channel ID",
           value: channel.text_channel_id,
           successLabel: `Copied raw text channel ID: ${channel.text_channel_id}`,
         },
         {
-          label: "Path for CLI (server channel)",
+          label: "Path for CLI (Server Channel)",
           value: path,
           successLabel: "Copied CLI path (server channel).",
         },
         {
-          label: "Path for CLI (text channel)",
+          label: "Path for CLI (Text Channel)",
           value: formatTextChannelCliPath(host, channel.text_channel_id),
           successLabel: "Copied CLI path (text channel).",
         },
@@ -119,7 +119,7 @@ export function ChannelActionsMenu({
                 }}
               >
                 <Hash className="size-4" />
-                <span className="font-medium">Create channel</span>
+                <span className="font-medium">Create Channel</span>
               </DropdownMenuItem>
               <DropdownMenuItem
                 className="cursor-pointer gap-3 rounded-xl px-3 py-2"
@@ -128,7 +128,7 @@ export function ChannelActionsMenu({
                 }}
               >
                 <FolderPlus className="size-4" />
-                <span className="font-medium">Create category</span>
+                <span className="font-medium">Create Category</span>
               </DropdownMenuItem>
               <DropdownMenuSeparator />
             </>
@@ -142,7 +142,7 @@ export function ChannelActionsMenu({
             >
               <Pencil className="size-4" />
               <span className="font-medium">
-                Edit {isCategory ? "category" : "channel"}
+                Edit {isCategory ? "Category" : "Channel"}
               </span>
             </DropdownMenuItem>
           ) : null}
@@ -156,7 +156,9 @@ export function ChannelActionsMenu({
             }}
           >
             <Copy className="size-4" />
-            <span className="font-medium">Copy {idLabel}</span>
+            <span className="font-medium">
+              Copy {isCategory ? "Category" : "Channel"} ID
+            </span>
           </DropdownMenuItem>
           <CopyOtherSubmenu options={getCopyOptions(host, channel)} />
           <DropdownMenuItem
@@ -173,7 +175,7 @@ export function ChannelActionsMenu({
           >
             <Trash2 className="size-4" />
             <span className="font-medium">
-              {isCategory ? "Delete category" : "Delete channel"}
+              {isCategory ? "Delete Category" : "Delete Channel"}
             </span>
           </DropdownMenuItem>
         </DropdownMenuContent>

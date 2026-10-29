@@ -151,7 +151,7 @@ export function ChannelSection({
   }
 
   const createChannelTooltip = canManageChannels
-    ? "Create channel"
+    ? "Create Channel"
     : "Only server admins can create channels.";
 
   function toggleCollapsed(channel: ServerChannel, isCollapsed: boolean) {
@@ -288,7 +288,7 @@ export function ChannelSection({
           </div>
         ) : channels.length === 0 ? (
           <div className="flex items-center justify-between gap-2 px-2">
-            <p className="text-sm text-sidebar-foreground/70">Add channel</p>
+            <p className="text-sm text-sidebar-foreground/70">Add Channel</p>
             <span className="inline-flex" title={createChannelTooltip}>
               <Button
                 type="button"
@@ -409,7 +409,7 @@ export function ChannelSection({
             onClick={() => onOpenCreateChannel("text", null)}
           >
             <Hash className="size-4" />
-            <span className="font-medium">Create channel</span>
+            <span className="font-medium">Create Channel</span>
           </DropdownMenuItem>
           <DropdownMenuItem
             className="cursor-pointer gap-3 rounded-xl px-3 py-2"
@@ -417,7 +417,7 @@ export function ChannelSection({
             onClick={() => onOpenCreateChannel("category", null)}
           >
             <FolderPlus className="size-4" />
-            <span className="font-medium">Create category</span>
+            <span className="font-medium">Create Category</span>
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
