@@ -106,8 +106,10 @@ export function writeAppRoute(route: AppRoute, mode: "push" | "replace"): void {
     return;
   }
 
-  const state = isAppHistoryEntry(window.history.state)
-    ? window.history.state
-    : null;
-  window.history.replaceState(state, "", path);
+  const state: unknown = window.history.state;
+  window.history.replaceState(
+    isAppHistoryEntry(state) ? state : null,
+    "",
+    path
+  );
 }
