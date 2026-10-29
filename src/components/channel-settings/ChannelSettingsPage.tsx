@@ -84,6 +84,10 @@ export function ChannelSettingsPage({
   );
 }
 
+function normalizeDescription(value: string | null): string {
+  return (value ?? "").replace(/[^\S\r\n]+$/gm, "").trim();
+}
+
 function ChannelSettingsForm({
   channel,
   host,
@@ -106,9 +110,11 @@ function ChannelSettingsForm({
   const mountedRef = useRef(false);
   const noun = channel.kind === "category" ? "category" : "channel";
   const label = channel.kind === "category" ? "Category" : "Channel";
+  const submittedTitle = title.trim();
+  const submittedDescription = normalizeDescription(description);
   const dirty =
-    title.trim() !== baseline.title ||
-    description !== (baseline.description ?? "");
+    submittedTitle !== baseline.title.trim() ||
+    submittedDescription !== normalizeDescription(baseline.description);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -127,7 +133,7 @@ function ChannelSettingsForm({
 
   async function save(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!account || !canManage || isSaving || !dirty || !title.trim()) return;
+    if (!account || !canManage || isSaving || !dirty || !submittedTitle) return;
     const active = getActiveAccount(useAuthStore.getState());
     if (active?.name !== account.name || active?.host !== account.host) {
       setError("The active account changed. Reopen settings to try again.");
@@ -142,8 +148,8 @@ function ChannelSettingsForm({
         data: {
           channel_id: channel.id,
           channel_update: {
-            title: title.trim(),
-            description: description || null,
+            title: submittedTitle,
+            description: submittedDescription || null,
             expected_updated_at: baseline.update_version,
           },
           target_host: host === account.host ? null : host,
@@ -216,7 +222,7 @@ function ChannelSettingsForm({
           <div className="flex items-center gap-3">
             <Button
               type="submit"
-              disabled={!canManage || isSaving || !dirty || !title.trim()}
+              disabled={!canManage || isSaving || !dirty || !submittedTitle}
             >
               {isSaving ? "Saving..." : "Save changes"}
             </Button>
