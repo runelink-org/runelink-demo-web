@@ -25,14 +25,14 @@ type ServerMembersTableProps = {
   canModerateMembers: boolean;
 };
 
-function formatServerTimestamp(value: Date): string {
+function formatServerTimestamp(value: string): string {
   return new Intl.DateTimeFormat(undefined, {
     month: "short",
     day: "numeric",
     year: "numeric",
     hour: "numeric",
     minute: "2-digit",
-  }).format(value);
+  }).format(new Date(value));
 }
 
 export function ServerMembersTable({

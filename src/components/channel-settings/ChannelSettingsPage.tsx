@@ -182,7 +182,7 @@ function ChannelSettingsForm({
           channel_update: {
             title: submittedTitle,
             description: submittedDescription || null,
-            expected_updated_at: baseline.update_version,
+            expected_updated_at: baseline.updated_at,
           },
           target_host: host === account.host ? null : host,
         },

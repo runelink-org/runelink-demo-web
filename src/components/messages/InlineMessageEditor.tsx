@@ -48,7 +48,7 @@ export function InlineMessageEditor({
         type: "messages_update",
         data: {
           message_id: message.id,
-          message_update: { body, expected_updated_at: message.update_version },
+          message_update: { body, expected_updated_at: message.updated_at },
           target_host: host === account.host ? null : host,
         },
       });

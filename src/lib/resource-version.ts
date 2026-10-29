@@ -1,17 +1,16 @@
-type VersionedResource = { updated_at: Date; update_version?: string };
+type VersionedResource = { updated_at: string };
 
 export function compareResourceVersions(
   left: VersionedResource,
   right: VersionedResource
 ): number {
-  const milliseconds = left.updated_at.getTime() - right.updated_at.getTime();
+  const milliseconds =
+    Date.parse(left.updated_at) - Date.parse(right.updated_at);
   if (milliseconds !== 0) return milliseconds;
-  // The host emits RFC3339 timestamps. JS Dates discard sub-millisecond digits.
+  // Compare fractional seconds separately because Date.parse drops precision
+  // beyond milliseconds. Parsing above also accounts for timezone offsets.
   function fraction(resource: VersionedResource): string {
-    return (resource.update_version?.match(/\.(\d+)/)?.[1] ?? "").padEnd(
-      9,
-      "0"
-    );
+    return (resource.updated_at.match(/\.(\d+)/)?.[1] ?? "").padEnd(9, "0");
   }
   return fraction(left).localeCompare(fraction(right));
 }

@@ -124,7 +124,8 @@ function loadStoredMembersPaneWidth(): number {
     : DEFAULT_MEMBERS_PANE_WIDTH;
 }
 
-function formatMessageTimestamp(value: Date): string {
+function formatMessageTimestamp(timestamp: string): string {
+  const value = new Date(timestamp);
   const now = new Date();
   const startOfToday = new Date(
     now.getFullYear(),
@@ -162,21 +163,21 @@ function formatMessageTimestamp(value: Date): string {
   }).format(value);
 }
 
-function formatFullTimestamp(value: Date): string {
+function formatFullTimestamp(value: string): string {
   return new Intl.DateTimeFormat(undefined, {
     month: "numeric",
     day: "numeric",
     year: "2-digit",
     hour: "numeric",
     minute: "2-digit",
-  }).format(value);
+  }).format(new Date(value));
 }
 
-function formatCompactTimestamp(value: Date): string {
+function formatCompactTimestamp(value: string): string {
   return new Intl.DateTimeFormat(undefined, {
     hour: "numeric",
     minute: "2-digit",
-  }).format(value);
+  }).format(new Date(value));
 }
 
 const COMPACT_MESSAGE_WINDOW_MS = 5 * 60 * 1000;
@@ -205,7 +206,7 @@ function shouldCompactMessage(current: Message, previous?: Message): boolean {
   }
 
   return (
-    current.created_at.getTime() - previous.created_at.getTime() <=
+    Date.parse(current.created_at) - Date.parse(previous.created_at) <=
     COMPACT_MESSAGE_WINDOW_MS
   );
 }

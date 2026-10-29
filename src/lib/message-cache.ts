@@ -20,6 +20,6 @@ export function mergeMessages(
     byId.set(message.id, message);
   }
   return [...byId.values()].sort(
-    (left, right) => left.created_at.getTime() - right.created_at.getTime()
+    (left, right) => Date.parse(left.created_at) - Date.parse(right.created_at)
   );
 }

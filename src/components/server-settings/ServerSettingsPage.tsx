@@ -39,14 +39,14 @@ function getTargetHost(serverHost: string, activeHost: string): string | null {
   return serverHost === activeHost ? null : serverHost;
 }
 
-function formatServerTimestamp(value: Date): string {
+function formatServerTimestamp(value: string): string {
   return new Intl.DateTimeFormat(undefined, {
     month: "short",
     day: "numeric",
     year: "numeric",
     hour: "numeric",
     minute: "2-digit",
-  }).format(value);
+  }).format(new Date(value));
 }
 
 export function ServerSettingsPage(props: ServerSettingsPageProps) {
@@ -161,7 +161,7 @@ function ServerSettingsContent({
           server_update: {
             title: submittedTitle,
             description: submittedDescription || null,
-            expected_updated_at: baseline.update_version,
+            expected_updated_at: baseline.updated_at,
           },
           target_host: getTargetHost(baseline.host, account.host),
         },
