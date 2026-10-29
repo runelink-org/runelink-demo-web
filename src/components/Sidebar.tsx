@@ -57,6 +57,7 @@ type SidebarProps = {
     parentChannelId: string | null
   ) => Promise<void>;
   onDeleteChannel: (channel: ServerChannel) => Promise<void>;
+  onEditChannel: (channel: ServerChannel) => void;
   onMoveChannel: (
     channel: ServerChannel,
     channelMove: ServerChannelMove
@@ -120,6 +121,7 @@ export function Sidebar({
   canManageServer,
   onCreateChannel,
   onDeleteChannel,
+  onEditChannel,
   onMoveChannel,
 }: SidebarProps) {
   const serverMenu = useContextActionsMenu();
@@ -425,6 +427,7 @@ export function Sidebar({
               setChannelPendingDelete(channel);
             }}
             onMoveChannel={onMoveChannel}
+            onEditChannel={onEditChannel}
           />
         </div>
       )}

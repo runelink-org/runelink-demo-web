@@ -1,3 +1,4 @@
+import { ChannelSettingsPage } from "@/components/channel-settings/ChannelSettingsPage";
 import type {
   Message,
   Server,
@@ -392,6 +393,17 @@ export function App() {
     ? (membersByServerId[serverSettingsServerId] ?? [])
     : [];
   const isServerSettingsOpen = !!serverSettingsServerId;
+  const isChannelSettingsOpen = route.screen === "channel-settings";
+  const channelSettingsServer =
+    route.screen === "channel-settings"
+      ? (hydratedServerById[route.serverId] ?? null)
+      : null;
+  const channelSettingsChannel =
+    route.screen === "channel-settings"
+      ? (channelSettingsServer?.channels.find(
+          (channel) => channel.id === route.channelId
+        ) ?? null)
+      : null;
   const isLoadingServerSettingsMembers = serverSettingsServerId
     ? (isLoadingMembersByServerId[serverSettingsServerId] ?? false)
     : false;
@@ -412,6 +424,11 @@ export function App() {
   useEffect(() => {
     if (route.screen === "auth") {
       document.title = "Account | RuneLink";
+      return;
+    }
+
+    if (isChannelSettingsOpen && channelSettingsChannel) {
+      document.title = `${channelSettingsChannel.title} Settings | RuneLink`;
       return;
     }
 
@@ -438,6 +455,8 @@ export function App() {
     document.title = `#${selectedChannel.title} | ${selectedServer.server.title}`;
   }, [
     isMembersPageOpen,
+    isChannelSettingsOpen,
+    channelSettingsChannel,
     isServerSettingsOpen,
     route.screen,
     selectedChannel,
@@ -621,6 +640,17 @@ export function App() {
     );
   }
 
+  function handleOpenChannelSettings(channel: ServerChannel) {
+    navigate(
+      {
+        screen: "channel-settings",
+        serverId: channel.server_id,
+        channelId: channel.id,
+      },
+      "push"
+    );
+  }
+
   function handleOpenServerSettings(serverId: string) {
     navigate({ screen: "server-settings", serverId }, "push");
   }
@@ -697,14 +727,40 @@ export function App() {
   }
 
   async function handleDeleteChannel(channel: ServerChannel) {
-    if (!activeAccount || !selectedServer) {
-      return;
+    const server = hydratedServerById[channel.server_id]?.server;
+    const currentAccount = getActiveAccount(useAuthStore.getState());
+    if (
+      !activeAccount ||
+      !currentAccount ||
+      userRefKey(currentAccount) !== userRefKey(activeAccount)
+    ) {
+      throw new Error(
+        "The active account changed. Reopen the confirmation to try again."
+      );
     }
+    if (!server)
+      throw new Error(
+        "The owning server is unavailable. Reload before deleting this channel."
+      );
     await deleteChannel(
-      selectedServer.server.id,
+      channel.server_id,
       channel.id,
-      getTargetHost(selectedServer.server.host, activeAccount.host)
+      getTargetHost(server.host, activeAccount.host)
     );
+    const accountAfterDelete = getActiveAccount(useAuthStore.getState());
+    if (
+      !accountAfterDelete ||
+      userRefKey(accountAfterDelete) !== userRefKey(activeAccount)
+    )
+      return;
+    const current = getCurrentRoute();
+    if (
+      current.screen === "channel-settings" &&
+      current.serverId === channel.server_id &&
+      current.channelId === channel.id
+    ) {
+      navigate({ screen: "server", serverId: channel.server_id }, "replace");
+    }
   }
 
   async function handleMoveChannel(
@@ -797,7 +853,7 @@ export function App() {
           "min-w-0 shrink-0",
           shouldShowAuthScreen
             ? "flex w-auto"
-            : isServerSettingsOpen
+            : isServerSettingsOpen || isChannelSettingsOpen
               ? "hidden"
               : isChannelOpen
                 ? "hidden sm:flex"
@@ -830,6 +886,7 @@ export function App() {
           canManageServer={canManageServer}
           onCreateChannel={handleCreateChannel}
           onDeleteChannel={handleDeleteChannel}
+          onEditChannel={handleOpenChannelSettings}
           onMoveChannel={handleMoveChannel}
         />
       </div>
@@ -839,7 +896,7 @@ export function App() {
           "min-h-0 min-w-0 overflow-hidden",
           shouldShowAuthScreen
             ? "flex flex-1"
-            : isChannelOpen || isServerSettingsOpen
+            : isChannelOpen || isServerSettingsOpen || isChannelSettingsOpen
               ? "flex flex-1"
               : "hidden flex-1 sm:flex",
         ].join(" ")}
@@ -859,6 +916,35 @@ export function App() {
               navigate(destination, "push");
             }}
             onBack={handleCloseAuthScreen}
+          />
+        ) : route.screen === "channel-settings" ? (
+          <ChannelSettingsPage
+            key={`${activeAccountKey}:${route.serverId}:${route.channelId}`}
+            channel={channelSettingsChannel}
+            host={channelSettingsServer?.server.host ?? null}
+            isLoading={
+              isSidebarLoading ||
+              !resolvedSidebarAccountKey ||
+              (!!channelSettingsServer &&
+                !(route.serverId in serverWithChannelsById))
+            }
+            canManage={
+              channelSettingsServer
+                ? canManageServer(channelSettingsServer.server)
+                : false
+            }
+            onDone={() =>
+              backOrReplace(
+                channelSettingsChannel?.kind === "text"
+                  ? {
+                      screen: "channel",
+                      serverId: route.serverId,
+                      channelId: route.channelId,
+                    }
+                  : { screen: "server", serverId: route.serverId }
+              )
+            }
+            onDeleteChannel={handleDeleteChannel}
           />
         ) : isServerSettingsOpen ? (
           <ServerSettingsPage
@@ -892,6 +978,7 @@ export function App() {
             onDeselectChannel={handleDeselectChannel}
             onSendMessage={handleSendMessage}
             onDeleteChannel={handleDeleteChannel}
+            onEditChannel={handleOpenChannelSettings}
             onDeleteMessage={handleDeleteMessage}
             membersPane={isWideLayout ? selectedServerMemberList : null}
             onOpenMembers={handleOpenMembers}

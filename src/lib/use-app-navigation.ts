@@ -116,8 +116,18 @@ export function useAppNavigation() {
 
       const currentRoute = routeRef.current;
       const isValidSettingsRoute =
-        currentRoute.screen === "server-settings" &&
-        servers.some((server) => server.server.id === currentRoute.serverId);
+        (currentRoute.screen === "server-settings" &&
+          servers.some(
+            (server) => server.server.id === currentRoute.serverId
+          )) ||
+        (currentRoute.screen === "channel-settings" &&
+          servers.some(
+            (server) =>
+              server.server.id === currentRoute.serverId &&
+              server.channels.some(
+                (channel) => channel.id === currentRoute.channelId
+              )
+          ));
       const isValidMembersRoute =
         currentRoute.screen === "channel-members" &&
         currentRoute.serverId === nextSelection.serverId &&
@@ -168,6 +178,7 @@ export function useAppNavigation() {
       case "channel-members":
         navigationState.selectChannel(route.serverId, route.channelId);
         break;
+      case "channel-settings":
       case "server-settings":
         navigationState.selectServer(route.serverId);
         break;

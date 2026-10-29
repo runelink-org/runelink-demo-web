@@ -42,6 +42,7 @@ type ChannelSectionProps = {
   ) => void;
   onSelectChannel: (serverId: string, channel: ServerChannel) => void;
   onDeleteChannel: (channel: ServerChannel) => void;
+  onEditChannel: (channel: ServerChannel) => void;
   onMoveChannel: (
     channel: ServerChannel,
     channelMove: ServerChannelMove
@@ -116,6 +117,7 @@ export function ChannelSection({
   onOpenCreateChannel,
   onSelectChannel,
   onDeleteChannel,
+  onEditChannel,
   onMoveChannel,
 }: ChannelSectionProps) {
   const backgroundMenu = useContextActionsMenu();
@@ -176,9 +178,7 @@ export function ChannelSection({
       !canManageChannels ||
       event.button !== 0 ||
       // Pressing the actions menu opens it rather than dragging
-      (event.target as Element).closest(
-        "[aria-haspopup], [data-channel-renaming]"
-      )
+      (event.target as Element).closest("[aria-haspopup]")
     ) {
       return;
     }
@@ -369,6 +369,7 @@ export function ChannelSection({
                         onOpenCreateChannel(kind, channel.id);
                       }}
                       onDeleteChannel={onDeleteChannel}
+                      onEditChannel={onEditChannel}
                     />
                   ) : (
                     <ChannelListItem
@@ -380,6 +381,7 @@ export function ChannelSection({
                         onSelectChannel(selectedServer.server.id, nextChannel);
                       }}
                       onDeleteChannel={onDeleteChannel}
+                      onEditChannel={onEditChannel}
                     />
                   )}
                 </div>
