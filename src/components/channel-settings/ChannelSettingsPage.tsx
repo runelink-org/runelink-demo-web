@@ -1,6 +1,16 @@
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import type { ServerChannel } from "@runelink/sdk";
 import { ArrowLeft, Trash2 } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { DeleteChannelDialog } from "@/components/sidebar/DeleteChannelDialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -27,6 +37,46 @@ export function ChannelSettingsPage({
   onDone,
   onDeleteChannel,
 }: ChannelSettingsPageProps) {
+  if (channel && host) {
+    return (
+      <ChannelSettingsForm
+        channel={channel}
+        host={host}
+        canManage={canManage}
+        onDone={onDone}
+        onDeleteChannel={onDeleteChannel}
+      />
+    );
+  }
+  return (
+    <ChannelSettingsLayout channel={channel} onBack={onDone}>
+      <div className="flex h-full items-center justify-center">
+        <div className="max-w-md rounded-3xl border border-border/70 bg-background/80 p-6 text-center shadow-sm">
+          <h2 className="text-lg font-semibold">
+            {isLoading ? "Loading Channel Settings..." : "Channel Unavailable"}
+          </h2>
+          {!isLoading ? (
+            <p className="mt-2 text-sm text-muted-foreground">
+              The selected channel or category could not be found.
+            </p>
+          ) : null}
+        </div>
+      </div>
+    </ChannelSettingsLayout>
+  );
+}
+
+function ChannelSettingsLayout({
+  channel,
+  onBack,
+  backDisabled = false,
+  children,
+}: {
+  channel: ServerChannel | null;
+  onBack: () => void;
+  backDisabled?: boolean;
+  children: ReactNode;
+}) {
   const noun = channel?.kind === "category" ? "Category" : "Channel";
   return (
     <section className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
@@ -37,7 +87,8 @@ export function ChannelSettingsPage({
             variant="ghost"
             size="icon"
             className="-ml-2 size-9 shrink-0 rounded-full"
-            onClick={onDone}
+            onClick={onBack}
+            disabled={backDisabled}
             aria-label="Back from channel settings"
           >
             <ArrowLeft className="size-4" />
@@ -56,29 +107,7 @@ export function ChannelSettingsPage({
         </div>
       </header>
       <div className="min-h-0 flex-1 overflow-y-auto bg-background px-4 py-5 sm:px-6">
-        {channel && host ? (
-          <ChannelSettingsForm
-            channel={channel}
-            host={host}
-            canManage={canManage}
-            onDeleteChannel={onDeleteChannel}
-          />
-        ) : (
-          <div className="flex h-full items-center justify-center">
-            <div className="max-w-md rounded-3xl border border-border/70 bg-background/80 p-6 text-center shadow-sm">
-              <h2 className="text-lg font-semibold">
-                {isLoading
-                  ? "Loading Channel Settings..."
-                  : "Channel Unavailable"}
-              </h2>
-              {!isLoading ? (
-                <p className="mt-2 text-sm text-muted-foreground">
-                  The selected channel or category could not be found.
-                </p>
-              ) : null}
-            </div>
-          </div>
-        )}
+        {children}
       </div>
     </section>
   );
@@ -92,11 +121,13 @@ function ChannelSettingsForm({
   channel,
   host,
   canManage,
+  onDone,
   onDeleteChannel,
 }: {
   channel: ServerChannel;
   host: string;
   canManage: boolean;
+  onDone: () => void;
   onDeleteChannel: (channel: ServerChannel) => Promise<void>;
 }) {
   const [baseline, setBaseline] = useState(channel);
@@ -106,6 +137,7 @@ function ChannelSettingsForm({
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
+  const [isDiscardOpen, setIsDiscardOpen] = useState(false);
   const [account] = useState(() => getActiveAccount(useAuthStore.getState()));
   const mountedRef = useRef(false);
   const noun = channel.kind === "category" ? "category" : "channel";
@@ -177,100 +209,126 @@ function ChannelSettingsForm({
   }
 
   return (
-    <div className="mx-auto flex w-full max-w-6xl flex-col gap-6">
-      <section>
-        <h2 className="text-base font-semibold text-foreground">Overview</h2>
-        <form className="mt-5 space-y-6" onSubmit={save}>
-          <div className="space-y-2">
-            <Label htmlFor="channel-title">{label} Title</Label>
-            <Input
-              id="channel-title"
-              value={title}
-              onChange={(event) => {
-                setTitle(event.target.value);
-                setSaved(false);
-              }}
-              disabled={!canManage || isSaving}
-              required
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="channel-description">{label} Description</Label>
-            <Textarea
-              id="channel-description"
-              value={description}
-              onChange={(event) => {
-                setDescription(event.target.value);
-                setSaved(false);
-              }}
-              rows={6}
-              className="min-h-40 resize-y field-sizing-fixed"
-              disabled={!canManage || isSaving}
-            />
-          </div>
-          {!canManage ? (
-            <p className="text-sm text-muted-foreground">
-              Only server admins can edit {noun} settings.
-            </p>
-          ) : null}
-          {error ? (
-            <p role="alert" className="text-sm text-destructive">
-              {error} Your changes have been kept. Reset to load the latest
-              values.
-            </p>
-          ) : null}
-          <div className="flex items-center gap-3">
-            <Button
-              type="submit"
-              disabled={!canManage || isSaving || !dirty || !submittedTitle}
-            >
-              {isSaving ? "Saving..." : "Save Changes"}
-            </Button>
-            {dirty || error ? (
-              <Button
-                type="button"
-                variant="outline"
-                disabled={isSaving}
-                onClick={reset}
-              >
-                Reset
-              </Button>
-            ) : null}
-            {saved ? (
-              <p role="status" className="text-sm text-muted-foreground">
-                Changes saved.
+    <ChannelSettingsLayout
+      channel={channel}
+      backDisabled={isSaving}
+      onBack={() => {
+        if (dirty) setIsDiscardOpen(true);
+        else onDone();
+      }}
+    >
+      <div className="mx-auto flex w-full max-w-6xl flex-col gap-6">
+        <section>
+          <h2 className="text-base font-semibold text-foreground">Overview</h2>
+          <form className="mt-5 space-y-6" onSubmit={save}>
+            <div className="space-y-2">
+              <Label htmlFor="channel-title">{label} Title</Label>
+              <Input
+                id="channel-title"
+                value={title}
+                onChange={(event) => {
+                  setTitle(event.target.value);
+                  setSaved(false);
+                }}
+                disabled={!canManage || isSaving}
+                required
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="channel-description">{label} Description</Label>
+              <Textarea
+                id="channel-description"
+                value={description}
+                onChange={(event) => {
+                  setDescription(event.target.value);
+                  setSaved(false);
+                }}
+                rows={6}
+                className="min-h-40 resize-y field-sizing-fixed"
+                disabled={!canManage || isSaving}
+              />
+            </div>
+            {!canManage ? (
+              <p className="text-sm text-muted-foreground">
+                Only server admins can edit {noun} settings.
               </p>
             ) : null}
+            {error ? (
+              <p role="alert" className="text-sm text-destructive">
+                {error} Your changes have been kept. Reset to load the latest
+                values.
+              </p>
+            ) : null}
+            <div className="flex items-center gap-3">
+              <Button
+                type="submit"
+                disabled={!canManage || isSaving || !dirty || !submittedTitle}
+              >
+                {isSaving ? "Saving..." : "Save Changes"}
+              </Button>
+              {dirty || error ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={isSaving}
+                  onClick={reset}
+                >
+                  Reset
+                </Button>
+              ) : null}
+              {saved ? (
+                <p role="status" className="text-sm text-muted-foreground">
+                  Changes saved.
+                </p>
+              ) : null}
+            </div>
+          </form>
+        </section>
+        <section>
+          <h2 className="text-base font-semibold text-destructive">
+            Danger Zone
+          </h2>
+          <div className="mt-5 overflow-hidden rounded-2xl border border-destructive/20 bg-destructive/5">
+            <div className="flex items-center justify-between gap-4 px-4 py-4 sm:px-5">
+              <p className="text-sm font-medium text-destructive">
+                Delete {label}
+              </p>
+              <Button
+                type="button"
+                variant="destructive"
+                className="shrink-0"
+                disabled={!canManage || isSaving}
+                onClick={() => setIsDeleteOpen(true)}
+              >
+                <Trash2 className="size-4" />
+                Delete {label}
+              </Button>
+            </div>
           </div>
-        </form>
-      </section>
-      <section>
-        <h2 className="text-base font-semibold text-destructive">
-          Danger Zone
-        </h2>
-        <div className="mt-5 overflow-hidden rounded-2xl border border-destructive/20 bg-destructive/5">
-          <div className="flex items-center justify-between gap-4 px-4 py-4 sm:px-5">
-            <p className="text-sm font-medium text-destructive">
-              Delete {label}
-            </p>
-            <Button
-              type="button"
-              variant="destructive"
-              className="shrink-0"
-              disabled={!canManage || isSaving}
-              onClick={() => setIsDeleteOpen(true)}
-            >
-              <Trash2 className="size-4" />
-              Delete {label}
-            </Button>
-          </div>
-        </div>
-      </section>
-      <DeleteChannelDialog
-        channel={isDeleteOpen ? channel : null}
-        onOpenChange={setIsDeleteOpen}
-        onDeleteChannel={onDeleteChannel}
-      />
-    </div>
+        </section>
+        <DeleteChannelDialog
+          channel={isDeleteOpen ? channel : null}
+          onOpenChange={setIsDeleteOpen}
+          onDeleteChannel={onDeleteChannel}
+        />
+        <AlertDialog open={isDiscardOpen} onOpenChange={setIsDiscardOpen}>
+          <AlertDialogContent size="sm">
+            <AlertDialogHeader>
+              <AlertDialogTitle>Unsaved Changes</AlertDialogTitle>
+              <AlertDialogDescription>
+                You have unsaved changes to this {noun}. Discard them and leave
+                settings?
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Go Back</AlertDialogCancel>
+              <AlertDialogAction variant="destructive" onClick={onDone}>
+                Discard
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      </div>
+    </ChannelSettingsLayout>
   );
 }
