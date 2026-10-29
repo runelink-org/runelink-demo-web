@@ -181,7 +181,7 @@ export function MessageListItem({
                   {message.edited_at ? (
                     <span
                       className="ml-2 text-xs text-muted-foreground"
-                      title={`Edited ${message.edited_at.toLocaleString()}`}
+                      title={`Edited ${new Date(message.edited_at).toLocaleString()}`}
                     >
                       (edited)
                     </span>

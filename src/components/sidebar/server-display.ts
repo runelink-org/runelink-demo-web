@@ -7,12 +7,12 @@ export function getServerMonogram(title: string): string {
     .toUpperCase();
 }
 
-export function formatServerTimestamp(value: Date): string {
+export function formatServerTimestamp(value: string): string {
   return new Intl.DateTimeFormat(undefined, {
     month: "numeric",
     day: "numeric",
     year: "2-digit",
     hour: "numeric",
     minute: "2-digit",
-  }).format(value);
+  }).format(new Date(value));
 }
