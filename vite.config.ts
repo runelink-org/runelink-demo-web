@@ -8,9 +8,9 @@ export default defineConfig({
   plugins: [react(), tailwindcss()],
   resolve: {
     alias: {
-      "@": path.resolve(__dirname, "./src"),
+      "@": path.resolve(import.meta.dirname, "./src"),
       "@runelink/sdk": path.resolve(
-        __dirname,
+        import.meta.dirname,
         "./vendor/runelink-sdk-js/src/index.ts"
       ),
     },

@@ -143,17 +143,27 @@ export function App() {
       cancelPendingAuthentication();
     }
     previousRouteRef.current = route;
-
-    // Lets the members effect retry failed loads after navigating
-    setMembersErrorByServerId({});
   }, [route]);
 
-  // Retries failed member loads once the connection is back
-  useEffect(() => {
-    if (connectionStatus === "connected") {
-      setMembersErrorByServerId({});
-    }
-  }, [connectionStatus]);
+  const [membersLoadContext, setMembersLoadContext] = useState({
+    route,
+    connectionStatus,
+    activeAccountKey,
+  });
+  // Retry failed member loads after navigation, reconnects, or account changes.
+  if (
+    membersLoadContext.route !== route ||
+    membersLoadContext.connectionStatus !== connectionStatus ||
+    membersLoadContext.activeAccountKey !== activeAccountKey
+  ) {
+    setMembersLoadContext({ route, connectionStatus, activeAccountKey });
+    setMembersErrorByServerId({});
+  }
+
+  if (route.screen !== "auth" && manageOriginAccountKey !== null) {
+    setManageOriginAccountKey(null);
+    setShouldPrefillAccount(true);
+  }
 
   // Wide layouts show members beside the channel, so drop the members page
   // route to keep the pane toggle in charge
@@ -181,13 +191,16 @@ export function App() {
     initializeRunelinkConnectionStore();
   }, []);
 
-  useEffect(() => {
-    if (!activeAccount || !activeAuth) {
-      setIsSidebarLoading(false);
-      setResolvedSidebarAccountKey(null);
-      setSidebarError(null);
-    }
-  }, [activeAccount, activeAuth]);
+  if (
+    (!activeAccount || !activeAuth) &&
+    (isSidebarLoading ||
+      resolvedSidebarAccountKey !== null ||
+      sidebarError !== null)
+  ) {
+    setIsSidebarLoading(false);
+    setResolvedSidebarAccountKey(null);
+    setSidebarError(null);
+  }
 
   useEffect(() => {
     if (!activeAccount || !activeAuth || connectionStatus !== "connected") {
@@ -308,9 +321,13 @@ export function App() {
       void fetchServerWithChannels(
         membership.server.id,
         getTargetHost(membership.server.host, activeAccount.host)
-      ).finally(() => {
-        pendingServerDetailsRef.current.delete(membership.server.id);
-      });
+      )
+        .catch((error) => {
+          debugRunelink("server hydration failed", { error });
+        })
+        .finally(() => {
+          pendingServerDetailsRef.current.delete(membership.server.id);
+        });
     }
   }, [
     activeAccount,
@@ -327,7 +344,9 @@ export function App() {
     if (activeUserKey in userByRefKey) {
       return;
     }
-    void fetchUserByRef(activeAccount);
+    void fetchUserByRef(activeAccount).catch((error) => {
+      debugRunelink("active user fetch failed", { error });
+    });
   }, [activeAccount, connectionStatus, fetchUserByRef, userByRefKey]);
 
   useEffect(() => {
@@ -379,8 +398,7 @@ export function App() {
     : false;
   const canModerateSelectedMessages = canDeleteSelectedServer;
   const isSelectedServerHydrating = selectedServer
-    ? !(selectedServer.server.id in serverWithChannelsById) ||
-      pendingServerDetailsRef.current.has(selectedServer.server.id)
+    ? !(selectedServer.server.id in serverWithChannelsById)
     : false;
   // Categories can't be opened, so only text channels count as selected
   const selectedChannel = selectedServer?.channels.find(
@@ -574,8 +592,6 @@ export function App() {
     if (!switchedToReadyAccount) {
       return;
     }
-    setManageOriginAccountKey(null);
-    setShouldPrefillAccount(true);
     const destination: AppRoute = authReturnRouteRef.current ?? {
       screen: "home",
     };
