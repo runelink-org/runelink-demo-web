@@ -1,4 +1,3 @@
-import { useState } from "react";
 import { InlineMessageEditor } from "./InlineMessageEditor";
 import { cn } from "@/lib/utils";
 import { useContextActionsMenu } from "@/lib/use-context-actions-menu";
@@ -17,6 +16,9 @@ type MessageListItemProps = {
   fullTimestamp: string;
   authorJoinedAt: string | null;
   canDeleteMessage: boolean;
+  editing: ActiveMessage | null;
+  onEdit: (message: ActiveMessage | null) => void;
+  onCancelEdit: () => void;
   replyTarget: Message | undefined;
   onReply: (message: ActiveMessage) => void;
   onJumpToMessage: (id: string) => void;
@@ -33,12 +35,14 @@ export function MessageListItem({
   fullTimestamp,
   authorJoinedAt,
   canDeleteMessage,
+  editing,
+  onEdit,
+  onCancelEdit,
   replyTarget,
   onReply,
   onJumpToMessage,
   onDeleteMessage,
 }: MessageListItemProps) {
-  const [editing, setEditing] = useState<ActiveMessage | null>(null);
   const contextMenu = useContextActionsMenu();
   const isOneLine = !message.body.includes("\n");
 
@@ -106,7 +110,7 @@ export function MessageListItem({
                 canDeleteMessage={canDeleteMessage}
                 onDeleteMessage={onDeleteMessage}
                 onReply={onReply}
-                onEdit={setEditing}
+                onEdit={onEdit}
               />
             </div>
           ) : null}
@@ -162,11 +166,8 @@ export function MessageListItem({
                   message={editing}
                   host={host}
                   onClose={(reason) => {
-                    setEditing(null);
-                    if (reason === "cancel")
-                      document
-                        .getElementById(`message-${message.id}`)
-                        ?.focus({ preventScroll: true });
+                    onEdit(null);
+                    if (reason === "cancel") onCancelEdit();
                   }}
                 />
               ) : (

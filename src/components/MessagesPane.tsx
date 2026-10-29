@@ -217,6 +217,9 @@ function MessageList({
   onScroll,
   activeAccount,
   canModerateMessages,
+  editingMessage,
+  onEditMessage,
+  onCancelEdit,
   onDeleteMessage,
   onReply,
 }: {
@@ -226,6 +229,9 @@ function MessageList({
   onScroll: () => void;
   activeAccount: UserRef | null;
   canModerateMessages: boolean;
+  editingMessage: ActiveMessage | null;
+  onEditMessage: (message: ActiveMessage | null) => void;
+  onCancelEdit: () => void;
   onDeleteMessage: (message: Message) => Promise<void>;
   onReply: (message: ActiveMessage) => void;
 }) {
@@ -294,6 +300,11 @@ function MessageList({
               onReply={onReply}
               onJumpToMessage={jumpToMessage}
               canDeleteMessage={canDeleteMessage}
+              editing={
+                editingMessage?.id === message.id ? editingMessage : null
+              }
+              onEdit={onEditMessage}
+              onCancelEdit={onCancelEdit}
               onDeleteMessage={(nextMessage) => {
                 setMessagePendingDelete(nextMessage);
               }}
@@ -343,6 +354,15 @@ export function MessagesPane({
   );
   const isMembersPaneShown = !!membersPane && isMembersPaneOpen;
   const [draft, setDraft] = useState("");
+  const [editSelection, setEditSelection] = useState<{
+    channelKey: string | null;
+    message: ActiveMessage;
+  } | null>(null);
+  const editingMessage =
+    editSelection?.channelKey === selectedChannelKey
+      ? editSelection.message
+      : null;
+  useEffect(() => () => setEditSelection(null), [selectedChannelKey]);
   const [replySelection, setReplySelection] = useState<{
     channelKey: string | null;
     messageId: string;
@@ -359,6 +379,7 @@ export function MessagesPane({
   const [composerHeight, setComposerHeight] = useState(DEFAULT_COMPOSER_HEIGHT);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const scrollContainerRef = useRef<HTMLDivElement | null>(null);
+  const scrollToBottomOnEditRef = useRef(false);
   const hasRestoredScrollRef = useRef(false);
   const previousChannelKeyRef = useRef<string | null>(null);
   const previousMessageCountRef = useRef(0);
@@ -392,6 +413,13 @@ export function MessagesPane({
 
     element.scrollTop = element.scrollHeight;
   }, []);
+
+  useLayoutEffect(() => {
+    if (editingMessage && scrollToBottomOnEditRef.current) {
+      scrollToBottomOnEditRef.current = false;
+      scrollToBottom();
+    }
+  }, [editingMessage, scrollToBottom]);
 
   const saveScrollPosition = useCallback(
     (channelKey: string | null, scrollTop?: number) => {
@@ -594,6 +622,32 @@ export function MessagesPane({
   }
 
   async function handleKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
+    if (
+      event.key === "ArrowUp" &&
+      !event.shiftKey &&
+      !event.altKey &&
+      !event.ctrlKey &&
+      !event.metaKey &&
+      !event.nativeEvent.isComposing &&
+      draft === "" &&
+      !editingMessage
+    ) {
+      const latest = [...selectedMessages]
+        .reverse()
+        .find((message) => message.deleted_at === null);
+      if (
+        latest &&
+        latest.deleted_at === null &&
+        latest.author &&
+        activeAccount &&
+        sameUserRef(activeAccount, latest.author)
+      ) {
+        event.preventDefault();
+        scrollToBottomOnEditRef.current = true;
+        setEditSelection({ channelKey: selectedChannelKey, message: latest });
+      }
+      return;
+    }
     if (event.key === "Escape") {
       setReplySelection(null);
       return;
@@ -828,6 +882,15 @@ export function MessagesPane({
               onScroll={handleMessagesScroll}
               activeAccount={activeAccount}
               canModerateMessages={canModerateMessages}
+              editingMessage={editingMessage}
+              onEditMessage={(message) =>
+                setEditSelection(
+                  message ? { channelKey: selectedChannelKey, message } : null
+                )
+              }
+              onCancelEdit={() =>
+                textareaRef.current?.focus({ preventScroll: true })
+              }
               onDeleteMessage={onDeleteMessage}
               onReply={(message) => {
                 setReplySelection({
