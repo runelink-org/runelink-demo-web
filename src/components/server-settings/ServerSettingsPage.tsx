@@ -116,10 +116,10 @@ export function ServerSettingsPage({
           </Button>
           <h1 className="min-w-0 truncate text-xl font-semibold text-foreground">
             <span className="text-muted-foreground font-medium">
-              Server settings
+              Server Settings
             </span>
             <span className="text-muted-foreground px-2">/</span>
-            <span>{server?.server.title ?? "Unknown server"}</span>
+            <span>{server?.server.title ?? "Unknown Server"}</span>
           </h1>
         </div>
       </header>
@@ -173,7 +173,7 @@ export function ServerSettingsPage({
                   <div className="grid gap-2 px-4 py-4 sm:grid-cols-[180px_minmax(0,1fr)] sm:gap-6 sm:px-5">
                     <div>
                       <p className="text-sm font-medium text-foreground">
-                        Member count
+                        Member Count
                       </p>
                     </div>
                     <div className="min-w-0 text-sm text-foreground">
@@ -230,7 +230,7 @@ export function ServerSettingsPage({
             <section>
               <div>
                 <h2 className="text-base font-semibold text-destructive">
-                  Danger zone
+                  Danger Zone
                 </h2>
               </div>
 
@@ -239,7 +239,7 @@ export function ServerSettingsPage({
                   <div className="flex items-center justify-between gap-4 px-4 py-4 sm:px-5">
                     <div className="min-w-0">
                       <p className="text-sm font-medium text-destructive">
-                        Leave server
+                        Leave Server
                       </p>
                     </div>
                     <Button
@@ -251,14 +251,14 @@ export function ServerSettingsPage({
                       }}
                     >
                       <LogOut className="size-4" />
-                      Leave server
+                      Leave Server
                     </Button>
                   </div>
 
                   <div className="flex items-center justify-between gap-4 px-4 py-4 sm:px-5">
                     <div className="min-w-0">
                       <p className="text-sm font-medium text-destructive">
-                        Delete server
+                        Delete Server
                       </p>
                     </div>
                     <Button
@@ -275,7 +275,7 @@ export function ServerSettingsPage({
                       }}
                     >
                       <Trash2 className="size-4" />
-                      Delete server
+                      Delete Server
                     </Button>
                   </div>
                 </div>
@@ -285,7 +285,7 @@ export function ServerSettingsPage({
         ) : (
           <div className="flex h-full items-center justify-center">
             <div className="max-w-md rounded-3xl border border-border/70 bg-background/80 p-6 text-center shadow-sm backdrop-blur">
-              <h2 className="text-lg font-semibold">Server unavailable</h2>
+              <h2 className="text-lg font-semibold">Server Unavailable</h2>
               <p className="mt-2 text-sm text-muted-foreground">
                 The selected server could not be found.
               </p>

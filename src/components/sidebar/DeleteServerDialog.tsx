@@ -62,7 +62,7 @@ export function DeleteServerDialog({
     >
       <AlertDialogContent size="sm">
         <AlertDialogHeader>
-          <AlertDialogTitle>Delete server?</AlertDialogTitle>
+          <AlertDialogTitle>Delete Server?</AlertDialogTitle>
           <AlertDialogDescription>
             {server
               ? `This permanently deletes ${server.title} and its channels.`
@@ -82,7 +82,7 @@ export function DeleteServerDialog({
               void handleConfirm();
             }}
           >
-            {isDeleting ? "Deleting..." : "Delete server"}
+            {isDeleting ? "Deleting..." : "Delete Server"}
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>

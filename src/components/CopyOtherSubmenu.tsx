@@ -19,7 +19,7 @@ export function CopyOtherSubmenu({ options }: { options: CopyOption[] }) {
     <DropdownMenuSub>
       <DropdownMenuSubTrigger className="cursor-pointer gap-3 rounded-xl px-3 py-2">
         <Copy className="size-4" />
-        <span className="font-medium">Copy other</span>
+        <span className="font-medium">Copy Other</span>
       </DropdownMenuSubTrigger>
       <DropdownMenuSubContent className="w-56">
         {options.map((option) => (

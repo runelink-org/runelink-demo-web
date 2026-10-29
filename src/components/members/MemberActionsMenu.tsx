@@ -147,7 +147,7 @@ export function MemberActionsMenu({
             }}
           >
             <Copy className="size-4" />
-            <span className="font-medium">Copy user ID</span>
+            <span className="font-medium">Copy User ID</span>
           </DropdownMenuItem>
           {canModerateMembers ? (
             <DropdownMenuItem
@@ -170,7 +170,7 @@ export function MemberActionsMenu({
                 <Shield className="size-4" />
               )}
               <span className="font-medium">
-                {member.role === "admin" ? "Remove admin" : "Promote to admin"}
+                {member.role === "admin" ? "Remove Admin" : "Promote to Admin"}
               </span>
             </DropdownMenuItem>
           ) : null}
@@ -183,7 +183,7 @@ export function MemberActionsMenu({
               }}
             >
               <Trash2 className="size-4" />
-              <span className="font-medium">Kick member</span>
+              <span className="font-medium">Kick Member</span>
             </DropdownMenuItem>
           ) : null}
         </DropdownMenuContent>
@@ -199,7 +199,7 @@ export function MemberActionsMenu({
       >
         <AlertDialogContent size="sm">
           <AlertDialogHeader>
-            <AlertDialogTitle>Remove your admin role?</AlertDialogTitle>
+            <AlertDialogTitle>Remove Your Admin Role?</AlertDialogTitle>
             <AlertDialogDescription>
               You will lose access to member management for this server after
               demoting yourself.
@@ -218,7 +218,7 @@ export function MemberActionsMenu({
                 void handleUpdateMemberRole("member");
               }}
             >
-              {isUpdatingRole ? "Removing..." : "Remove admin"}
+              {isUpdatingRole ? "Removing..." : "Remove Admin"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

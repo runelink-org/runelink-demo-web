@@ -28,6 +28,7 @@ export function DeleteChannelDialog({
   const [error, setError] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const noun = channel?.kind === "category" ? "category" : "channel";
+  const nounLabel = channel?.kind === "category" ? "Category" : "Channel";
 
   async function handleConfirm() {
     if (!channel) {
@@ -74,7 +75,7 @@ export function DeleteChannelDialog({
     >
       <AlertDialogContent size="sm">
         <AlertDialogHeader>
-          <AlertDialogTitle>Delete {noun}?</AlertDialogTitle>
+          <AlertDialogTitle>Delete {nounLabel}?</AlertDialogTitle>
           <AlertDialogDescription>
             {channel?.kind === "category"
               ? `This will remove the ${channel.title} category. Only empty categories can be deleted.`
@@ -96,7 +97,7 @@ export function DeleteChannelDialog({
               void handleConfirm();
             }}
           >
-            {isDeleting ? "Deleting..." : `Delete ${noun}`}
+            {isDeleting ? "Deleting..." : `Delete ${nounLabel}`}
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>

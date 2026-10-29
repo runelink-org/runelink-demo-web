@@ -62,7 +62,7 @@ export function DeleteMessageDialog({
     >
       <AlertDialogContent size="sm">
         <AlertDialogHeader>
-          <AlertDialogTitle>Delete message?</AlertDialogTitle>
+          <AlertDialogTitle>Delete Message?</AlertDialogTitle>
           <AlertDialogDescription>
             This permanently clears the message text. Replies to it will show
             that the original message was deleted.
@@ -82,7 +82,7 @@ export function DeleteMessageDialog({
               void handleConfirm();
             }}
           >
-            {isDeleting ? "Deleting..." : "Delete message"}
+            {isDeleting ? "Deleting..." : "Delete Message"}
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>
