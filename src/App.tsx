@@ -322,7 +322,7 @@ export function App() {
         membership.server.id,
         getTargetHost(membership.server.host, activeAccount.host)
       )
-        .catch((error) => {
+        .catch((error: unknown) => {
           debugRunelink("server hydration failed", { error });
         })
         .finally(() => {
@@ -344,7 +344,7 @@ export function App() {
     if (activeUserKey in userByRefKey) {
       return;
     }
-    void fetchUserByRef(activeAccount).catch((error) => {
+    void fetchUserByRef(activeAccount).catch((error: unknown) => {
       debugRunelink("active user fetch failed", { error });
     });
   }, [activeAccount, connectionStatus, fetchUserByRef, userByRefKey]);
