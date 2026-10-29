@@ -1,6 +1,21 @@
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { requestExpected } from "@/lib/runelink-request";
+import { handleRunelinkUpdate } from "@/lib/runelink-updates";
 import type { ServerMember, ServerWithChannels } from "@runelink/sdk";
 import { ArrowLeft, LogOut, Trash2, Users } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { DeleteServerDialog } from "@/components/sidebar/DeleteServerDialog";
 import { LeaveServerDialog } from "@/components/sidebar/LeaveServerDialog";
 import { Button } from "@/components/ui/button";
@@ -34,13 +49,49 @@ function formatServerTimestamp(value: Date): string {
   }).format(value);
 }
 
-export function ServerSettingsPage({
+export function ServerSettingsPage(props: ServerSettingsPageProps) {
+  const account = useAuthStore(getActiveAccount);
+  return (
+    <ServerSettingsContent
+      key={`${account ? userRefKey(account) : "none"}:${props.server?.server.id ?? "none"}`}
+      {...props}
+    />
+  );
+}
+
+function normalizeDescription(value: string | null): string {
+  return (value ?? "").replace(/[^\S\r\n]+$/gm, "").trim();
+}
+
+function ServerSettingsContent({
   server,
   members,
   isLoadingMembers,
   membersError,
   onDone,
 }: ServerSettingsPageProps) {
+  const [baseline, setBaseline] = useState(server?.server ?? null);
+  const [title, setTitle] = useState(server?.server.title ?? "");
+  const [description, setDescription] = useState(
+    server?.server.description ?? ""
+  );
+  const [isSaving, setIsSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [saved, setSaved] = useState(false);
+  const [isDiscardOpen, setIsDiscardOpen] = useState(false);
+  const mountedRef = useRef(false);
+  const submittedTitle = title.trim();
+  const submittedDescription = normalizeDescription(description);
+  const dirty =
+    baseline !== null &&
+    (submittedTitle !== baseline.title.trim() ||
+      submittedDescription !== normalizeDescription(baseline.description));
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
   const [isLeaveDialogOpen, setIsLeaveDialogOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const activeAccount = useAuthStore(getActiveAccount);
@@ -78,6 +129,64 @@ export function ServerSettingsPage({
   const canModerateMembers =
     activeUser?.role === "admin" || activeServerMember?.role === "admin";
 
+  function reset() {
+    if (!server) return;
+    setBaseline(server.server);
+    setTitle(server.server.title);
+    setDescription(server.server.description ?? "");
+    setError(null);
+    setSaved(false);
+  }
+
+  async function save(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (
+      !activeAccount ||
+      !baseline ||
+      !canModerateMembers ||
+      isSaving ||
+      !dirty ||
+      !submittedTitle
+    )
+      return;
+    const account = activeAccount;
+    setIsSaving(true);
+    setError(null);
+    setSaved(false);
+    try {
+      const reply = await requestExpected("servers_update", {
+        type: "servers_update",
+        data: {
+          server_id: baseline.id,
+          server_update: {
+            title: submittedTitle,
+            description: submittedDescription || null,
+            expected_updated_at: baseline.update_version,
+          },
+          target_host: getTargetHost(baseline.host, account.host),
+        },
+      });
+      const active = getActiveAccount(useAuthStore.getState());
+      if (active?.name !== account.name || active?.host !== account.host)
+        return;
+      handleRunelinkUpdate({ type: "server_upserted", data: reply.data });
+      if (!mountedRef.current) return;
+      setBaseline(reply.data);
+      setTitle(reply.data.title);
+      setDescription(reply.data.description ?? "");
+      setSaved(true);
+    } catch (error) {
+      if (mountedRef.current)
+        setError(
+          error instanceof Error
+            ? error.message
+            : "Could not save server settings."
+        );
+    } finally {
+      if (mountedRef.current) setIsSaving(false);
+    }
+  }
+
   async function handleLeaveServer(serverId: string, serverHost: string) {
     if (!activeAccount) {
       return;
@@ -109,7 +218,11 @@ export function ServerSettingsPage({
             variant="ghost"
             size="icon"
             className="-ml-2 size-9 shrink-0 rounded-full"
-            onClick={onDone}
+            onClick={() => {
+              if (dirty) setIsDiscardOpen(true);
+              else onDone();
+            }}
+            disabled={isSaving}
             aria-label="Back from server settings"
           >
             <ArrowLeft className="size-4" />
@@ -128,9 +241,83 @@ export function ServerSettingsPage({
         {server ? (
           <div className="mx-auto flex w-full max-w-6xl flex-col gap-6">
             <section>
+              <h2 className="text-base font-semibold text-foreground">
+                Overview
+              </h2>
+              <form className="mt-5 space-y-6" onSubmit={save}>
+                <div className="space-y-2">
+                  <Label htmlFor="server-title">Server Title</Label>
+                  <Input
+                    id="server-title"
+                    value={title}
+                    onChange={(event) => {
+                      setTitle(event.target.value);
+                      setSaved(false);
+                    }}
+                    disabled={!canModerateMembers || isSaving}
+                    required
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="server-description">Server Description</Label>
+                  <Textarea
+                    id="server-description"
+                    value={description}
+                    onChange={(event) => {
+                      setDescription(event.target.value);
+                      setSaved(false);
+                    }}
+                    rows={6}
+                    className="min-h-40 resize-y field-sizing-fixed"
+                    disabled={!canModerateMembers || isSaving}
+                  />
+                </div>
+                {!canModerateMembers ? (
+                  <p className="text-sm text-muted-foreground">
+                    Only server admins can edit server settings.
+                  </p>
+                ) : null}
+                {error ? (
+                  <p role="alert" className="text-sm text-destructive">
+                    {error} Your changes have been kept. Reset to load the
+                    latest values.
+                  </p>
+                ) : null}
+                <div className="flex items-center gap-3">
+                  <Button
+                    type="submit"
+                    disabled={
+                      !canModerateMembers ||
+                      isSaving ||
+                      !dirty ||
+                      !submittedTitle
+                    }
+                  >
+                    {isSaving ? "Saving..." : "Save Changes"}
+                  </Button>
+                  {dirty || error ? (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      disabled={isSaving}
+                      onClick={reset}
+                    >
+                      Reset
+                    </Button>
+                  ) : null}
+                  {saved ? (
+                    <p role="status" className="text-sm text-muted-foreground">
+                      Changes saved.
+                    </p>
+                  ) : null}
+                </div>
+              </form>
+            </section>
+
+            <section>
               <div>
                 <h2 className="text-base font-semibold text-foreground">
-                  General
+                  Details
                 </h2>
               </div>
 
@@ -139,34 +326,11 @@ export function ServerSettingsPage({
                   <div className="grid gap-2 px-4 py-4 sm:grid-cols-[180px_minmax(0,1fr)] sm:gap-6 sm:px-5">
                     <div>
                       <p className="text-sm font-medium text-foreground">
-                        Name
-                      </p>
-                    </div>
-                    <div className="min-w-0 text-sm text-foreground">
-                      {server.server.title}
-                    </div>
-                  </div>
-
-                  <div className="grid gap-2 px-4 py-4 sm:grid-cols-[180px_minmax(0,1fr)] sm:gap-6 sm:px-5">
-                    <div>
-                      <p className="text-sm font-medium text-foreground">
                         Host
                       </p>
                     </div>
                     <div className="min-w-0 text-sm text-foreground">
-                      @{server.server.host}
-                    </div>
-                  </div>
-
-                  <div className="grid gap-2 px-4 py-4 sm:grid-cols-[180px_minmax(0,1fr)] sm:gap-6 sm:px-5">
-                    <div>
-                      <p className="text-sm font-medium text-foreground">
-                        Description
-                      </p>
-                    </div>
-                    <div className="min-w-0 whitespace-pre-wrap text-sm text-foreground/90">
-                      {server.server.description?.trim() ||
-                        "No description yet."}
+                      {server.server.host}
                     </div>
                   </div>
 
@@ -246,6 +410,7 @@ export function ServerSettingsPage({
                       type="button"
                       variant="destructive"
                       className="shrink-0"
+                      disabled={isSaving}
                       onClick={() => {
                         setIsLeaveDialogOpen(true);
                       }}
@@ -265,7 +430,7 @@ export function ServerSettingsPage({
                       type="button"
                       variant="destructive"
                       className="shrink-0"
-                      disabled={!canModerateMembers}
+                      disabled={!canModerateMembers || isSaving}
                       onClick={() => {
                         if (!canModerateMembers) {
                           return;
@@ -292,6 +457,24 @@ export function ServerSettingsPage({
             </div>
           </div>
         )}
+
+        <AlertDialog open={isDiscardOpen} onOpenChange={setIsDiscardOpen}>
+          <AlertDialogContent size="sm">
+            <AlertDialogHeader>
+              <AlertDialogTitle>Unsaved Changes</AlertDialogTitle>
+              <AlertDialogDescription>
+                You have unsaved changes to this server. Discard them and leave
+                settings?
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Go Back</AlertDialogCancel>
+              <AlertDialogAction variant="destructive" onClick={onDone}>
+                Discard
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
 
         <LeaveServerDialog
           server={isLeaveDialogOpen && server ? server.server : null}
