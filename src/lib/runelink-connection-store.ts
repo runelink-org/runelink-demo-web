@@ -4,6 +4,7 @@ import {
   RunelinkRequestError,
   TokenResponseSchema,
   getWsUrl,
+  type CapabilityIssue,
   type TokenResponse,
   type UserRef,
   type WsReply,
@@ -39,6 +40,7 @@ type RunelinkConnectionStore = {
   connectedAccount: UserRef | null;
   // Capabilities this client offered that the host did not agree to.
   unsupportedCapabilities: string[];
+  capabilityIssues: CapabilityIssue[];
   incompatibleHost: string | null;
   disconnect: () => void;
   request: (message: WsRequest) => Promise<WsReply>;
@@ -114,7 +116,12 @@ function requireCapabilities(
   if (missing.length > 0) {
     throw new RunelinkIncompatibleHostError(
       host,
-      `missing ${missing.join(", ")}`
+      connection
+        .getCapabilityIssues()
+        ?.filter((issue) => missing.includes(issue.capability))
+        .map((issue) => issue.message)
+        .join("; ") ||
+        `compatibility details unavailable for ${missing.join(", ")}`
     );
   }
 }
@@ -132,6 +139,7 @@ export const useRunelinkConnectionStore = create<RunelinkConnectionStore>(
     lastError: null,
     connectedAccount: null,
     unsupportedCapabilities: [],
+    capabilityIssues: [],
     incompatibleHost: null,
     disconnect() {
       teardownConnection();
@@ -188,6 +196,7 @@ function teardownConnection(): void {
   replaceInProgress = false;
   useRunelinkConnectionStore.setState({
     unsupportedCapabilities: [],
+    capabilityIssues: [],
     incompatibleHost: null,
   });
 }
@@ -264,6 +273,7 @@ function attachConnectionListeners(connection: RunelinkConnection): void {
     if (status === "connected") {
       useRunelinkConnectionStore.setState({
         unsupportedCapabilities: connection.getUnsupportedCapabilities() ?? [],
+        capabilityIssues: connection.getCapabilityIssues() ?? [],
       });
       if (currentConnectionAuthenticated) {
         const connectedAccount = getConnectedAccount();

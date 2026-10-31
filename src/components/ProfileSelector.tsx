@@ -62,6 +62,9 @@ export function ProfileSelector({
   const unsupportedCapabilities = useRunelinkConnectionStore(
     (state) => state.unsupportedCapabilities
   );
+  const capabilityIssues = useRunelinkConnectionStore(
+    (state) => state.capabilityIssues
+  );
   const incompatibleHost = useRunelinkConnectionStore(
     (state) => state.incompatibleHost
   );
@@ -76,7 +79,7 @@ export function ProfileSelector({
     : isLimited
       ? {
           label: "Connected (Limited)",
-          detail: `${activeAccount?.host} doesn't support ${unsupportedCapabilities.join(", ")}`,
+          detail: `${activeAccount?.host}: ${capabilityIssues.map((issue) => issue.message).join("; ")}`,
           color: "text-amber-500",
         }
       : null;
