@@ -59,9 +59,6 @@ export function ProfileSelector({
   const logoutActive = useAuthStore((state) => state.logoutActive);
   const removeAccount = useAuthStore((state) => state.removeAccount);
   const connectionStatus = useRunelinkConnectionStore((state) => state.status);
-  const unsupportedCapabilities = useRunelinkConnectionStore(
-    (state) => state.unsupportedCapabilities
-  );
   const capabilityIssues = useRunelinkConnectionStore(
     (state) => state.capabilityIssues
   );
@@ -69,7 +66,7 @@ export function ProfileSelector({
     (state) => state.incompatibleHost
   );
   const isLimited =
-    connectionStatus === "connected" && unsupportedCapabilities.length > 0;
+    connectionStatus === "connected" && capabilityIssues.length > 0;
   const warning = incompatibleHost
     ? {
         label: "Incompatible Host",
