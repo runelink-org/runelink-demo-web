@@ -38,8 +38,6 @@ type RunelinkConnectionStore = {
   status: AccountConnectionStatus;
   lastError: string | null;
   connectedAccount: UserRef | null;
-  // Capabilities this client offered that the host did not agree to.
-  unsupportedCapabilities: string[];
   capabilityIssues: CapabilityIssue[];
   incompatibleHost: string | null;
   disconnect: () => void;
@@ -111,17 +109,13 @@ function requireCapabilities(
   host: string,
   capabilities: string[]
 ): void {
-  const unsupported = connection.getUnsupportedCapabilities() ?? [];
-  const missing = capabilities.filter((id) => unsupported.includes(id));
-  if (missing.length > 0) {
+  const issues = (connection.getCapabilityIssues() ?? []).filter((issue) =>
+    capabilities.includes(issue.capability)
+  );
+  if (issues.length > 0) {
     throw new RunelinkIncompatibleHostError(
       host,
-      connection
-        .getCapabilityIssues()
-        ?.filter((issue) => missing.includes(issue.capability))
-        .map((issue) => issue.message)
-        .join("; ") ||
-        `compatibility details unavailable for ${missing.join(", ")}`
+      issues.map((issue) => issue.message).join("; ")
     );
   }
 }
@@ -138,7 +132,6 @@ export const useRunelinkConnectionStore = create<RunelinkConnectionStore>(
     status: "disconnected",
     lastError: null,
     connectedAccount: null,
-    unsupportedCapabilities: [],
     capabilityIssues: [],
     incompatibleHost: null,
     disconnect() {
@@ -195,7 +188,6 @@ function teardownConnection(): void {
   currentConnectionAuthenticated = false;
   replaceInProgress = false;
   useRunelinkConnectionStore.setState({
-    unsupportedCapabilities: [],
     capabilityIssues: [],
     incompatibleHost: null,
   });
@@ -272,7 +264,6 @@ function attachConnectionListeners(connection: RunelinkConnection): void {
 
     if (status === "connected") {
       useRunelinkConnectionStore.setState({
-        unsupportedCapabilities: connection.getUnsupportedCapabilities() ?? [],
         capabilityIssues: connection.getCapabilityIssues() ?? [],
       });
       if (currentConnectionAuthenticated) {
