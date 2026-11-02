@@ -21,10 +21,9 @@
 - Follow the existing project structure and conventions
 - Ensure type safety throughout the codebase
 
-## Vendored Repositories
+## Runelink SDK
 
-- Treat vendored Git repositories as submodules. Do not manually copy or edit their files to update them to an upstream commit.
-- When the relevant upstream work is on the currently tracked branch, update the vendored repository with `git submodule update --remote <path>`.
-- When the relevant upstream work is on another branch, use `git submodule set-branch --branch <branch> <path>` followed by `git submodule update --remote <path>`.
-- When returning a vendored repository from a child branch to a parent branch, use `git submodule set-branch --branch <parent-branch> <path>` followed by `git submodule update --remote <path>`.
-- After updating, verify that the submodule worktree is clean and that the parent repository records only the intended submodule commit change.
+- The app depends on the published `@runelink/sdk` npm package.
+- When a sibling `../runelink-sdk-js` checkout exists, Vite and TypeScript use its source instead, so local SDK changes apply without publishing. Run `pnpm install` in that checkout too, so TypeScript can resolve the SDK's dependencies. Otherwise, the installed package is used, as on Vercel.
+- Local builds with the sibling checkout don't verify against the published package. The Vercel preview build is the authoritative check.
+- Changes that need unreleased SDK features can only merge after that SDK version is published and the dependency is bumped here.

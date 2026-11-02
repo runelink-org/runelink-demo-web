@@ -17,6 +17,9 @@ importers:
       '@fontsource/geist-sans':
         specifier: ^5.3.0
         version: 5.3.0
+      '@runelink/sdk':
+        specifier: ^0.1.0
+        version: 0.1.0
       '@tailwindcss/vite':
         specifier: ^4.3.3
         version: 4.3.3(vite@8.3.5(@types/node@26.6.5)(jiti@2.7.0))
@@ -530,6 +533,9 @@ packages:
 
   '@rolldown/pluginutils@1.0.1':
     resolution: {integrity: sha512-2j9bGt5Jh8hj+vPtgzPtl72j0yRxHAyumoo6TNfAjsLB04UtpSvPbPcDcBMxz7n+9CYB0c1GxQFxYRg2jimqGw==}
+
+  '@runelink/sdk@0.1.0':
+    resolution: {integrity: sha512-UfZMZPqFYwZ1UbR/QsyERrEjj2ETmmpTvx0YRMs9mkSP8+5HUMpl3B93M0TRS1L0ueSIEuq+BHzNXOrvmyd+Lw==}
 
   '@sec-ant/readable-stream@0.4.1':
     resolution: {integrity: sha512-831qok9r2t8AlxLko40y2ebgSDhenenCatLVeW/uBtnHPyhHOvG0C7TvfgecV+wHzIm5KUICgzmVpWS+IMEAeg==}
@@ -2236,6 +2242,10 @@ snapshots:
     optional: true
 
   '@rolldown/pluginutils@1.0.1': {}
+
+  '@runelink/sdk@0.1.0':
+    dependencies:
+      zod: 4.6.7
 
   '@sec-ant/readable-stream@0.4.1': {}
 
