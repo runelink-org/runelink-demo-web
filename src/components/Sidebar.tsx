@@ -351,6 +351,7 @@ export function Sidebar({
         {accountRailOnly ? null : <ServerRailSettingsMenu />}
 
         <ProfileSelector
+          isAuthScreenOpen={accountRailOnly}
           onManageAccounts={onManageAccounts}
           onSelectAccount={onSelectAccount}
         />

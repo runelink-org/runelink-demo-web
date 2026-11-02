@@ -582,12 +582,15 @@ export function App() {
   const connectedAccountKey = connectedAccount
     ? `${connectedAccount.name}@${connectedAccount.host}`
     : null;
+  // Selecting a saved account (which prefills the form) returns once it is
+  // ready, even if it was already active. Adding an account stays here until
+  // a different account is ready.
   const switchedToReadyAccount =
     route.screen === "auth" &&
     !!manageOriginAccountKey &&
     !!activeAccount &&
     !!activeAuth &&
-    activeAccountKey !== manageOriginAccountKey &&
+    (shouldPrefillAccount || activeAccountKey !== manageOriginAccountKey) &&
     connectedAccountKey === activeAccountKey &&
     connectionStatus === "connected";
 
