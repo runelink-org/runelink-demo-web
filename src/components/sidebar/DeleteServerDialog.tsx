@@ -1,6 +1,7 @@
 import type { Server } from "@runelink/sdk";
 import { useState } from "react";
 import { toast } from "sonner";
+import { TypedConfirmationField } from "@/components/TypedConfirmationField";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -18,16 +19,31 @@ type DeleteServerDialogProps = {
   onDeleteServer: (serverId: string, serverHost: string) => Promise<void>;
 };
 
+function normalizeWhitespace(value: string): string {
+  return value.trim().replace(/\s+/g, " ");
+}
+
 export function DeleteServerDialog({
   server,
   onOpenChange,
   onDeleteServer,
 }: DeleteServerDialogProps) {
+  const [confirmation, setConfirmation] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [shownServerId, setShownServerId] = useState(server?.id);
+  // Start fresh for each server, even when the parent closes the dialog.
+  if (shownServerId !== server?.id) {
+    setShownServerId(server?.id);
+    setConfirmation("");
+    setError(null);
+  }
+  // Titles may contain whitespace that can't be typed into one line.
+  const phrase = server ? normalizeWhitespace(`delete ${server.title}`) : "";
+  const isConfirmed = !!server && normalizeWhitespace(confirmation) === phrase;
 
   async function handleConfirm() {
-    if (!server) {
+    if (!server || !isConfirmed || isDeleting) {
       return;
     }
 
@@ -55,7 +71,6 @@ export function DeleteServerDialog({
       open={server !== null}
       onOpenChange={(open) => {
         if (!open && !isDeleting) {
-          setError(null);
           onOpenChange(false);
         }
       }}
@@ -64,11 +79,34 @@ export function DeleteServerDialog({
         <AlertDialogHeader>
           <AlertDialogTitle>Delete Server?</AlertDialogTitle>
           <AlertDialogDescription>
-            {server
-              ? `This permanently deletes ${server.title} and its channels.`
-              : "This permanently deletes the selected server and its channels."}
+            This permanently deletes this server, including all of its channels
+            and messages, for every member.
           </AlertDialogDescription>
         </AlertDialogHeader>
+
+        {server ? (
+          <>
+            <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-sm">
+              <dt className="text-muted-foreground">Title</dt>
+              <dd className="font-semibold wrap-anywhere">{server.title}</dd>
+              <dt className="text-muted-foreground">ID</dt>
+              <dd className="font-mono text-xs leading-5 wrap-anywhere">
+                {server.id}
+              </dd>
+              <dt className="text-muted-foreground">Host</dt>
+              <dd className="wrap-anywhere">{server.host}</dd>
+            </dl>
+            <TypedConfirmationField
+              phrase={phrase}
+              value={confirmation}
+              disabled={isDeleting}
+              onChange={setConfirmation}
+              onSubmit={() => {
+                void handleConfirm();
+              }}
+            />
+          </>
+        ) : null}
 
         {error ? <p className="text-sm text-destructive">{error}</p> : null}
 
@@ -77,7 +115,7 @@ export function DeleteServerDialog({
           <AlertDialogAction
             type="button"
             variant="destructive"
-            disabled={isDeleting}
+            disabled={!isConfirmed || isDeleting}
             onClick={() => {
               void handleConfirm();
             }}

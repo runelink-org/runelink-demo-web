@@ -1,6 +1,7 @@
 import {
   UserRefSchema,
   normalizeHostInput,
+  stripDefaultPort,
   validateHost,
   validateUsername,
   type UserRef,
@@ -65,8 +66,14 @@ function saveStoredJson<T>(key: string, value: T): void {
   window.localStorage.setItem(key, JSON.stringify(value));
 }
 
+// Hosts identify default-port users without the port, so saved accounts do
+// too. Otherwise lookups, deletions, and updates would not match them.
 export function normalizeHost(host: string): string {
-  return validateHost(host);
+  return stripDefaultPort(validateHost(host));
+}
+
+function canonicalUserRef(userRef: UserRef): UserRef {
+  return { ...userRef, host: stripDefaultPort(userRef.host) };
 }
 
 export function normalizeAccountInput(input: {
@@ -98,12 +105,31 @@ export function sameUserRef(
   return left.name === right.name && left.host === right.host;
 }
 
+export function hasAccount(accounts: UserRef[], userRef: UserRef): boolean {
+  return accounts.some((account) => sameUserRef(account, userRef));
+}
+
+export function upsertAccount(
+  accounts: UserRef[],
+  userRef: UserRef
+): UserRef[] {
+  return hasAccount(accounts, userRef) ? accounts : [...accounts, userRef];
+}
+
 export function loadBrowserAppConfig(): BrowserAppConfig {
-  return loadStoredJson(
+  const config = loadStoredJson(
     APP_CONFIG_STORAGE_KEY,
     BrowserAppConfigSchema,
     BrowserAppConfigSchema.parse({})
   );
+  return {
+    default_account: config.default_account
+      ? canonicalUserRef(config.default_account)
+      : null,
+    // Accounts saved before hosts were canonical may include the default
+    // port, so merge accounts that only differed by it.
+    accounts: config.accounts.map(canonicalUserRef).reduce(upsertAccount, []),
+  };
 }
 
 export function saveBrowserAppConfig(config: BrowserAppConfig): void {
@@ -111,11 +137,21 @@ export function saveBrowserAppConfig(config: BrowserAppConfig): void {
 }
 
 export function loadBrowserAuthCache(): BrowserAuthCache {
-  return loadStoredJson(
+  const cache = loadStoredJson(
     AUTH_CACHE_STORAGE_KEY,
     BrowserAuthCacheSchema,
     BrowserAuthCacheSchema.parse({})
   );
+  // An entry saved under the canonical key is newer than one with the
+  // default port, so it wins when both exist.
+  const accounts: BrowserAuthCache["accounts"] = {};
+  for (const [key, auth] of Object.entries(cache.accounts)) {
+    const canonicalKey = stripDefaultPort(key);
+    if (key === canonicalKey || !(canonicalKey in cache.accounts)) {
+      accounts[canonicalKey] = auth;
+    }
+  }
+  return { accounts };
 }
 
 export function saveBrowserAuthCache(cache: BrowserAuthCache): void {

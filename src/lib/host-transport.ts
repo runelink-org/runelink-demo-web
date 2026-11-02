@@ -87,14 +87,24 @@ async function probe(apiUrl: string, signal: AbortSignal): Promise<boolean> {
   return true;
 }
 
+function transportKey(host: string): string {
+  return padHost(host).replace(
+    /:(\d+)$/,
+    (_, port: string) => `:${Number(port)}`
+  );
+}
+
+// Returns whether a previously connected host uses HTTPS, or null if this
+// browser has not connected to it. Never prompts.
+export function getKnownHostTransport(host: string): boolean | null {
+  return loadHostTransports()[transportKey(host)]?.secure ?? null;
+}
+
 export async function resolveHostTransport(
   host: string,
   signal: AbortSignal
 ): Promise<boolean> {
-  host = padHost(host).replace(
-    /:(\d+)$/,
-    (_, port: string) => `:${Number(port)}`
-  );
+  host = transportKey(host);
   const secure = await probe(getApiUrl(host, true), signal);
   if (!secure) {
     if (window.location.protocol === "https:") {

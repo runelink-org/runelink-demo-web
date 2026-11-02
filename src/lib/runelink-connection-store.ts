@@ -11,6 +11,7 @@ import {
   type WsRequest,
 } from "@runelink/sdk";
 import { create } from "zustand";
+import { checkAccountDeleted } from "@/lib/account-deletion";
 import { sameUserRef, type StoredAccountAuth } from "@/lib/account-storage";
 import {
   clearAuthSessionAccount,
@@ -532,6 +533,9 @@ async function authenticateStoredAccount(
 
     clearAuthSessionAccount(userRef, errorMessage);
     connection.disconnect();
+    // The session may have been rejected because the user was deleted while
+    // this browser was offline.
+    void checkAccountDeleted(userRef);
     useRunelinkConnectionStore.setState({
       status: "disconnected",
       lastError: errorMessage,
