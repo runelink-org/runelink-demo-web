@@ -8,6 +8,7 @@ import type {
   ServerWithChannels,
 } from "@runelink/sdk";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { toast } from "sonner";
 import { AuthScreen } from "@/components/AuthScreen";
 import { ServerMemberList } from "@/components/members/ServerMemberList";
 import { ServerMembersPage } from "@/components/members/ServerMembersPage";
@@ -19,6 +20,7 @@ import {
   getActiveAccountAuth,
   useAuthStore,
 } from "@/lib/auth-store";
+import { initializeAccountDeletion } from "@/lib/account-deletion";
 import { type AppRoute, getContentRoute } from "@/lib/app-route";
 import { useChannelsStore } from "@/lib/channels-store";
 import { useNavigationStore } from "@/lib/navigation-store";
@@ -189,6 +191,7 @@ export function App() {
 
   useEffect(() => {
     initializeRunelinkConnectionStore();
+    initializeAccountDeletion((account) => toast(`${account} was deleted.`));
   }, []);
 
   if (

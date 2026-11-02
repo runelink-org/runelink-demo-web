@@ -95,5 +95,10 @@ export function useContextActionsMenu(moveThreshold = 10) {
     },
     style: { WebkitTouchCallout: "none" },
   };
-  return { menuProps, targetProps, anchor: menuAnchor };
+  return {
+    menuProps,
+    targetProps,
+    anchor: menuAnchor,
+    closeMenu: () => setMenuOpen(false),
+  };
 }

@@ -7,12 +7,14 @@ import {
 } from "@/lib/auth-session-bridge";
 import {
   accountStorageKey,
+  hasAccount,
   loadBrowserAppConfig,
   loadBrowserAuthCache,
   normalizeAccountInput,
   sameUserRef,
   saveBrowserAppConfig,
   saveBrowserAuthCache,
+  upsertAccount,
   type BrowserAppConfig,
   type BrowserAuthCache,
   type StoredAccountAuth,
@@ -39,7 +41,11 @@ type AuthStore = {
   signup: (credentials: AccountCredentials) => Promise<AuthResult>;
   login: (credentials: AccountCredentials) => Promise<AuthResult>;
   logoutActive: () => void;
-  removeAccount: (userRef: UserRef) => void;
+  // Returns false if the account was not saved.
+  removeAccount: (
+    userRef: UserRef,
+    options?: { selectNext?: boolean }
+  ) => boolean;
   storeAccountToken: (
     userRef: UserRef,
     tokenResponse: TokenResponse,
@@ -57,14 +63,6 @@ function persistState(
 ): void {
   saveBrowserAppConfig(config);
   saveBrowserAuthCache(authCache);
-}
-
-function upsertAccount(accounts: UserRef[], userRef: UserRef): UserRef[] {
-  if (accounts.some((account) => sameUserRef(account, userRef))) {
-    return accounts;
-  }
-
-  return [...accounts, userRef];
 }
 
 function storeTokenState(
@@ -134,6 +132,10 @@ function persistAuthenticatedAccount(
     authCache: nextAuthCache,
     authError: null,
   };
+}
+
+export function isSavedAccount(userRef: UserRef): boolean {
+  return hasAccount(useAuthStore.getState().config.accounts, userRef);
 }
 
 export function getActiveAccount(state: AuthStore): UserRef | null {
@@ -241,26 +243,28 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
     get().clearAccountAuth(activeAccount);
   },
 
-  removeAccount(userRef) {
-    set((state) => {
-      const accounts = state.config.accounts.filter(
-        (account) => !sameUserRef(account, userRef)
-      );
-      const nextConfig = {
-        default_account: sameUserRef(state.config.default_account, userRef)
-          ? (accounts[0] ?? null)
-          : state.config.default_account,
-        accounts,
-      };
-      const nextAuthCache = clearTokenState(state.authCache, userRef);
+  removeAccount(userRef, { selectNext = true } = {}) {
+    const state = get();
+    const accounts = state.config.accounts.filter(
+      (account) => !sameUserRef(account, userRef)
+    );
+    if (accounts.length === state.config.accounts.length) {
+      return false;
+    }
 
-      persistState(nextConfig, nextAuthCache);
-      return {
-        config: nextConfig,
-        authCache: nextAuthCache,
-        authError: null,
-      };
-    });
+    const nextConfig = {
+      default_account: sameUserRef(state.config.default_account, userRef)
+        ? selectNext
+          ? (accounts[0] ?? null)
+          : null
+        : state.config.default_account,
+      accounts,
+    };
+    const nextAuthCache = clearTokenState(state.authCache, userRef);
+
+    persistState(nextConfig, nextAuthCache);
+    set({ config: nextConfig, authCache: nextAuthCache, authError: null });
+    return true;
   },
 
   storeAccountToken(userRef, tokenResponse, clientId) {

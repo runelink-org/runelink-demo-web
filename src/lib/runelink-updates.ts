@@ -11,6 +11,7 @@ import type {
   UserRef,
   WsUpdate,
 } from "@runelink/sdk";
+import { handleUserDeletedUpdate } from "@/lib/account-deletion";
 import { getActiveAccount, useAuthStore } from "@/lib/auth-store";
 import { applyChannelUpserts, useChannelsStore } from "@/lib/channels-store";
 import { upsertMembership } from "@/lib/membership-utils";
@@ -320,6 +321,8 @@ function handleUserUpsert(user: User): void {
 }
 
 function handleUserDeleted(userRef: UserRef): void {
+  handleUserDeletedUpdate(userRef);
+
   const userKey = userRefKey(userRef);
   if (!(userKey in useUsersStore.getState().userByRefKey)) {
     return;
