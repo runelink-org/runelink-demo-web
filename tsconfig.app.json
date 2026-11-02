@@ -25,7 +25,7 @@
     "noUncheckedSideEffectImports": true,
     "paths": {
       "@/*": ["./src/*"],
-      "@runelink/sdk": ["./vendor/runelink-sdk-js/src/index.ts"]
+      "@runelink/sdk": ["../runelink-sdk-js/src/index.ts"]
     }
   },
   "include": ["src"]
