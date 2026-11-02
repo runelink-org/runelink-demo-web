@@ -36,6 +36,7 @@ import {
 import { useRunelinkConnectionStore } from "@/lib/runelink-connection-store";
 
 type ProfileSelectorProps = {
+  isAuthScreenOpen: boolean;
   onManageAccounts: () => void;
   onSelectAccount: () => void;
 };
@@ -50,6 +51,7 @@ const statusLabels = {
 };
 
 export function ProfileSelector({
+  isAuthScreenOpen,
   onManageAccounts,
   onSelectAccount,
 }: ProfileSelectorProps) {
@@ -100,6 +102,15 @@ export function ProfileSelector({
   }
 
   function selectAccount(account: UserRef) {
+    // The active account with a session is already open, unless the auth
+    // screen is covering it, in which case selecting it returns to it.
+    if (
+      !isAuthScreenOpen &&
+      sameUserRef(account, activeAccount) &&
+      activeAuth
+    ) {
+      return;
+    }
     onSelectAccount();
     openAccount(account);
   }
