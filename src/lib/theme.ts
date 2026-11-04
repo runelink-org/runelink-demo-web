@@ -3,6 +3,8 @@ import { create } from "zustand";
 
 const THEME_STORAGE_KEY = "runelink.demo.theme";
 const ThemePreferenceSchema = z.enum(["light", "dark", "system"]);
+// Matches --background in index.css.
+const THEME_COLORS = { light: "#ffffff", dark: "#171717" };
 
 export type ThemePreference = z.infer<typeof ThemePreferenceSchema>;
 export type ResolvedTheme = "light" | "dark";
@@ -53,10 +55,14 @@ function applyTheme(
     return;
   }
 
-  document.documentElement.classList.toggle(
-    "dark",
-    resolveTheme(selectedTheme, systemTheme) === "dark"
-  );
+  const resolvedTheme = resolveTheme(selectedTheme, systemTheme);
+
+  document.documentElement.classList.toggle("dark", resolvedTheme === "dark");
+  document
+    .querySelectorAll('meta[name="theme-color"]')
+    .forEach((meta) =>
+      meta.setAttribute("content", THEME_COLORS[resolvedTheme])
+    );
 }
 
 export const useThemeStore = create<ThemeState>((set, get) => ({
