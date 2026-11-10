@@ -1,3 +1,4 @@
+import { captureChannelNavigationUpdate } from "@/lib/channel-navigation-hints";
 import { compareResourceVersions } from "./resource-version";
 import { mergeMessages } from "./message-cache";
 import type {
@@ -534,6 +535,7 @@ function handleChannelDeleted(serverId: string, channelId: string): void {
 }
 
 function handleMessageUpsert(message: Message): void {
+  captureChannelNavigationUpdate(message);
   const textChannelId = message.text_channel_id;
   if (!isLoadedTextChannel(textChannelId)) {
     return;

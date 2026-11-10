@@ -1,3 +1,8 @@
+import {
+  cancelChannelNavigationPrefetch,
+  rememberChannelNavigationHints,
+  startChannelNavigationPrefetch,
+} from "@/lib/channel-navigation-hints";
 import { ChannelSettingsPage } from "@/components/channel-settings/ChannelSettingsPage";
 import type {
   Message,
@@ -201,6 +206,14 @@ export function App() {
     }
 
     const account = activeAccount;
+    const currentRoute = getCurrentRoute();
+    startChannelNavigationPrefetch(
+      account,
+      currentRoute.screen === "auth"
+        ? (authReturnRouteRef.current ?? currentRoute)
+        : currentRoute,
+      useMessagesStore.getState().messagesByTextChannelId
+    );
     const accountKey = `${account.name}@${account.host}`;
     let isCancelled = false;
 
@@ -250,6 +263,7 @@ export function App() {
 
     return () => {
       isCancelled = true;
+      cancelChannelNavigationPrefetch();
     };
   }, [
     activeAccount,
@@ -257,8 +271,15 @@ export function App() {
     connectionStatus,
     fetchMembershipsByUser,
     fetchServerWithChannels,
+    getCurrentRoute,
     reconcileServers,
   ]);
+
+  useEffect(() => {
+    if (activeAccount && activeAuth && connectionStatus === "connected") {
+      rememberChannelNavigationHints(activeAccount, serverWithChannelsById);
+    }
+  }, [activeAccount, activeAuth, connectionStatus, serverWithChannelsById]);
 
   const activeMemberships = activeAccount
     ? membershipsByUserRefKey[userRefKey(activeAccount)]
