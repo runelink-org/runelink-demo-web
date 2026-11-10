@@ -1,3 +1,7 @@
+import {
+  cancelChannelNavigationPrefetch,
+  takeChannelNavigationPrefetch,
+} from "@/lib/channel-navigation-hints";
 import { mergeMessages } from "./message-cache";
 import { type Message, type NewMessage } from "@runelink/sdk";
 import { create } from "zustand";
@@ -54,6 +58,10 @@ export const useMessagesStore = create<MessagesState>((set, get) => ({
 
     // Reset replaces this map so an old account's reply cannot fill its successor's cache.
     const requests = pendingFetches;
+    const prefetchedHistory = takeChannelNavigationPrefetch(
+      textChannelId,
+      targetHost
+    );
     set((state) => ({
       // Register the channel before requesting history so updates received
       // during the first fetch are retained and merged with its response.
@@ -73,15 +81,21 @@ export const useMessagesStore = create<MessagesState>((set, get) => ({
 
     const request = (async () => {
       try {
-        const reply = await requestExpected("messages_get_by_text_channel", {
-          type: "messages_get_by_text_channel",
-          data: {
-            text_channel_id: textChannelId,
-            target_host: targetHost,
-          },
-        });
+        const history = prefetchedHistory ? await prefetchedHistory : null;
+        if (requests !== pendingFetches) return history ?? [];
+        const messages =
+          history ??
+          (
+            await requestExpected("messages_get_by_text_channel", {
+              type: "messages_get_by_text_channel",
+              data: {
+                text_channel_id: textChannelId,
+                target_host: targetHost,
+              },
+            })
+          ).data;
 
-        if (requests !== pendingFetches) return reply.data;
+        if (requests !== pendingFetches) return messages;
 
         set((state) => ({
           hasFetchedByTextChannelId: {
@@ -92,7 +106,7 @@ export const useMessagesStore = create<MessagesState>((set, get) => ({
             ...state.messagesByTextChannelId,
             [textChannelId]: mergeMessages(
               state.messagesByTextChannelId[textChannelId] ?? [],
-              reply.data
+              messages
             ),
           },
           isLoadingByTextChannelId: {
@@ -101,7 +115,7 @@ export const useMessagesStore = create<MessagesState>((set, get) => ({
           },
         }));
 
-        return reply.data;
+        return messages;
       } catch (error) {
         if (requests !== pendingFetches) throw error;
         const message =
@@ -171,6 +185,7 @@ export const useMessagesStore = create<MessagesState>((set, get) => ({
   },
 
   reset() {
+    cancelChannelNavigationPrefetch();
     pendingFetches = new Map();
     set(initialState);
   },
