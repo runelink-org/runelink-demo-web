@@ -38,6 +38,8 @@ import { useAppNavigation } from "@/lib/use-app-navigation";
 import { useIsWideLayout } from "@/lib/use-wide-layout";
 import { useUsersStore } from "@/lib/users-store";
 
+const EMPTY_MESSAGES: Message[] = [];
+
 function getTargetHost(serverHost: string, activeHost: string): string | null {
   return serverHost === activeHost ? null : serverHost;
 }
@@ -116,18 +118,6 @@ export function App() {
   const createChannel = useChannelsStore((state) => state.createChannel);
   const deleteChannel = useChannelsStore((state) => state.deleteChannel);
   const moveChannel = useChannelsStore((state) => state.moveChannel);
-  const messagesByTextChannelId = useMessagesStore(
-    (state) => state.messagesByTextChannelId
-  );
-  const isLoadingByTextChannelId = useMessagesStore(
-    (state) => state.isLoadingByTextChannelId
-  );
-  const errorByTextChannelId = useMessagesStore(
-    (state) => state.errorByTextChannelId
-  );
-  const hasFetchedMessagesByTextChannelId = useMessagesStore(
-    (state) => state.hasFetchedByTextChannelId
-  );
   const fetchMessagesByTextChannel = useMessagesStore(
     (state) => state.fetchMessagesByTextChannel
   );
@@ -540,18 +530,28 @@ export function App() {
       : null;
   const selectedTextChannelId =
     selectedChannel?.kind === "text" ? selectedChannel.text_channel_id : null;
-  const selectedMessages = selectedTextChannelId
-    ? (messagesByTextChannelId[selectedTextChannelId] ?? [])
-    : [];
-  const isMessagesLoading = selectedTextChannelId
-    ? (isLoadingByTextChannelId[selectedTextChannelId] ?? false)
-    : false;
-  const hasFetchedSelectedMessages = selectedTextChannelId
-    ? (hasFetchedMessagesByTextChannelId[selectedTextChannelId] ?? false)
-    : false;
-  const messagesError = selectedTextChannelId
-    ? (errorByTextChannelId[selectedTextChannelId] ?? null)
-    : null;
+  // Background prefetches should not rerender the selected conversation.
+  const selectedMessages =
+    useMessagesStore((state) =>
+      selectedTextChannelId
+        ? state.messagesByTextChannelId[selectedTextChannelId]
+        : undefined
+    ) ?? EMPTY_MESSAGES;
+  const isMessagesLoading = useMessagesStore((state) =>
+    selectedTextChannelId
+      ? (state.isLoadingByTextChannelId[selectedTextChannelId] ?? false)
+      : false
+  );
+  const hasFetchedSelectedMessages = useMessagesStore((state) =>
+    selectedTextChannelId
+      ? (state.hasFetchedByTextChannelId[selectedTextChannelId] ?? false)
+      : false
+  );
+  const messagesError = useMessagesStore((state) =>
+    selectedTextChannelId
+      ? (state.errorByTextChannelId[selectedTextChannelId] ?? null)
+      : null
+  );
 
   useEffect(() => {
     if (

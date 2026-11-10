@@ -38,10 +38,22 @@ const initialState = {
   errorByTextChannelId: {},
 };
 
-export const useMessagesStore = create<MessagesState>((set) => ({
+let pendingFetches = new Map<string, Promise<Message[]>>();
+
+export const useMessagesStore = create<MessagesState>((set, get) => ({
   ...initialState,
 
-  async fetchMessagesByTextChannel(textChannelId, targetHost = null) {
+  fetchMessagesByTextChannel(textChannelId, targetHost = null) {
+    if (get().hasFetchedByTextChannelId[textChannelId]) {
+      return Promise.resolve(
+        get().messagesByTextChannelId[textChannelId] ?? []
+      );
+    }
+    const pending = pendingFetches.get(textChannelId);
+    if (pending) return pending;
+
+    // Reset replaces this map so an old account's reply cannot fill its successor's cache.
+    const requests = pendingFetches;
     set((state) => ({
       // Register the channel before requesting history so updates received
       // during the first fetch are retained and merged with its response.
@@ -59,51 +71,60 @@ export const useMessagesStore = create<MessagesState>((set) => ({
       },
     }));
 
-    try {
-      const reply = await requestExpected("messages_get_by_text_channel", {
-        type: "messages_get_by_text_channel",
-        data: {
-          text_channel_id: textChannelId,
-          target_host: targetHost,
-        },
-      });
+    const request = (async () => {
+      try {
+        const reply = await requestExpected("messages_get_by_text_channel", {
+          type: "messages_get_by_text_channel",
+          data: {
+            text_channel_id: textChannelId,
+            target_host: targetHost,
+          },
+        });
 
-      set((state) => ({
-        hasFetchedByTextChannelId: {
-          ...state.hasFetchedByTextChannelId,
-          [textChannelId]: true,
-        },
-        messagesByTextChannelId: {
-          ...state.messagesByTextChannelId,
-          [textChannelId]: mergeMessages(
-            state.messagesByTextChannelId[textChannelId] ?? [],
-            reply.data
-          ),
-        },
-        isLoadingByTextChannelId: {
-          ...state.isLoadingByTextChannelId,
-          [textChannelId]: false,
-        },
-      }));
+        if (requests !== pendingFetches) return reply.data;
 
-      return reply.data;
-    } catch (error) {
-      const message =
-        error instanceof Error
-          ? error.message
-          : "Failed to load channel messages";
-      set((state) => ({
-        isLoadingByTextChannelId: {
-          ...state.isLoadingByTextChannelId,
-          [textChannelId]: false,
-        },
-        errorByTextChannelId: {
-          ...state.errorByTextChannelId,
-          [textChannelId]: message,
-        },
-      }));
-      throw error;
-    }
+        set((state) => ({
+          hasFetchedByTextChannelId: {
+            ...state.hasFetchedByTextChannelId,
+            [textChannelId]: true,
+          },
+          messagesByTextChannelId: {
+            ...state.messagesByTextChannelId,
+            [textChannelId]: mergeMessages(
+              state.messagesByTextChannelId[textChannelId] ?? [],
+              reply.data
+            ),
+          },
+          isLoadingByTextChannelId: {
+            ...state.isLoadingByTextChannelId,
+            [textChannelId]: false,
+          },
+        }));
+
+        return reply.data;
+      } catch (error) {
+        if (requests !== pendingFetches) throw error;
+        const message =
+          error instanceof Error
+            ? error.message
+            : "Failed to load channel messages";
+        set((state) => ({
+          isLoadingByTextChannelId: {
+            ...state.isLoadingByTextChannelId,
+            [textChannelId]: false,
+          },
+          errorByTextChannelId: {
+            ...state.errorByTextChannelId,
+            [textChannelId]: message,
+          },
+        }));
+        throw error;
+      } finally {
+        requests.delete(textChannelId);
+      }
+    })();
+    requests.set(textChannelId, request);
+    return request;
   },
 
   async createMessage(textChannelId, newMessage, targetHost = null) {
@@ -150,6 +171,7 @@ export const useMessagesStore = create<MessagesState>((set) => ({
   },
 
   reset() {
+    pendingFetches = new Map();
     set(initialState);
   },
 }));
