@@ -1,9 +1,16 @@
 import type { ServerChannel } from "@runelink/sdk";
 import { Hash } from "lucide-react";
+import { useEffect, useRef } from "react";
 import { ChannelActionsMenu } from "@/components/sidebar/ChannelActionsMenu";
 import { Button } from "@/components/ui/button";
 import { useContextActionsMenu } from "@/lib/use-context-actions-menu";
 import { cn } from "@/lib/utils";
+import { getActiveAccount, useAuthStore } from "@/lib/auth-store";
+import { sameUserRef } from "@/lib/account-storage";
+import { useMessagesStore } from "@/lib/messages-store";
+import { useRunelinkConnectionStore } from "@/lib/runelink-connection-store";
+
+const PREFETCH_DELAY_MS = 150;
 
 type ChannelListItemProps = {
   host: string;
@@ -26,6 +33,37 @@ export function ChannelListItem({
 }: ChannelListItemProps) {
   // Cancel the long press as soon as the tree starts a drag at 5px.
   const contextMenu = useContextActionsMenu(5);
+  const prefetchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  function cancelPrefetch() {
+    if (prefetchTimer.current !== null) {
+      clearTimeout(prefetchTimer.current);
+      prefetchTimer.current = null;
+    }
+  }
+  useEffect(() => cancelPrefetch, [channel.id, host]);
+
+  function prefetch() {
+    cancelPrefetch();
+    const account = getActiveAccount(useAuthStore.getState());
+    const connection = useRunelinkConnectionStore.getState();
+    if (
+      channel.kind !== "text" ||
+      !account ||
+      connection.status !== "connected" ||
+      !sameUserRef(account, connection.connectedAccount)
+    )
+      return;
+
+    void useMessagesStore
+      .getState()
+      .fetchMessagesByTextChannel(
+        channel.text_channel_id,
+        host === account.host ? null : host
+      )
+      .catch(() => {
+        // Opening the channel retries a failed background fetch.
+      });
+  }
   return (
     <div
       {...contextMenu.targetProps}
@@ -45,8 +83,20 @@ export function ChannelListItem({
             : "text-sidebar-foreground/80 hover:text-sidebar-foreground"
         )}
         onClick={() => {
+          cancelPrefetch();
           onSelect(channel);
         }}
+        onPointerEnter={(event) => {
+          if (event.pointerType !== "mouse") return;
+          cancelPrefetch();
+          prefetchTimer.current = setTimeout(prefetch, PREFETCH_DELAY_MS);
+        }}
+        onPointerLeave={cancelPrefetch}
+        onPointerDown={cancelPrefetch}
+        onFocus={(event) => {
+          if (event.currentTarget.matches(":focus-visible")) prefetch();
+        }}
+        onBlur={cancelPrefetch}
       >
         <div className="flex min-w-0 items-start gap-3">
           <Hash
