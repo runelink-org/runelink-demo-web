@@ -23,6 +23,7 @@ import { ServerActionsMenu } from "@/components/sidebar/ServerActionsMenu";
 import { ServerRailButton } from "@/components/sidebar/ServerRailButton";
 import { Separator } from "@/components/ui/separator";
 import { useContextActionsMenu } from "@/lib/use-context-actions-menu";
+import { getAppRoutePath, getContentRoute } from "@/lib/app-route";
 
 type SidebarProps = {
   servers: ServerWithChannels[];
@@ -313,6 +314,12 @@ export function Sidebar({
                   key={server.id}
                   isSelected={isSelected}
                   server={server}
+                  href={getAppRoutePath(
+                    getContentRoute(
+                      server.id,
+                      selectedChannelIdByServerId[server.id] ?? null
+                    )
+                  )}
                   onOpenServerSettings={onOpenServerSettings}
                   canCreateChannels={canManageServer(server)}
                   onCreateChannel={openCreateChannel}
