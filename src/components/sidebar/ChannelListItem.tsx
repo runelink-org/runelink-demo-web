@@ -2,7 +2,9 @@ import type { ServerChannel } from "@runelink/sdk";
 import { Hash } from "lucide-react";
 import { useEffect, useRef } from "react";
 import { ChannelActionsMenu } from "@/components/sidebar/ChannelActionsMenu";
-import { Button } from "@/components/ui/button";
+import { NavigationLink } from "@/components/NavigationLink";
+import { buttonVariants } from "@/components/ui/button";
+import { getAppRoutePath } from "@/lib/app-route";
 import { useContextActionsMenu } from "@/lib/use-context-actions-menu";
 import { cn } from "@/lib/utils";
 import { getActiveAccount, useAuthStore } from "@/lib/auth-store";
@@ -74,15 +76,21 @@ export function ChannelListItem({
           : "border-transparent hover:bg-primary/6 dark:hover:bg-muted/60"
       )}
     >
-      <Button
-        variant="ghost"
+      <NavigationLink
+        href={getAppRoutePath({
+          screen: "channel",
+          serverId: channel.server_id,
+          channelId: channel.id,
+        })}
+        aria-current={isSelected ? "page" : undefined}
         className={cn(
+          buttonVariants({ variant: "ghost" }),
           "h-auto w-full min-w-0 cursor-pointer justify-start rounded-2xl px-3 py-3 text-left transition-colors group-hover:pr-10 group-has-[[data-slot=dropdown-menu-trigger]:focus-visible]:pr-10 hover:bg-transparent dark:hover:bg-transparent",
           isSelected
             ? "text-foreground dark:text-sidebar-foreground"
             : "text-sidebar-foreground/80 hover:text-sidebar-foreground"
         )}
-        onClick={() => {
+        onNavigate={() => {
           cancelPrefetch();
           onSelect(channel);
         }}
@@ -111,7 +119,7 @@ export function ChannelListItem({
             <p className="truncate text-sm font-medium">{channel.title}</p>
           </div>
         </div>
-      </Button>
+      </NavigationLink>
 
       <ChannelActionsMenu
         contextMenu={contextMenu}

@@ -1,6 +1,7 @@
 import type { Server, ServerChannelKind } from "@runelink/sdk";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { NavigationLink } from "@/components/NavigationLink";
 import { getServerMonogram } from "@/components/sidebar/server-display";
 import { ServerActionsMenu } from "@/components/sidebar/ServerActionsMenu";
 import { useContextActionsMenu } from "@/lib/use-context-actions-menu";
@@ -9,6 +10,7 @@ import { cn } from "@/lib/utils";
 type ServerRailButtonProps = {
   isSelected: boolean;
   server: Server;
+  href: string;
   onSelect: (serverId: string) => void;
   onOpenServerSettings: (server: Server) => void;
   canCreateChannels: boolean;
@@ -24,6 +26,7 @@ type TooltipPosition = {
 export function ServerRailButton({
   isSelected,
   server,
+  href,
   onSelect,
   onOpenServerSettings,
   canCreateChannels,
@@ -31,7 +34,7 @@ export function ServerRailButton({
   onLeaveServer,
 }: ServerRailButtonProps) {
   const contextMenu = useContextActionsMenu();
-  const buttonRef = useRef<HTMLButtonElement | null>(null);
+  const buttonRef = useRef<HTMLAnchorElement | null>(null);
   const [isTooltipVisible, setIsTooltipVisible] = useState(false);
   const [tooltipPosition, setTooltipPosition] =
     useState<TooltipPosition | null>(null);
@@ -90,22 +93,23 @@ export function ServerRailButton({
 
   return (
     <>
-      <button
+      <NavigationLink
         {...contextMenu.targetProps}
         ref={buttonRef}
-        type="button"
+        href={href}
         className={cn(
           "group relative flex size-12 shrink-0 cursor-pointer items-center justify-center rounded-2xl border text-sm font-semibold",
           isSelected
             ? "border-primary/30 bg-primary text-primary-foreground"
             : "border-sidebar-border bg-sidebar-accent text-sidebar-foreground hover:border-sidebar-foreground/35 hover:bg-sidebar-accent/80"
         )}
-        onClick={() => onSelect(server.id)}
+        onNavigate={() => onSelect(server.id)}
         onMouseEnter={showTooltip}
         onMouseLeave={hideTooltip}
         onFocus={showTooltip}
         onBlur={hideTooltip}
-        aria-pressed={isSelected}
+        aria-current={isSelected ? "location" : undefined}
+        aria-label={server.title}
       >
         <span
           className="pointer-events-none absolute -left-2 top-1/2 h-6 w-1 -translate-y-1/2 rounded-full bg-primary opacity-0 transition-[height,opacity] group-hover:opacity-60 data-[selected=true]:h-8 data-[selected=true]:opacity-100"
@@ -119,7 +123,7 @@ export function ServerRailButton({
         >
           {getServerMonogram(server.title)}
         </span>
-      </button>
+      </NavigationLink>
 
       <ServerActionsMenu
         contextOnly
