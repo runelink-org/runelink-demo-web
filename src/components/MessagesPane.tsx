@@ -38,6 +38,7 @@ import {
 import { sameUserRef } from "@/lib/account-storage";
 import type { AppRoute } from "@/lib/app-route";
 import { useMessageScrollStore } from "@/lib/message-scroll-store";
+import { useContextActionsMenu } from "@/lib/use-context-actions-menu";
 import { DeleteMessageDialog } from "./messages/DeleteMessageDialog";
 import { MessageListItem } from "./messages/MessageListItem";
 
@@ -375,6 +376,7 @@ export function MessagesPane({
   membersPane,
   onOpenMembers,
 }: MessagesPaneProps) {
+  const channelMenu = useContextActionsMenu();
   const [isMembersPaneOpen, setIsMembersPaneOpen] = useState(() =>
     loadStoredMembersPaneOpen()
   );
@@ -791,8 +793,17 @@ export function MessagesPane({
                   <ArrowLeft className="size-4" />
                 </Button>
                 <Hash className="size-5 shrink-0 text-muted-foreground" />
-                <h1 className="truncate text-xl font-semibold text-foreground">
-                  {selectedChannel.title}
+                <h1
+                  {...channelMenu.targetProps}
+                  className="truncate text-xl font-semibold text-foreground"
+                >
+                  <button
+                    type="button"
+                    className="block w-full cursor-pointer truncate rounded-sm text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+                    onClick={() => onEditChannel(selectedChannel)}
+                  >
+                    {selectedChannel.title}
+                  </button>
                 </h1>
               </div>
 
@@ -818,6 +829,7 @@ export function MessagesPane({
                 )}
                 <div className="sm:hidden">
                   <ChannelActionsMenu
+                    contextMenu={channelMenu}
                     host={selectedServer.server.host}
                     channel={selectedChannel}
                     canDeleteChannel={canDeleteChannel}
