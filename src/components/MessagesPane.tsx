@@ -27,6 +27,7 @@ import {
   X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { toast } from "sonner";
 import { Separator } from "@/components/ui/separator";
 import { ChannelActionsMenu } from "@/components/sidebar/ChannelActionsMenu";
 import { Textarea } from "@/components/ui/textarea";
@@ -423,6 +424,43 @@ export function MessagesPane({
   const setScrollTop = useMessageScrollStore((state) => state.setScrollTop);
 
   const canCompose = !!selectedServer && !!selectedChannel && !sidebarError;
+  const linkedMessage = targetMessageId
+    ? selectedMessages.find((message) => message.id === targetMessageId)
+    : undefined;
+  const messageLinkError = !linkedMessage
+    ? "The linked message could not be found."
+    : linkedMessage.deleted_at !== null
+      ? "The linked message has been deleted."
+      : null;
+
+  useEffect(() => {
+    if (
+      !targetMessageId ||
+      !selectedChannelKey ||
+      !canCompose ||
+      isSidebarLoading ||
+      !hasLoadedMessages ||
+      isMessagesLoading ||
+      messagesError ||
+      !messageLinkError
+    ) {
+      return;
+    }
+
+    toast.error(messageLinkError, {
+      id: `message-link-${selectedChannelKey}-${targetMessageId}`,
+    });
+  }, [
+    canCompose,
+    hasLoadedMessages,
+    isMessagesLoading,
+    isSidebarLoading,
+    messageLinkError,
+    messagesError,
+    selectedChannelKey,
+    targetMessageId,
+  ]);
+
   const isSendDisabled =
     !canCompose ||
     isSending ||
@@ -861,20 +899,6 @@ export function MessagesPane({
           className="relative flex min-h-0 min-w-0 flex-1 flex-col bg-background"
           onContextMenu={(event) => event.preventDefault()}
         >
-          {targetMessageId &&
-          hasLoadedMessages &&
-          !messagesError &&
-          !selectedMessages.some(
-            (message) =>
-              message.id === targetMessageId && message.deleted_at === null
-          ) ? (
-            <p
-              role="status"
-              className="px-6 py-2 text-sm text-muted-foreground"
-            >
-              Message unavailable.
-            </p>
-          ) : null}
           {sidebarError ? (
             <div className="flex flex-1 items-center justify-center px-6">
               <div className="max-w-md rounded-3xl border border-destructive/20 bg-destructive/5 p-6 text-center">
