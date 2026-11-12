@@ -18,6 +18,7 @@ export function useContextActionsMenu(moveThreshold = 10) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [menuAnchor, setMenuAnchor] = useState<{
     getBoundingClientRect: () => DOMRect;
+    side?: "top" | "bottom";
   }>();
   const longPressTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
   const touchStart = useRef<{ x: number; y: number }>(undefined);
@@ -33,6 +34,14 @@ export function useContextActionsMenu(moveThreshold = 10) {
   function openMenuAt(x: number, y: number) {
     const point = new DOMRect(x, y, 0, 0);
     setMenuAnchor({ getBoundingClientRect: () => point });
+    setMenuOpen(true);
+  }
+
+  function openMenuAbove(element: HTMLElement) {
+    setMenuAnchor({
+      getBoundingClientRect: () => element.getBoundingClientRect(),
+      side: "top",
+    });
     setMenuOpen(true);
   }
 
@@ -99,6 +108,8 @@ export function useContextActionsMenu(moveThreshold = 10) {
     menuProps,
     targetProps,
     anchor: menuAnchor,
+    side: menuAnchor?.side ?? "bottom",
+    openMenuAbove,
     closeMenu: () => setMenuOpen(false),
   };
 }

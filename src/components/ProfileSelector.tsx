@@ -321,7 +321,7 @@ function AccountMenuItem({
             <button
               type="button"
               className={[
-                "bg-accent text-accent-foreground absolute right-1 size-6 items-center justify-center rounded-sm",
+                "bg-accent text-accent-foreground absolute right-1 size-6 cursor-pointer items-center justify-center rounded-sm",
                 isActionsOpen
                   ? "flex"
                   : "hidden group-hover/account:flex group-focus-within/account:flex",

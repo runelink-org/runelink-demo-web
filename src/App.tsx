@@ -1025,6 +1025,7 @@ export function App() {
             messagesError={messagesError}
             activeAccount={activeAccount}
             canModerateMessages={canModerateSelectedMessages}
+            canModerateMembers={canDeleteSelectedServer}
             canDeleteChannel={canDeleteSelectedServer}
             onDeselectChannel={handleDeselectChannel}
             onSendMessage={handleSendMessage}

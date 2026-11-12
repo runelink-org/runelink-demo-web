@@ -55,6 +55,7 @@ type MessagesPaneProps = {
   messagesError: string | null;
   activeAccount: UserRef | null;
   canModerateMessages: boolean;
+  canModerateMembers: boolean;
   canDeleteChannel: boolean;
   onDeselectChannel: () => void;
   onSendMessage: (body: string, replyTo: string | null) => Promise<void>;
@@ -166,16 +167,6 @@ function formatMessageTimestamp(timestamp: string): string {
   }).format(value);
 }
 
-function formatFullTimestamp(value: string): string {
-  return new Intl.DateTimeFormat(undefined, {
-    month: "numeric",
-    day: "numeric",
-    year: "2-digit",
-    hour: "numeric",
-    minute: "2-digit",
-  }).format(new Date(value));
-}
-
 function formatCompactTimestamp(value: string): string {
   return new Intl.DateTimeFormat(undefined, {
     hour: "numeric",
@@ -253,6 +244,7 @@ function MessageList({
   onScroll,
   activeAccount,
   canModerateMessages,
+  canModerateMembers,
   editingMessage,
   onEditMessage,
   onCancelEdit,
@@ -267,6 +259,7 @@ function MessageList({
   onScroll: () => void;
   activeAccount: UserRef | null;
   canModerateMessages: boolean;
+  canModerateMembers: boolean;
   editingMessage: ActiveMessage | null;
   onEditMessage: (message: ActiveMessage | null) => void;
   onCancelEdit: () => void;
@@ -323,11 +316,6 @@ function MessageList({
               leadingMessageOffset={leadingMessageOffset}
               compactTimestamp={formatCompactTimestamp(message.created_at)}
               fullTimestamp={formatMessageTimestamp(message.created_at)}
-              authorJoinedAt={
-                message.author
-                  ? formatFullTimestamp(message.author.created_at)
-                  : null
-              }
               replyTarget={
                 message.reply_to
                   ? messagesById.get(message.reply_to)
@@ -336,6 +324,7 @@ function MessageList({
               onReply={onReply}
               onJumpToMessage={jumpToMessage}
               canDeleteMessage={canDeleteMessage}
+              canModerateMembers={canModerateMembers}
               editing={
                 editingMessage?.id === message.id ? editingMessage : null
               }
@@ -376,6 +365,7 @@ export function MessagesPane({
   messagesError,
   activeAccount,
   canModerateMessages,
+  canModerateMembers,
   canDeleteChannel,
   onDeselectChannel,
   onSendMessage,
@@ -963,6 +953,7 @@ export function MessagesPane({
               onScroll={handleMessagesScroll}
               activeAccount={activeAccount}
               canModerateMessages={canModerateMessages}
+              canModerateMembers={canModerateMembers}
               editingMessage={editingMessage}
               onEditMessage={(message) =>
                 setEditSelection(
