@@ -1,6 +1,7 @@
 import type { Server, ServerChannelKind } from "@runelink/sdk";
 import { Cog, Copy, Ellipsis, FolderPlus, Hash, LogOut } from "lucide-react";
 import { CopyOtherSubmenu } from "@/components/CopyOtherSubmenu";
+import { getAppRoutePath } from "@/lib/app-route";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -89,6 +90,14 @@ export function ServerActionsMenu({
         </DropdownMenuItem>
         <CopyOtherSubmenu
           options={[
+            {
+              label: "Web Link",
+              value: new URL(
+                getAppRoutePath({ screen: "server", serverId: server.id }),
+                window.location.origin
+              ).href,
+              successLabel: "Copied web link.",
+            },
             {
               label: "Path for CLI",
               value: formatServerCliPath(server.host, server.id),

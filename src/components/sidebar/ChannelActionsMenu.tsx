@@ -13,6 +13,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { copyToClipboard } from "@/lib/clipboard";
+import { getAppRoutePath } from "@/lib/app-route";
 import { formatChannelCliPath, formatTextChannelCliPath } from "@/lib/cli-path";
 import type { useContextActionsMenu } from "@/lib/use-context-actions-menu";
 import { cn } from "@/lib/utils";
@@ -35,6 +36,18 @@ function getCopyOptions(host: string, channel: ServerChannel): CopyOption[] {
   switch (channel.kind) {
     case "text":
       return [
+        {
+          label: "Web Link",
+          value: new URL(
+            getAppRoutePath({
+              screen: "channel",
+              serverId: channel.server_id,
+              channelId: channel.id,
+            }),
+            window.location.origin
+          ).href,
+          successLabel: "Copied web link.",
+        },
         {
           label: "Raw Text Channel ID",
           value: channel.text_channel_id,
