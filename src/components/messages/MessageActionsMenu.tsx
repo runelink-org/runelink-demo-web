@@ -105,12 +105,12 @@ export function MessageActionsMenu({
         <CopyOtherSubmenu
           options={[
             {
-              label: "Web Link",
+              label: "Message Link",
               value: new URL(
                 getAppRoutePath(channelRoute, message.id),
                 window.location.origin
               ).href,
-              successLabel: "Copied web link.",
+              successLabel: "Copied message link.",
             },
             {
               label: "Message ID",

@@ -92,12 +92,12 @@ export function ServerActionsMenu({
         <CopyOtherSubmenu
           options={[
             {
-              label: "Web Link",
+              label: "Server Link",
               value: new URL(
                 getAppRoutePath({ screen: "server", serverId: server.id }),
                 window.location.origin
               ).href,
-              successLabel: "Copied web link.",
+              successLabel: "Copied server link.",
             },
             {
               label: "Path for CLI",
