@@ -1,7 +1,8 @@
-import type { ServerMember, ServerRole } from "@runelink/sdk";
-import { Copy, Ellipsis, Shield, ShieldOff, Trash2 } from "lucide-react";
+import type { ServerRole, UserRef } from "@runelink/sdk";
+import { Ellipsis, Shield, ShieldOff, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
+import { IdIcon } from "@/components/icons/IdIcon";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -20,11 +21,15 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { getActiveAccount, useAuthStore } from "@/lib/auth-store";
 import { useMembershipsStore } from "@/lib/memberships-store";
+import type { useContextActionsMenu } from "@/lib/use-context-actions-menu";
 
 type MemberActionsMenuProps = {
+  contextMenu?: ReturnType<typeof useContextActionsMenu>;
+  contextOnly?: boolean;
   serverId: string;
   serverHost: string;
-  member: ServerMember;
+  user: UserRef;
+  role?: ServerRole;
   canModerateMembers: boolean;
 };
 
@@ -37,9 +42,12 @@ function formatUserId(user: { name: string; host: string }): string {
 }
 
 export function MemberActionsMenu({
+  contextMenu,
+  contextOnly = false,
   serverId,
   serverHost,
-  member,
+  user,
+  role,
   canModerateMembers,
 }: MemberActionsMenuProps) {
   const activeAccount = useAuthStore(getActiveAccount);
@@ -59,7 +67,7 @@ export function MemberActionsMenu({
       return;
     }
 
-    const userId = formatUserId(member.user);
+    const userId = formatUserId(user);
 
     try {
       await navigator.clipboard.writeText(userId);
@@ -69,27 +77,28 @@ export function MemberActionsMenu({
     }
   }
 
-  async function handleUpdateMemberRole(role: ServerRole) {
+  async function handleUpdateMemberRole(nextRole: ServerRole) {
+    if (!canModerateMembers || !role) return;
     setIsUpdatingRole(true);
 
     try {
       await upsertMembership(serverId, {
-        user_ref: member.user,
+        user_ref: user,
         server_id: serverId,
         server_host: serverHost,
-        role,
+        role: nextRole,
       });
       toast.success(
-        role === "admin"
-          ? `Promoted ${member.user.name} to admin.`
-          : `Removed admin from ${member.user.name}.`
+        nextRole === "admin"
+          ? `Promoted ${user.name} to admin.`
+          : `Removed admin from ${user.name}.`
       );
       setIsConfirmingSelfDemotion(false);
     } catch (error) {
       toast.error(
-        role === "admin"
-          ? `Failed to promote ${member.user.name} to admin.`
-          : `Failed to remove admin from ${member.user.name}.`
+        nextRole === "admin"
+          ? `Failed to promote ${user.name} to admin.`
+          : `Failed to remove admin from ${user.name}.`
       );
       throw error;
     } finally {
@@ -98,46 +107,48 @@ export function MemberActionsMenu({
   }
 
   async function handleKickMember() {
-    if (!activeAccount) {
+    if (!activeAccount || !canModerateMembers || !role || isActiveAccount) {
       return;
     }
 
     try {
       await deleteMembership(
         serverId,
-        member.user,
+        user,
         getTargetHost(serverHost, activeAccount.host)
       );
-      toast.success(`Kicked ${member.user.name} from the server.`);
+      toast.success(`Kicked ${user.name} from the server.`);
     } catch (error) {
-      toast.error(`Failed to kick ${member.user.name}.`);
+      toast.error(`Failed to kick ${user.name}.`);
       throw error;
     }
   }
 
   const isActiveAccount =
-    activeAccount?.name === member.user.name &&
-    activeAccount.host === member.user.host;
-  const isSelfDemotion = isActiveAccount && member.role === "admin";
+    activeAccount?.name === user.name && activeAccount.host === user.host;
+  const isSelfDemotion = isActiveAccount && role === "admin";
 
   return (
     <>
-      <DropdownMenu>
-        <DropdownMenuTrigger
-          render={
-            <button
-              type="button"
-              className="flex size-8 shrink-0 items-center justify-center rounded-xl text-muted-foreground/55 transition hover:bg-background hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
-              aria-label={`Open ${member.user.name} menu`}
-            />
-          }
-        >
-          <Ellipsis className="size-4" />
-        </DropdownMenuTrigger>
+      <DropdownMenu {...contextMenu?.menuProps}>
+        {contextOnly ? null : (
+          <DropdownMenuTrigger
+            render={
+              <button
+                type="button"
+                className="flex size-8 shrink-0 cursor-pointer items-center justify-center rounded-xl text-muted-foreground/55 transition hover:bg-background hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+                aria-label={`Open ${user.name} menu`}
+              />
+            }
+          >
+            <Ellipsis className="size-4" />
+          </DropdownMenuTrigger>
+        )}
         <DropdownMenuContent
-          align="end"
-          side="bottom"
-          sideOffset={8}
+          anchor={contextMenu?.anchor}
+          align={contextMenu?.anchor ? "start" : "end"}
+          side={contextMenu?.side ?? "bottom"}
+          sideOffset={contextMenu?.anchor ? 0 : 8}
           className="w-56"
         >
           <DropdownMenuItem
@@ -146,12 +157,12 @@ export function MemberActionsMenu({
               void handleCopyUserId();
             }}
           >
-            <Copy className="size-4" />
+            <IdIcon className="size-4" />
             <span className="font-medium">Copy User ID</span>
           </DropdownMenuItem>
-          {canModerateMembers ? (
+          {canModerateMembers && role ? (
             <DropdownMenuItem
-              variant={member.role === "admin" ? "destructive" : "default"}
+              variant={role === "admin" ? "destructive" : "default"}
               className="cursor-pointer gap-3 rounded-xl px-3 py-2"
               onClick={() => {
                 if (isSelfDemotion) {
@@ -160,21 +171,21 @@ export function MemberActionsMenu({
                 }
 
                 void handleUpdateMemberRole(
-                  member.role === "admin" ? "member" : "admin"
+                  role === "admin" ? "member" : "admin"
                 );
               }}
             >
-              {member.role === "admin" ? (
+              {role === "admin" ? (
                 <ShieldOff className="size-4" />
               ) : (
                 <Shield className="size-4" />
               )}
               <span className="font-medium">
-                {member.role === "admin" ? "Remove Admin" : "Promote to Admin"}
+                {role === "admin" ? "Remove Admin" : "Promote to Admin"}
               </span>
             </DropdownMenuItem>
           ) : null}
-          {canModerateMembers && !isActiveAccount ? (
+          {canModerateMembers && role && !isActiveAccount ? (
             <DropdownMenuItem
               variant="destructive"
               className="cursor-pointer gap-3 rounded-xl px-3 py-2"

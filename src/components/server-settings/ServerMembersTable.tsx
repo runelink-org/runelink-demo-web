@@ -1,6 +1,7 @@
 import type { ServerMember } from "@runelink/sdk";
 import { Badge } from "@/components/ui/badge";
 import { MemberActionsMenu } from "@/components/members/MemberActionsMenu";
+import { useContextActionsMenu } from "@/lib/use-context-actions-menu";
 import {
   MEMBER_STATUS,
   ROLE_LABELS,
@@ -33,6 +34,78 @@ function formatServerTimestamp(value: string): string {
     hour: "numeric",
     minute: "2-digit",
   }).format(new Date(value));
+}
+
+function ServerMemberTableRow({
+  serverId,
+  serverHost,
+  member,
+  activeAccount,
+  canModerateMembers,
+}: Pick<
+  ServerMembersTableProps,
+  "serverId" | "serverHost" | "activeAccount" | "canModerateMembers"
+> & { member: ServerMember }) {
+  const contextMenu = useContextActionsMenu();
+
+  const initials = member.user.name.slice(0, 2).toUpperCase();
+  const isActiveAccount =
+    activeAccount?.name === member.user.name &&
+    activeAccount.host === member.user.host;
+
+  return (
+    <TableRow {...contextMenu.targetProps} className="group">
+      <TableCell>
+        <div className="flex min-w-0 items-center gap-3">
+          <div className="flex size-10 shrink-0 select-none items-center justify-center rounded-full bg-primary/10 text-xs font-semibold text-primary">
+            {initials}
+          </div>
+          <div className="min-w-0">
+            <p className="truncate font-medium text-foreground">
+              {member.user.name}
+              {isActiveAccount ? (
+                <span className="text-blue-600 dark:text-blue-300"> (you)</span>
+              ) : null}
+            </p>
+            <p className="text-muted-foreground truncate text-xs">
+              @{member.user.host}
+            </p>
+          </div>
+        </div>
+      </TableCell>
+      <TableCell>
+        <Badge
+          variant="secondary"
+          className={
+            member.role === "admin"
+              ? `rounded-full border border-violet-200 bg-violet-100 dark:border-violet-400/30 dark:bg-violet-400/15 ${ROLE_TEXT_CLASS_NAMES.admin}`
+              : "rounded-full"
+          }
+        >
+          {ROLE_LABELS[member.role]}
+        </Badge>
+      </TableCell>
+      <TableCell>
+        <span className="text-muted-foreground inline-flex items-center gap-1.5 text-sm">
+          <MEMBER_STATUS.Icon className="size-3.5" />
+          {MEMBER_STATUS.label}
+        </span>
+      </TableCell>
+      <TableCell className="whitespace-nowrap text-sm text-muted-foreground">
+        {formatServerTimestamp(member.joined_at)}
+      </TableCell>
+      <TableCell className="w-0 pr-3 text-right">
+        <MemberActionsMenu
+          contextMenu={contextMenu}
+          serverId={serverId}
+          serverHost={serverHost}
+          user={member.user}
+          role={member.role}
+          canModerateMembers={canModerateMembers}
+        />
+      </TableCell>
+    </TableRow>
+  );
 }
 
 export function ServerMembersTable({
@@ -81,70 +154,16 @@ export function ServerMembersTable({
           </TableRow>
         </TableHeader>
         <TableBody>
-          {members.map((member) => {
-            const initials = member.user.name.slice(0, 2).toUpperCase();
-            const isActiveAccount =
-              activeAccount?.name === member.user.name &&
-              activeAccount.host === member.user.host;
-
-            return (
-              <TableRow
-                key={`${member.user.name}@${member.user.host}`}
-                className="group"
-              >
-                <TableCell>
-                  <div className="flex min-w-0 items-center gap-3">
-                    <div className="flex size-10 shrink-0 select-none items-center justify-center rounded-full bg-primary/10 text-xs font-semibold text-primary">
-                      {initials}
-                    </div>
-                    <div className="min-w-0">
-                      <p className="truncate font-medium text-foreground">
-                        {member.user.name}
-                        {isActiveAccount ? (
-                          <span className="text-blue-600 dark:text-blue-300">
-                            {" "}
-                            (you)
-                          </span>
-                        ) : null}
-                      </p>
-                      <p className="text-muted-foreground truncate text-xs">
-                        @{member.user.host}
-                      </p>
-                    </div>
-                  </div>
-                </TableCell>
-                <TableCell>
-                  <Badge
-                    variant="secondary"
-                    className={
-                      member.role === "admin"
-                        ? `rounded-full border border-violet-200 bg-violet-100 dark:border-violet-400/30 dark:bg-violet-400/15 ${ROLE_TEXT_CLASS_NAMES.admin}`
-                        : "rounded-full"
-                    }
-                  >
-                    {ROLE_LABELS[member.role]}
-                  </Badge>
-                </TableCell>
-                <TableCell>
-                  <span className="text-muted-foreground inline-flex items-center gap-1.5 text-sm">
-                    <MEMBER_STATUS.Icon className="size-3.5" />
-                    {MEMBER_STATUS.label}
-                  </span>
-                </TableCell>
-                <TableCell className="whitespace-nowrap text-sm text-muted-foreground">
-                  {formatServerTimestamp(member.joined_at)}
-                </TableCell>
-                <TableCell className="w-0 pr-3 text-right">
-                  <MemberActionsMenu
-                    serverId={serverId}
-                    serverHost={serverHost}
-                    member={member}
-                    canModerateMembers={canModerateMembers}
-                  />
-                </TableCell>
-              </TableRow>
-            );
-          })}
+          {members.map((member) => (
+            <ServerMemberTableRow
+              key={`${member.user.name}@${member.user.host}`}
+              serverId={serverId}
+              serverHost={serverHost}
+              member={member}
+              activeAccount={activeAccount}
+              canModerateMembers={canModerateMembers}
+            />
+          ))}
         </TableBody>
       </Table>
     </div>

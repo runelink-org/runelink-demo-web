@@ -13,6 +13,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
+import { useContextActionsMenu } from "@/lib/use-context-actions-menu";
 
 type ServerMemberListProps = {
   serverId: string;
@@ -24,6 +25,61 @@ type ServerMemberListProps = {
 };
 
 const ROLE_ORDER: ServerRole[] = ["admin", "member"];
+
+function ServerMemberListItem({
+  serverId,
+  serverHost,
+  member,
+  canModerateMembers,
+}: Pick<
+  ServerMemberListProps,
+  "serverId" | "serverHost" | "canModerateMembers"
+> & { member: ServerMember }) {
+  const contextMenu = useContextActionsMenu();
+
+  return (
+    <li
+      {...contextMenu.targetProps}
+      className="group flex items-center gap-3 rounded-xl px-2 py-1.5 transition-colors hover:bg-muted"
+    >
+      <div className="relative shrink-0">
+        <div className="flex size-8 select-none items-center justify-center rounded-full bg-primary/10 text-xs font-semibold text-primary">
+          {member.user.name.slice(0, 2).toUpperCase()}
+        </div>
+        <Tooltip>
+          <TooltipTrigger
+            render={
+              <span
+                role="img"
+                aria-label={MEMBER_STATUS.label}
+                className="absolute -right-1 -bottom-1 flex size-4 items-center justify-center rounded-full bg-background text-muted-foreground transition-colors group-hover:bg-muted"
+              />
+            }
+          >
+            <MEMBER_STATUS.Icon className="size-3" />
+          </TooltipTrigger>
+          <TooltipContent>{MEMBER_STATUS.label}</TooltipContent>
+        </Tooltip>
+      </div>
+      <p
+        className={cn(
+          "min-w-0 flex-1 truncate text-sm font-medium",
+          ROLE_TEXT_CLASS_NAMES[member.role]
+        )}
+      >
+        {member.user.name}
+      </p>
+      <MemberActionsMenu
+        contextMenu={contextMenu}
+        serverId={serverId}
+        serverHost={serverHost}
+        user={member.user}
+        role={member.role}
+        canModerateMembers={canModerateMembers}
+      />
+    </li>
+  );
+}
 
 export function ServerMemberList({
   serverId,
@@ -66,44 +122,13 @@ export function ServerMemberList({
           </h2>
           <ul>
             {section.members.map((member) => (
-              <li
+              <ServerMemberListItem
                 key={`${member.user.name}@${member.user.host}`}
-                className="group flex items-center gap-3 rounded-xl px-2 py-1.5 transition-colors hover:bg-muted"
-              >
-                <div className="relative shrink-0">
-                  <div className="flex size-8 select-none items-center justify-center rounded-full bg-primary/10 text-xs font-semibold text-primary">
-                    {member.user.name.slice(0, 2).toUpperCase()}
-                  </div>
-                  <Tooltip>
-                    <TooltipTrigger
-                      render={
-                        <span
-                          role="img"
-                          aria-label={MEMBER_STATUS.label}
-                          className="absolute -right-1 -bottom-1 flex size-4 items-center justify-center rounded-full bg-background text-muted-foreground transition-colors group-hover:bg-muted"
-                        />
-                      }
-                    >
-                      <MEMBER_STATUS.Icon className="size-3" />
-                    </TooltipTrigger>
-                    <TooltipContent>{MEMBER_STATUS.label}</TooltipContent>
-                  </Tooltip>
-                </div>
-                <p
-                  className={cn(
-                    "min-w-0 flex-1 truncate text-sm font-medium",
-                    ROLE_TEXT_CLASS_NAMES[member.role]
-                  )}
-                >
-                  {member.user.name}
-                </p>
-                <MemberActionsMenu
-                  serverId={serverId}
-                  serverHost={serverHost}
-                  member={member}
-                  canModerateMembers={canModerateMembers}
-                />
-              </li>
+                serverId={serverId}
+                serverHost={serverHost}
+                member={member}
+                canModerateMembers={canModerateMembers}
+              />
             ))}
           </ul>
         </section>

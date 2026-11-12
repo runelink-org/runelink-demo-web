@@ -6,6 +6,10 @@ import { formatMessagePreview } from "@/lib/message-preview";
 import type { ActiveMessage, Message } from "@runelink/sdk";
 import { MessageActionsMenu } from "./MessageActionsMenu";
 import type { AppRoute } from "@/lib/app-route";
+import { MemberActionsMenu } from "@/components/members/MemberActionsMenu";
+import { useMembershipsStore } from "@/lib/memberships-store";
+import { sameUserRef } from "@/lib/account-storage";
+import type { MouseEvent } from "react";
 
 type MessageListItemProps = {
   host: string;
@@ -16,8 +20,8 @@ type MessageListItemProps = {
   leadingMessageOffset: boolean;
   compactTimestamp: string;
   fullTimestamp: string;
-  authorJoinedAt: string | null;
   canDeleteMessage: boolean;
+  canModerateMembers: boolean;
   editing: ActiveMessage | null;
   onEdit: (message: ActiveMessage | null) => void;
   onCancelEdit: () => void;
@@ -36,8 +40,8 @@ export function MessageListItem({
   leadingMessageOffset,
   compactTimestamp,
   fullTimestamp,
-  authorJoinedAt,
   canDeleteMessage,
+  canModerateMembers,
   editing,
   onEdit,
   onCancelEdit,
@@ -47,7 +51,21 @@ export function MessageListItem({
   onDeleteMessage,
 }: MessageListItemProps) {
   const contextMenu = useContextActionsMenu();
+  const authorContextMenu = useContextActionsMenu();
+  const authorRole = useMembershipsStore((state) =>
+    message.author
+      ? state.membersByServerId[channelRoute.serverId]?.find((member) =>
+          sameUserRef(member.user, message.author)
+        )?.role
+      : undefined
+  );
   const isOneLine = !message.body.includes("\n");
+
+  function openAuthorMenu(event: MouseEvent<HTMLButtonElement>) {
+    if (!message.author) return;
+    event.stopPropagation();
+    authorContextMenu.openMenuAbove(event.currentTarget);
+  }
 
   return (
     <div key={message.id} className={leadingMessageOffset ? "mt-3" : ""}>
@@ -125,41 +143,33 @@ export function MessageListItem({
               </div>
             ) : null}
             {!isCompact ? (
-              <div className="group/avatar relative shrink-0">
-                <div className="flex size-10 cursor-default select-none items-center justify-center rounded-full bg-primary/10 text-sm font-semibold text-primary">
-                  {authorName.slice(0, 2).toUpperCase()}
-                </div>
-                {message.author ? (
-                  <div className="pointer-events-none invisible absolute bottom-full left-9 z-10 mb-1 w-56 rounded-2xl border border-border/70 bg-background p-3 text-left opacity-0 shadow-lg transition duration-150 group-hover/avatar:pointer-events-auto group-hover/avatar:visible group-hover/avatar:opacity-100">
-                    <p className="truncate text-sm font-semibold text-foreground">
-                      {message.author.name}
-                    </p>
-                    <div className="mt-2 space-y-1.5 text-xs text-muted-foreground">
-                      <p>
-                        Host:{" "}
-                        <span className="text-foreground/90">
-                          @{message.author.host}
-                        </span>
-                      </p>
-                      {authorJoinedAt ? (
-                        <p>
-                          Joined:{" "}
-                          <span className="text-foreground/90">
-                            {authorJoinedAt}
-                          </span>
-                        </p>
-                      ) : null}
-                    </div>
-                  </div>
-                ) : null}
-              </div>
+              <button
+                type="button"
+                {...(message.author ? authorContextMenu.targetProps : {})}
+                onClick={openAuthorMenu}
+                disabled={!message.author}
+                aria-label={`Open ${authorName} menu`}
+                aria-haspopup="menu"
+                aria-expanded={authorContextMenu.menuProps.open}
+                className="flex size-10 shrink-0 cursor-pointer select-none items-center justify-center rounded-full bg-primary/10 text-sm font-semibold text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-default"
+              >
+                {authorName.slice(0, 2).toUpperCase()}
+              </button>
             ) : null}
             <div className="min-w-0 flex-1">
               {!isCompact ? (
                 <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                  <span className="font-medium text-foreground">
+                  <button
+                    type="button"
+                    {...(message.author ? authorContextMenu.targetProps : {})}
+                    onClick={openAuthorMenu}
+                    disabled={!message.author}
+                    aria-haspopup="menu"
+                    aria-expanded={authorContextMenu.menuProps.open}
+                    className="cursor-pointer font-medium text-foreground hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-default disabled:no-underline"
+                  >
                     {authorName}
-                  </span>
+                  </button>
                   <span className="cursor-text select-text text-[11px] text-muted-foreground">
                     {fullTimestamp}
                   </span>
@@ -196,6 +206,17 @@ export function MessageListItem({
           </div>
         </article>
       </DropdownMenu>
+      {!isCompact && message.author ? (
+        <MemberActionsMenu
+          contextMenu={authorContextMenu}
+          contextOnly
+          serverId={channelRoute.serverId}
+          serverHost={host}
+          user={message.author}
+          role={authorRole}
+          canModerateMembers={canModerateMembers}
+        />
+      ) : null}
     </div>
   );
 }

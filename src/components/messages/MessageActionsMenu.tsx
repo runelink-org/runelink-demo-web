@@ -48,7 +48,7 @@ export function MessageActionsMenu({
           <button
             type="button"
             className={cn(
-              "flex size-8 shrink-0 items-center justify-center rounded-xl text-muted-foreground/55 transition",
+              "flex size-8 shrink-0 cursor-pointer items-center justify-center rounded-xl text-muted-foreground/55 transition",
               "opacity-0 group-hover:opacity-100",
               "hover:bg-background hover:text-foreground focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
             )}
