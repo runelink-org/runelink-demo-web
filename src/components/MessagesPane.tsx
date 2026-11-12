@@ -36,6 +36,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { sameUserRef } from "@/lib/account-storage";
+import type { AppRoute } from "@/lib/app-route";
 import { useMessageScrollStore } from "@/lib/message-scroll-store";
 import { DeleteMessageDialog } from "./messages/DeleteMessageDialog";
 import { MessageListItem } from "./messages/MessageListItem";
@@ -45,6 +46,8 @@ type MessagesPaneProps = {
   selectedChannel: ServerWithChannels["channels"][number] | undefined;
   selectedChannelKey: string | null;
   selectedMessages: Message[];
+  targetMessageId: string | null;
+  hasLoadedMessages: boolean;
   isSidebarLoading: boolean;
   sidebarError: string | null;
   hydratedServerCount: number;
@@ -211,8 +214,39 @@ function shouldCompactMessage(current: Message, previous?: Message): boolean {
   );
 }
 
+function highlightMessage(element: HTMLElement) {
+  const highlighted = {
+    backgroundColor: "color-mix(in oklab, var(--primary) 14%, transparent)",
+  };
+  const clear = { backgroundColor: "transparent" };
+  const duration = 2167.5;
+  const reducedMotion = window.matchMedia(
+    "(prefers-reduced-motion: reduce)"
+  ).matches;
+  element.animate(
+    reducedMotion
+      ? [
+          { ...highlighted, offset: 0 },
+          { ...highlighted, offset: 0.8 },
+          { ...clear, offset: 1 },
+        ]
+      : [
+          // Pulses last 787.5, 157.5, and 1102.5ms, separated by 60ms gaps.
+          { ...highlighted, offset: 0, easing: "steps(1, end)" },
+          { ...clear, offset: 787.5 / duration, easing: "steps(1, end)" },
+          { ...highlighted, offset: 847.5 / duration, easing: "steps(1, end)" },
+          { ...clear, offset: 1005 / duration, easing: "steps(1, end)" },
+          { ...highlighted, offset: 1065 / duration },
+          { ...highlighted, offset: 1852.5 / duration },
+          { ...clear, offset: 1 },
+        ],
+    { duration, easing: "linear" }
+  );
+}
+
 function MessageList({
   host,
+  channelRoute,
   messages,
   scrollContainerRef,
   composerRef,
@@ -226,6 +260,7 @@ function MessageList({
   onReply,
 }: {
   host: string;
+  channelRoute: Extract<AppRoute, { screen: "channel" }>;
   messages: Message[];
   scrollContainerRef: RefObject<HTMLDivElement | null>;
   composerRef: RefObject<HTMLTextAreaElement | null>;
@@ -253,10 +288,7 @@ function MessageList({
     if (!element) return;
     element.scrollIntoView({ block: "center", behavior: "smooth" });
     element.focus({ preventScroll: true });
-    element.animate(
-      [{ backgroundColor: "var(--muted)" }, { backgroundColor: "transparent" }],
-      { duration: 1400 }
-    );
+    highlightMessage(element);
   }
 
   return (
@@ -284,6 +316,7 @@ function MessageList({
             <MessageListItem
               key={message.id}
               host={host}
+              channelRoute={channelRoute}
               message={message}
               authorName={authorName}
               isCompact={isCompact}
@@ -334,6 +367,8 @@ export function MessagesPane({
   selectedChannel,
   selectedChannelKey,
   selectedMessages,
+  targetMessageId,
+  hasLoadedMessages,
   isSidebarLoading,
   sidebarError,
   hydratedServerCount,
@@ -385,6 +420,7 @@ export function MessagesPane({
   const scrollContainerRef = useRef<HTMLDivElement | null>(null);
   const scrollToBottomOnEditRef = useRef(false);
   const hasRestoredScrollRef = useRef(false);
+  const previousTargetMessageIdRef = useRef(targetMessageId);
   const previousChannelKeyRef = useRef<string | null>(null);
   const previousMessageCountRef = useRef(0);
   const wasAtBottomRef = useRef(true);
@@ -521,12 +557,19 @@ export function MessagesPane({
     };
   }, [saveScrollPosition, selectedChannelKey]);
 
+  useLayoutEffect(() => {
+    if (previousTargetMessageIdRef.current === targetMessageId) return;
+    previousTargetMessageIdRef.current = targetMessageId;
+    hasRestoredScrollRef.current = false;
+  }, [targetMessageId]);
+
   // Runs after every render because the scroll container can mount without any
   // of the values read here changing (e.g. once the sidebar finishes loading).
   useLayoutEffect(() => {
     if (
       !selectedChannelKey ||
       isMessagesLoading ||
+      (targetMessageId && !hasLoadedMessages) ||
       hasRestoredScrollRef.current
     ) {
       return;
@@ -537,8 +580,21 @@ export function MessagesPane({
       return;
     }
 
+    const target = targetMessageId
+      ? document.getElementById(`message-${targetMessageId}`)
+      : null;
     const savedScrollState = scrollByChannelKey[selectedChannelKey];
-    if (savedScrollState) {
+    if (target && element.contains(target)) {
+      element.scrollTo({
+        top:
+          element.scrollTop +
+          target.getBoundingClientRect().top -
+          element.getBoundingClientRect().top -
+          (element.clientHeight - target.offsetHeight) / 2,
+        behavior: "instant",
+      });
+      highlightMessage(target);
+    } else if (savedScrollState) {
       element.scrollTop = savedScrollState.scrollTop;
     } else {
       scrollToBottom();
@@ -548,6 +604,7 @@ export function MessagesPane({
     wasAtBottomRef.current = isAtBottom(element);
     saveCurrentScrollPosition();
     hasRestoredScrollRef.current = true;
+    previousMessageCountRef.current = selectedMessages.length;
   });
 
   useLayoutEffect(() => {
@@ -802,6 +859,20 @@ export function MessagesPane({
           className="relative flex min-h-0 min-w-0 flex-1 flex-col bg-background"
           onContextMenu={(event) => event.preventDefault()}
         >
+          {targetMessageId &&
+          hasLoadedMessages &&
+          !messagesError &&
+          !selectedMessages.some(
+            (message) =>
+              message.id === targetMessageId && message.deleted_at === null
+          ) ? (
+            <p
+              role="status"
+              className="px-6 py-2 text-sm text-muted-foreground"
+            >
+              Message unavailable.
+            </p>
+          ) : null}
           {sidebarError ? (
             <div className="flex flex-1 items-center justify-center px-6">
               <div className="max-w-md rounded-3xl border border-destructive/20 bg-destructive/5 p-6 text-center">
@@ -881,6 +952,11 @@ export function MessagesPane({
           ) : (
             <MessageList
               host={selectedServer.server.host}
+              channelRoute={{
+                screen: "channel",
+                serverId: selectedServer.server.id,
+                channelId: selectedChannel.id,
+              }}
               messages={selectedMessages}
               scrollContainerRef={scrollContainerRef}
               composerRef={textareaRef}

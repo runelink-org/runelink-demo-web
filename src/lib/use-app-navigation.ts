@@ -1,5 +1,11 @@
 import type { ServerWithChannels } from "@runelink/sdk";
-import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
 import {
   type AppRoute,
   getAppRoutePath,
@@ -51,7 +57,10 @@ function getFallbackSelection(
 
 export function useAppNavigation() {
   const [initialLocation] = useState(() => {
-    const parsedRoute = parseAppRoute(window.location.pathname);
+    const parsedRoute = parseAppRoute(
+      window.location.pathname,
+      window.location.search
+    );
     const initialRoute: AppRoute = parsedRoute ?? { screen: "home" };
     return {
       route: initialRoute,
@@ -65,7 +74,8 @@ export function useAppNavigation() {
     (nextRoute: AppRoute, mode: "push" | "replace") => {
       const nextPath = getAppRoutePath(nextRoute);
       const nextMode =
-        mode === "push" && nextPath === window.location.pathname
+        mode === "push" &&
+        nextPath === window.location.pathname + window.location.search
           ? "replace"
           : mode;
       writeAppRoute(nextRoute, nextMode);
@@ -115,6 +125,10 @@ export function useAppNavigation() {
       }
 
       const currentRoute = routeRef.current;
+      const isValidChannelRoute =
+        currentRoute.screen === "channel" &&
+        currentRoute.serverId === nextSelection.serverId &&
+        currentRoute.channelId === nextSelection.channelId;
       const isValidSettingsRoute =
         (currentRoute.screen === "server-settings" &&
           servers.some(
@@ -134,6 +148,7 @@ export function useAppNavigation() {
         currentRoute.channelId === nextSelection.channelId;
       if (
         currentRoute.screen !== "auth" &&
+        !isValidChannelRoute &&
         !isValidSettingsRoute &&
         !isValidMembersRoute
       ) {
@@ -152,7 +167,10 @@ export function useAppNavigation() {
     }
 
     function handlePopState() {
-      const parsedRoute = parseAppRoute(window.location.pathname);
+      const parsedRoute = parseAppRoute(
+        window.location.pathname,
+        window.location.search
+      );
       const nextRoute: AppRoute = parsedRoute ?? { screen: "home" };
       if (!parsedRoute) {
         writeAppRoute(nextRoute, "replace");
@@ -165,7 +183,7 @@ export function useAppNavigation() {
     return () => window.removeEventListener("popstate", handlePopState);
   }, [initialLocation.pathWasValid]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const navigationState = useNavigationStore.getState();
     switch (route.screen) {
       case "home":

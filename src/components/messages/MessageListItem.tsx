@@ -5,9 +5,11 @@ import { DropdownMenu } from "@/components/ui/dropdown-menu";
 import { formatMessagePreview } from "@/lib/message-preview";
 import type { ActiveMessage, Message } from "@runelink/sdk";
 import { MessageActionsMenu } from "./MessageActionsMenu";
+import type { AppRoute } from "@/lib/app-route";
 
 type MessageListItemProps = {
   host: string;
+  channelRoute: Extract<AppRoute, { screen: "channel" }>;
   message: ActiveMessage;
   authorName: string;
   isCompact: boolean;
@@ -27,6 +29,7 @@ type MessageListItemProps = {
 
 export function MessageListItem({
   host,
+  channelRoute,
   message,
   authorName,
   isCompact,
@@ -106,6 +109,7 @@ export function MessageListItem({
               <MessageActionsMenu
                 anchor={contextMenu.anchor}
                 host={host}
+                channelRoute={channelRoute}
                 message={message}
                 canDeleteMessage={canDeleteMessage}
                 onDeleteMessage={onDeleteMessage}
