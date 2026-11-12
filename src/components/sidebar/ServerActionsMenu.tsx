@@ -1,6 +1,7 @@
 import type { Server, ServerChannelKind } from "@runelink/sdk";
-import { Cog, Copy, Ellipsis, FolderPlus, Hash, LogOut } from "lucide-react";
+import { Cog, Ellipsis, FolderPlus, Hash, LogOut } from "lucide-react";
 import { CopyOtherSubmenu } from "@/components/CopyOtherSubmenu";
+import { IdIcon } from "@/components/icons/IdIcon";
 import { getAppRoutePath } from "@/lib/app-route";
 import {
   DropdownMenu,
@@ -85,7 +86,7 @@ export function ServerActionsMenu({
             void copyToClipboard(server.id, `Copied server ID: ${server.id}`);
           }}
         >
-          <Copy className="size-4" />
+          <IdIcon className="size-4" />
           <span className="font-medium">Copy Server ID</span>
         </DropdownMenuItem>
         <CopyOtherSubmenu

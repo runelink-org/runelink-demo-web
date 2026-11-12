@@ -1,6 +1,7 @@
 import { useRef } from "react";
 import type { ServerChannel, ServerChannelKind } from "@runelink/sdk";
-import { Copy, Ellipsis, FolderPlus, Hash, Pencil, Trash2 } from "lucide-react";
+import { Ellipsis, FolderPlus, Hash, Pencil, Trash2 } from "lucide-react";
+import { IdIcon } from "@/components/icons/IdIcon";
 import {
   CopyOtherSubmenu,
   type CopyOption,
@@ -168,7 +169,7 @@ export function ChannelActionsMenu({
               );
             }}
           >
-            <Copy className="size-4" />
+            <IdIcon className="size-4" />
             <span className="font-medium">
               Copy {isCategory ? "Category" : "Channel"} ID
             </span>
