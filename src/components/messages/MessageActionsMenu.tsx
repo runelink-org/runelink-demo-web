@@ -11,10 +11,12 @@ import {
 import { copyToClipboard } from "@/lib/clipboard";
 import { formatMessageCliPath } from "@/lib/cli-path";
 import { cn } from "@/lib/utils";
+import { getAppRoutePath, type AppRoute } from "@/lib/app-route";
 
 type MessageActionsMenuProps = {
   anchor?: ComponentProps<typeof DropdownMenuContent>["anchor"];
   host: string;
+  channelRoute: Extract<AppRoute, { screen: "channel" }>;
   message: ActiveMessage;
   canDeleteMessage: boolean;
   onReply: (message: ActiveMessage) => void;
@@ -25,6 +27,7 @@ type MessageActionsMenuProps = {
 export function MessageActionsMenu({
   anchor,
   host,
+  channelRoute,
   message,
   canDeleteMessage,
   onReply,
@@ -101,6 +104,14 @@ export function MessageActionsMenu({
         </DropdownMenuItem>
         <CopyOtherSubmenu
           options={[
+            {
+              label: "Web Link",
+              value: new URL(
+                getAppRoutePath(channelRoute, message.id),
+                window.location.origin
+              ).href,
+              successLabel: "Copied web link.",
+            },
             {
               label: "Message ID",
               value: message.id,

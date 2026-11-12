@@ -6,7 +6,12 @@ export type AppRoute =
   | { screen: "home" }
   | { screen: "auth" }
   | { screen: "server"; serverId: string }
-  | { screen: "channel"; serverId: string; channelId: string }
+  | {
+      screen: "channel";
+      serverId: string;
+      channelId: string;
+      messageId?: string;
+    }
   | { screen: "channel-settings"; serverId: string; channelId: string }
   | { screen: "channel-members"; serverId: string; channelId: string }
   | { screen: "server-settings"; serverId: string };
@@ -37,7 +42,7 @@ function parseId(value: string): string | null {
   }
 }
 
-export function parseAppRoute(pathname: string): AppRoute | null {
+export function parseAppRoute(pathname: string, search = ""): AppRoute | null {
   if (pathname === "/" || pathname === "") {
     return { screen: "home" };
   }
@@ -58,7 +63,13 @@ export function parseAppRoute(pathname: string): AppRoute | null {
         : channelMatch[3] === "/members"
           ? "channel-members"
           : "channel";
-    return serverId && channelId ? { screen, serverId, channelId } : null;
+    if (!serverId || !channelId) return null;
+    const messageId = IdSchema.safeParse(
+      new URLSearchParams(search).get("message")
+    );
+    return screen === "channel" && messageId.success
+      ? { screen, serverId, channelId, messageId: messageId.data }
+      : { screen, serverId, channelId };
   }
 
   const settingsMatch = pathname.match(/^\/servers\/([^/]+)\/settings\/?$/);
@@ -76,7 +87,7 @@ export function parseAppRoute(pathname: string): AppRoute | null {
   return null;
 }
 
-export function getAppRoutePath(route: AppRoute): string {
+export function getAppRoutePath(route: AppRoute, messageId?: string): string {
   switch (route.screen) {
     case "home":
       return "/";
@@ -84,8 +95,14 @@ export function getAppRoutePath(route: AppRoute): string {
       return "/auth";
     case "server":
       return `/servers/${route.serverId}`;
-    case "channel":
-      return `/servers/${route.serverId}/channels/${route.channelId}`;
+    case "channel": {
+      const targetMessageId = messageId ?? route.messageId;
+      return `/servers/${route.serverId}/channels/${route.channelId}${
+        targetMessageId
+          ? `?${new URLSearchParams({ message: targetMessageId })}`
+          : ""
+      }`;
+    }
     case "channel-settings":
       return `/servers/${route.serverId}/channels/${route.channelId}/settings`;
     case "channel-members":

@@ -1010,6 +1010,14 @@ export function App() {
             selectedChannel={selectedChannel}
             selectedChannelKey={selectedChannelKey}
             selectedMessages={selectedMessages}
+            targetMessageId={
+              route.screen === "channel" &&
+              route.serverId === selectedServer?.server.id &&
+              route.channelId === selectedChannel?.id
+                ? (route.messageId ?? null)
+                : null
+            }
+            hasLoadedMessages={hasFetchedSelectedMessages}
             isSidebarLoading={isSidebarLoading}
             sidebarError={sidebarError}
             hydratedServerCount={hydratedServers.length}
