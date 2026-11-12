@@ -38,7 +38,7 @@ function getCopyOptions(host: string, channel: ServerChannel): CopyOption[] {
     case "text":
       return [
         {
-          label: "Web Link",
+          label: "Channel Link",
           value: new URL(
             getAppRoutePath({
               screen: "channel",
@@ -47,7 +47,7 @@ function getCopyOptions(host: string, channel: ServerChannel): CopyOption[] {
             }),
             window.location.origin
           ).href,
-          successLabel: "Copied web link.",
+          successLabel: "Copied channel link.",
         },
         {
           label: "Raw Text Channel ID",
