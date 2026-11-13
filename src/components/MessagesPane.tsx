@@ -1,3 +1,8 @@
+import {
+  readTextareaSelection,
+  restoreTextareaSelection,
+  sameTextareaSelection,
+} from "@/lib/textarea-selection";
 import { formatMessagePreview } from "@/lib/message-preview";
 import type {
   ActiveMessage,
@@ -38,6 +43,10 @@ import {
 } from "@/components/ui/tooltip";
 import { sameUserRef } from "@/lib/account-storage";
 import type { AppRoute } from "@/lib/app-route";
+import {
+  EMPTY_COMPOSER,
+  useMessageComposerStore,
+} from "@/lib/message-composer-store";
 import { useMessageScrollStore } from "@/lib/message-scroll-store";
 import { useContextActionsMenu } from "@/lib/use-context-actions-menu";
 import { DeleteMessageDialog } from "./messages/DeleteMessageDialog";
@@ -385,29 +394,63 @@ export function MessagesPane({
     loadStoredMembersPaneWidth()
   );
   const isMembersPaneShown = !!membersPane && isMembersPaneOpen;
-  const [draft, setDraft] = useState("");
-  const [editSelection, setEditSelection] = useState<{
-    channelKey: string | null;
-    message: ActiveMessage;
-  } | null>(null);
-  const editingMessage =
-    editSelection?.channelKey === selectedChannelKey
-      ? editSelection.message
-      : null;
-  useEffect(() => () => setEditSelection(null), [selectedChannelKey]);
-  const [replySelection, setReplySelection] = useState<{
-    channelKey: string | null;
-    messageId: string;
-  } | null>(null);
-  const replyTarget =
-    replySelection?.channelKey === selectedChannelKey
-      ? selectedMessages.find(
-          (message) => message.id === replySelection?.messageId
-        )
-      : undefined;
+  const composer = useMessageComposerStore((state) =>
+    selectedChannelKey
+      ? (state.byChannelKey[selectedChannelKey] ?? EMPTY_COMPOSER)
+      : EMPTY_COMPOSER
+  );
+  const updateChannel = useMessageComposerStore((state) => state.updateChannel);
+  const { draft, editing, sendError } = composer;
+  const editingMessage = editing?.message ?? null;
+  const isSending = composer.sending !== null;
+  const replyTarget = composer.replyTo
+    ? selectedMessages.find((message) => message.id === composer.replyTo)
+    : undefined;
 
-  const [isSending, setIsSending] = useState(false);
-  const [sendError, setSendError] = useState<string | null>(null);
+  function updateDraft(input: HTMLTextAreaElement) {
+    if (selectedChannelKey) {
+      const draft = input.value;
+      const selection = readTextareaSelection(input);
+      updateChannel(selectedChannelKey, (state) =>
+        state.draft === draft &&
+        sameTextareaSelection(state.selection, selection)
+          ? state
+          : { ...state, draft, selection }
+      );
+    }
+  }
+
+  function setEditing(message: ActiveMessage | null) {
+    if (selectedChannelKey) {
+      updateChannel(selectedChannelKey, (state) => ({
+        ...state,
+        focusedInput: message ? "edit" : "draft",
+        editing: message
+          ? {
+              session: {},
+              message,
+              body: message.body,
+              selection: null,
+              isSaving: false,
+              error: null,
+            }
+          : null,
+      }));
+    }
+  }
+
+  function setReplyTo(replyTo: string | null) {
+    if (selectedChannelKey) {
+      updateChannel(selectedChannelKey, (state) => ({ ...state, replyTo }));
+    }
+  }
+
+  function setSendError(sendError: string | null) {
+    if (selectedChannelKey) {
+      updateChannel(selectedChannelKey, (state) => ({ ...state, sendError }));
+    }
+  }
+
   const [composerHeight, setComposerHeight] = useState(DEFAULT_COMPOSER_HEIGHT);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const scrollContainerRef = useRef<HTMLDivElement | null>(null);
@@ -521,17 +564,34 @@ export function MessagesPane({
       return;
     }
 
+    if (!selectedChannelKey) return;
     const timeoutId = window.setTimeout(() => {
-      setSendError(null);
+      updateChannel(selectedChannelKey, (state) => ({
+        ...state,
+        sendError: null,
+      }));
     }, 4000);
 
     return () => {
       window.clearTimeout(timeoutId);
     };
-  }, [sendError]);
+  }, [sendError, selectedChannelKey, updateChannel]);
+
+  useLayoutEffect(() => {
+    const input = textareaRef.current;
+    if (!input || !selectedChannelKey) return;
+    const selection =
+      useMessageComposerStore.getState().byChannelKey[selectedChannelKey]
+        ?.selection ?? null;
+    restoreTextareaSelection(input, selection);
+  }, [canCompose, selectedChannelKey]);
 
   useEffect(() => {
-    if (!canCompose || isSending) {
+    if (
+      !canCompose ||
+      isSending ||
+      (composer.focusedInput === "edit" && editingMessage)
+    ) {
       return;
     }
 
@@ -543,7 +603,14 @@ export function MessagesPane({
     }
 
     textareaRef.current?.focus();
-  }, [canCompose, isSending, selectedChannel?.id, selectedServer?.server.id]);
+  }, [
+    canCompose,
+    isSending,
+    composer.focusedInput,
+    editingMessage,
+    selectedChannel?.id,
+    selectedServer?.server.id,
+  ]);
 
   useEffect(() => {
     window.localStorage.setItem(
@@ -686,7 +753,7 @@ export function MessagesPane({
   async function handleSubmit() {
     const nextBody = draft.trim();
 
-    if (!nextBody || !canCompose) {
+    if (!nextBody || !canCompose || !selectedChannelKey || isSending) {
       return;
     }
 
@@ -696,19 +763,39 @@ export function MessagesPane({
       );
       return;
     }
-    setIsSending(true);
-    setSendError(null);
+    const sending = {};
+    updateChannel(selectedChannelKey, (state) => ({
+      ...state,
+      sending,
+      sendError: null,
+    }));
 
     try {
       await onSendMessage(nextBody, replyTarget?.id ?? null);
-      setDraft("");
-      setReplySelection(null);
-    } catch (error) {
-      setSendError(
-        error instanceof Error ? error.message : "Failed to send message"
+      updateChannel(selectedChannelKey, (state) =>
+        state.sending === sending
+          ? {
+              ...state,
+              draft: "",
+              selection: null,
+              replyTo: null,
+              sending: null,
+            }
+          : state
       );
-    } finally {
-      setIsSending(false);
+    } catch (error) {
+      updateChannel(selectedChannelKey, (state) =>
+        state.sending === sending
+          ? {
+              ...state,
+              sending: null,
+              sendError:
+                error instanceof Error
+                  ? error.message
+                  : "Failed to send message",
+            }
+          : state
+      );
     }
   }
 
@@ -735,12 +822,12 @@ export function MessagesPane({
       ) {
         event.preventDefault();
         scrollToBottomOnEditRef.current = true;
-        setEditSelection({ channelKey: selectedChannelKey, message: latest });
+        setEditing(latest);
       }
       return;
     }
     if (event.key === "Escape") {
-      setReplySelection(null);
+      setReplyTo(null);
       return;
     }
     if (
@@ -991,24 +1078,17 @@ export function MessagesPane({
               canModerateMessages={canModerateMessages}
               canModerateMembers={canModerateMembers}
               editingMessage={editingMessage}
-              onEditMessage={(message) =>
-                setEditSelection(
-                  message ? { channelKey: selectedChannelKey, message } : null
-                )
-              }
+              onEditMessage={setEditing}
               onCancelEdit={() =>
                 textareaRef.current?.focus({ preventScroll: true })
               }
               onDeleteMessage={async (message) => {
                 await onDeleteMessage(message);
-                if (editingMessage?.id === message.id) setEditSelection(null);
+                if (editingMessage?.id === message.id) setEditing(null);
                 textareaRef.current?.focus({ preventScroll: true });
               }}
               onReply={(message) => {
-                setReplySelection({
-                  channelKey: selectedChannelKey,
-                  messageId: message.id,
-                });
+                setReplyTo(message.id);
                 textareaRef.current?.focus();
               }}
             />
@@ -1043,7 +1123,7 @@ export function MessagesPane({
                     size="icon"
                     className="size-6 shrink-0"
                     aria-label="Cancel reply"
-                    onClick={() => setReplySelection(null)}
+                    onClick={() => setReplyTo(null)}
                   >
                     <X className="size-3.5" />
                   </Button>
@@ -1057,8 +1137,17 @@ export function MessagesPane({
                   ref={textareaRef}
                   value={draft}
                   onChange={(event) => {
-                    setDraft(event.target.value);
+                    updateDraft(event.currentTarget);
                   }}
+                  onFocus={() => {
+                    if (!selectedChannelKey) return;
+                    updateChannel(selectedChannelKey, (state) =>
+                      state.focusedInput === "draft"
+                        ? state
+                        : { ...state, focusedInput: "draft" }
+                    );
+                  }}
+                  onSelect={(event) => updateDraft(event.currentTarget)}
                   onKeyDown={(event) => {
                     void handleKeyDown(event);
                   }}
