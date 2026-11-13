@@ -163,7 +163,7 @@ function ChannelSettingsForm({
     setSaved(false);
   }
 
-  async function save(event: React.FormEvent<HTMLFormElement>) {
+  async function save(event: React.SubmitEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!account || !canManage || isSaving || !dirty || !submittedTitle) return;
     const active = getActiveAccount(useAuthStore.getState());

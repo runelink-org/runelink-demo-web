@@ -13,7 +13,7 @@ import type {
 } from "@runelink/sdk";
 import {
   useCallback,
-  type FormEvent,
+  type SubmitEvent,
   type KeyboardEvent,
   type ReactNode,
   type RefObject,
@@ -842,7 +842,7 @@ export function MessagesPane({
     await handleSubmit();
   }
 
-  function handleFormSubmit(event: FormEvent<HTMLFormElement>) {
+  function handleFormSubmit(event: SubmitEvent<HTMLFormElement>) {
     event.preventDefault();
     void handleSubmit();
   }

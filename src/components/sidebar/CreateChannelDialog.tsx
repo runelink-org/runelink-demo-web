@@ -95,7 +95,7 @@ function CreateChannelDialogForm({
   const noun = kind === "category" ? "category" : "channel";
   const nounLabel = kind === "category" ? "Category" : "Channel";
 
-  async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
+  async function handleSubmit(event: React.SubmitEvent<HTMLFormElement>) {
     event.preventDefault();
 
     const nextTitle = title.trim();

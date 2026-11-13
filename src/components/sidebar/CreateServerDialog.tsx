@@ -67,7 +67,7 @@ function CreateServerDialogForm({
     };
   }, [open]);
 
-  async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
+  async function handleSubmit(event: React.SubmitEvent<HTMLFormElement>) {
     event.preventDefault();
 
     const nextHost = host.trim();
