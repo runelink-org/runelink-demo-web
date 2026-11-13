@@ -104,7 +104,7 @@ function JoinServerDialogForm({
     };
   }, [activeHost, open]);
 
-  async function handleSearch(event: React.FormEvent<HTMLFormElement>) {
+  async function handleSearch(event: React.SubmitEvent<HTMLFormElement>) {
     event.preventDefault();
     await searchServers(host.trim());
   }

@@ -138,7 +138,7 @@ function ServerSettingsContent({
     setSaved(false);
   }
 
-  async function save(event: React.FormEvent<HTMLFormElement>) {
+  async function save(event: React.SubmitEvent<HTMLFormElement>) {
     event.preventDefault();
     if (
       !activeAccount ||
