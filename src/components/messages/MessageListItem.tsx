@@ -1,3 +1,4 @@
+import { serverChannelKey } from "@/lib/runelink-store-utils";
 import { InlineMessageEditor } from "./InlineMessageEditor";
 import { cn } from "@/lib/utils";
 import { useContextActionsMenu } from "@/lib/use-context-actions-menu";
@@ -178,10 +179,13 @@ export function MessageListItem({
               {editing ? (
                 <InlineMessageEditor
                   message={editing}
+                  channelKey={serverChannelKey(
+                    channelRoute.serverId,
+                    channelRoute.channelId
+                  )}
                   host={host}
                   onDelete={() => onDeleteMessage(message)}
                   onClose={(reason) => {
-                    onEdit(null);
                     if (reason === "cancel") onCancelEdit();
                   }}
                 />
