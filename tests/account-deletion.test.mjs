@@ -43,7 +43,7 @@ beforeEach(() => {
   storage.clear();
 });
 
-test("saved accounts drop the default port and keep the canonical session", () => {
+test("saved accounts drop the default port, keep the canonical session, and migrate the active account", () => {
   storage.set(
     CONFIG_KEY,
     JSON.stringify({
@@ -66,10 +66,12 @@ test("saved accounts drop the default port and keep the canonical session", () =
     })
   );
 
-  assert.deepEqual(accountStorage.loadBrowserAppConfig(), {
-    default_account: alice,
+  const expectedConfig = {
+    active_account: alice,
     accounts: [alice, { name: "bob", host: "example.com:7001" }],
-  });
+  };
+  assert.deepEqual(accountStorage.loadBrowserAppConfig(), expectedConfig);
+  assert.deepEqual(JSON.parse(storage.get(CONFIG_KEY)), expectedConfig);
   assert.deepEqual(accountStorage.loadBrowserAuthCache().accounts, {
     "alice@example.com": { refresh_token: "new" },
     "carol@example.com": { refresh_token: "carol" },
@@ -104,7 +106,7 @@ for (const [label, respond, deleted] of [
       return respond();
     };
     useAuthStore.setState({
-      config: { default_account: alice, accounts: [alice] },
+      config: { active_account: alice, accounts: [alice] },
       authCache: { accounts: { "alice@example.com": { refresh_token: "t" } } },
     });
 
@@ -113,7 +115,7 @@ for (const [label, respond, deleted] of [
     assert.deepEqual(urls, ["https://example.com:7000/users/example.com/alice"]);
     const { config, authCache } = useAuthStore.getState();
     assert.deepEqual(config.accounts, deleted ? [] : [alice]);
-    assert.equal(config.default_account, deleted ? null : alice);
+    assert.equal(config.active_account, deleted ? null : alice);
     assert.equal("alice@example.com" in authCache.accounts, !deleted);
   });
 }

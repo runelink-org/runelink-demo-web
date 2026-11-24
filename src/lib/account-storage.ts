@@ -20,8 +20,14 @@ export const StoredAccountAuthSchema = z.object({
 });
 
 export const BrowserAppConfigSchema = z.object({
-  default_account: UserRefSchema.nullable().default(null),
+  active_account: UserRefSchema.nullable().default(null),
   accounts: z.array(UserRefSchema).default([]),
+});
+
+// Configs saved before the rename store the active account as
+// `default_account`. Remove once stored configs have been migrated.
+const StoredAppConfigSchema = BrowserAppConfigSchema.extend({
+  default_account: UserRefSchema.nullable().optional(),
 });
 
 export const BrowserAuthCacheSchema = z.object({
@@ -119,17 +125,24 @@ export function upsertAccount(
 export function loadBrowserAppConfig(): BrowserAppConfig {
   const config = loadStoredJson(
     APP_CONFIG_STORAGE_KEY,
-    BrowserAppConfigSchema,
-    BrowserAppConfigSchema.parse({})
+    StoredAppConfigSchema,
+    StoredAppConfigSchema.parse({})
   );
-  return {
-    default_account: config.default_account
-      ? canonicalUserRef(config.default_account)
-      : null,
+  const activeAccount = config.active_account ?? config.default_account;
+  const migrated: BrowserAppConfig = {
+    active_account: activeAccount ? canonicalUserRef(activeAccount) : null,
     // Accounts saved before hosts were canonical may include the default
     // port, so merge accounts that only differed by it.
     accounts: config.accounts.map(canonicalUserRef).reduce(upsertAccount, []),
   };
+  if (config.default_account !== undefined) {
+    try {
+      saveBrowserAppConfig(migrated);
+    } catch {
+      // Use the migrated config in memory and retry on the next load
+    }
+  }
+  return migrated;
 }
 
 export function saveBrowserAppConfig(config: BrowserAppConfig): void {
