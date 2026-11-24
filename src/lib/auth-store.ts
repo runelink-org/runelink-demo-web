@@ -115,7 +115,7 @@ function persistAuthenticatedAccount(
   clientId: string
 ): Pick<AuthStore, "config" | "authCache" | "authError"> {
   const nextConfig = {
-    default_account: userRef,
+    active_account: userRef,
     accounts: upsertAccount(state.config.accounts, userRef),
   };
   const previousAuth = state.authCache.accounts[accountStorageKey(userRef)];
@@ -139,7 +139,7 @@ export function isSavedAccount(userRef: UserRef): boolean {
 }
 
 export function getActiveAccount(state: AuthStore): UserRef | null {
-  return state.config.default_account;
+  return state.config.active_account;
 }
 
 export function getActiveAccountAuth(
@@ -162,7 +162,7 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
 
     set((state) => {
       const nextConfig = {
-        default_account: normalizedAccount,
+        active_account: normalizedAccount,
         accounts: upsertAccount(state.config.accounts, normalizedAccount),
       };
 
@@ -238,7 +238,7 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
   },
 
   logoutActive() {
-    const activeAccount = get().config.default_account;
+    const activeAccount = get().config.active_account;
     if (!activeAccount) return;
     get().clearAccountAuth(activeAccount);
   },
@@ -253,11 +253,11 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
     }
 
     const nextConfig = {
-      default_account: sameUserRef(state.config.default_account, userRef)
+      active_account: sameUserRef(state.config.active_account, userRef)
         ? selectNext
           ? (accounts[0] ?? null)
           : null
-        : state.config.default_account,
+        : state.config.active_account,
       accounts,
     };
     const nextAuthCache = clearTokenState(state.authCache, userRef);
