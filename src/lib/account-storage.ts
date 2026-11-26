@@ -9,7 +9,7 @@ import {
 import { z } from "zod";
 
 const APP_CONFIG_STORAGE_KEY = "runelink.demo.app-config";
-const AUTH_CACHE_STORAGE_KEY = "runelink.demo.auth-cache";
+export const AUTH_CACHE_STORAGE_KEY = "runelink.demo.auth-cache";
 
 export const StoredAccountAuthSchema = z.object({
   refresh_token: z.string(),

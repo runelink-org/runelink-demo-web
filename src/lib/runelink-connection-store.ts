@@ -420,7 +420,7 @@ async function authenticateWithRefreshToken(
   connection: RunelinkConnection,
   userRef: UserRef,
   auth: StoredAccountAuth
-): Promise<string> {
+): Promise<StoredAccountAuth> {
   const clientId = auth.client_id ?? crypto.randomUUID();
   const reply = await withTimeout(
     connection.send({
@@ -444,7 +444,9 @@ async function authenticateWithRefreshToken(
     throw new Error("Session changed while refreshing");
   }
   storeAuthSessionToken(userRef, tokenResponse, clientId);
-  return tokenResponse.access_token;
+  // The host replaces the refresh token, so the session continues with the
+  // new one.
+  return { ...auth, refresh_token: tokenResponse.refresh_token };
 }
 
 async function authenticateStoredAccount(
@@ -453,6 +455,7 @@ async function authenticateStoredAccount(
   auth: StoredAccountAuth,
   generation: number
 ): Promise<void> {
+  let session = auth;
   useRunelinkConnectionStore.setState({
     status: "authenticating",
     lastError: null,
@@ -482,16 +485,16 @@ async function authenticateStoredAccount(
         ) {
           throw error;
         }
-        await authenticateWithRefreshToken(connection, userRef, auth);
+        session = await authenticateWithRefreshToken(connection, userRef, auth);
       }
     } else {
-      await authenticateWithRefreshToken(connection, userRef, auth);
+      session = await authenticateWithRefreshToken(connection, userRef, auth);
     }
 
     if (
       generation !== syncGeneration ||
       connection !== currentConnection ||
-      !isActiveSession(userRef, auth)
+      !isActiveSession(userRef, session)
     ) {
       return;
     }
@@ -501,7 +504,7 @@ async function authenticateStoredAccount(
     if (
       generation !== syncGeneration ||
       connection !== currentConnection ||
-      !isActiveSession(userRef, auth)
+      !isActiveSession(userRef, session)
     ) {
       return;
     }

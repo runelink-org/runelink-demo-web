@@ -21,6 +21,7 @@ import { MessagesPane } from "@/components/MessagesPane";
 import { ServerSettingsPage } from "@/components/server-settings/ServerSettingsPage";
 import { Sidebar } from "@/components/Sidebar";
 import {
+  followStoredAuth,
   getActiveAccount,
   getActiveAccountAuth,
   useAuthStore,
@@ -74,7 +75,11 @@ export function App() {
 
   const isWideLayout = useIsWideLayout();
   const activeAccount = useAuthStore(getActiveAccount);
-  const activeAuth = useAuthStore(getActiveAccountAuth);
+  // Only whether the active account is signed in matters here, not its
+  // tokens, which refreshes in any tab replace.
+  const isSignedIn = useAuthStore(
+    (state) => getActiveAccountAuth(state) !== null
+  );
   const selectedServerId = useNavigationStore(
     (state) => state.selectedServerId
   );
@@ -178,19 +183,20 @@ export function App() {
   }, [isWideLayout, navigate, route]);
 
   useEffect(() => {
-    if ((!activeAccount || !activeAuth) && route.screen !== "auth") {
+    if ((!activeAccount || !isSignedIn) && route.screen !== "auth") {
       authReturnRouteRef.current = route;
       navigate({ screen: "auth" }, "replace");
     }
-  }, [activeAccount, activeAuth, navigate, route]);
+  }, [activeAccount, isSignedIn, navigate, route]);
 
   useEffect(() => {
+    followStoredAuth();
     initializeRunelinkConnectionStore();
     initializeAccountDeletion((account) => toast(`${account} was deleted.`));
   }, []);
 
   if (
-    (!activeAccount || !activeAuth) &&
+    (!activeAccount || !isSignedIn) &&
     (isSidebarLoading ||
       resolvedSidebarAccountKey !== null ||
       sidebarError !== null)
@@ -201,7 +207,7 @@ export function App() {
   }
 
   useEffect(() => {
-    if (!activeAccount || !activeAuth || connectionStatus !== "connected") {
+    if (!activeAccount || !isSignedIn || connectionStatus !== "connected") {
       return;
     }
 
@@ -267,7 +273,7 @@ export function App() {
     };
   }, [
     activeAccount,
-    activeAuth,
+    isSignedIn,
     connectionStatus,
     fetchMembershipsByUser,
     fetchServerWithChannels,
@@ -276,10 +282,10 @@ export function App() {
   ]);
 
   useEffect(() => {
-    if (activeAccount && activeAuth && connectionStatus === "connected") {
+    if (activeAccount && isSignedIn && connectionStatus === "connected") {
       rememberChannelNavigationHints(activeAccount, serverWithChannelsById);
     }
-  }, [activeAccount, activeAuth, connectionStatus, serverWithChannelsById]);
+  }, [activeAccount, isSignedIn, connectionStatus, serverWithChannelsById]);
 
   const activeMemberships = activeAccount
     ? membershipsByUserRefKey[userRefKey(activeAccount)]
@@ -610,7 +616,7 @@ export function App() {
     route.screen === "auth" &&
     !!manageOriginAccountKey &&
     !!activeAccount &&
-    !!activeAuth &&
+    isSignedIn &&
     (shouldPrefillAccount || activeAccountKey !== manageOriginAccountKey) &&
     connectedAccountKey === activeAccountKey &&
     connectionStatus === "connected";
@@ -627,7 +633,7 @@ export function App() {
   }, [navigate, switchedToReadyAccount]);
 
   const shouldShowAuthScreen =
-    route.screen === "auth" || !activeAccount || !activeAuth;
+    route.screen === "auth" || !activeAccount || !isSignedIn;
   const selectedServerMemberList = selectedServer ? (
     <ServerMemberList
       serverId={selectedServer.server.id}
@@ -947,7 +953,7 @@ export function App() {
         {shouldShowAuthScreen ? (
           <AuthScreen
             key={`${manageSessionId}:${activeAccount ? `${activeAccount.name}@${activeAccount.host}` : "no-account"}`}
-            canClose={!!activeAccount && !!activeAuth}
+            canClose={!!activeAccount && isSignedIn}
             prefillAccount={shouldPrefillAccount}
             onDone={() => {
               setManageOriginAccountKey(null);
