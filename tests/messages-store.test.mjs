@@ -31,6 +31,8 @@ before(async () => {
   server = await createServer({
     server: { middlewareMode: true, ws: false },
     appType: "custom",
+    // Keep a running dev server's optimized dependencies intact.
+    cacheDir: "node_modules/.vite-test",
     plugins: [
       {
         name: "controlled-message-requests",

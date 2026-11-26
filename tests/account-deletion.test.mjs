@@ -27,6 +27,8 @@ before(async () => {
     // Another test file runs its own server, so skip the shared HMR socket.
     server: { middlewareMode: true, ws: false },
     appType: "custom",
+    // Keep a running dev server's optimized dependencies intact.
+    cacheDir: "node_modules/.vite-test",
   });
   accountStorage = await server.ssrLoadModule("/src/lib/account-storage.ts");
   accountDeletion = await server.ssrLoadModule("/src/lib/account-deletion.ts");

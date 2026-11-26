@@ -14,6 +14,8 @@ before(async () => {
   server = await createServer({
     server: { middlewareMode: true },
     appType: "custom",
+    // Keep a running dev server's optimized dependencies intact.
+    cacheDir: "node_modules/.vite-test",
   });
   ({ resolveHostTransport, useHostTransportPrompt } =
     await server.ssrLoadModule("/src/lib/host-transport.ts"));
