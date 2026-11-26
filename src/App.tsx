@@ -13,7 +13,15 @@ import type {
   ServerWithChannels,
 } from "@runelink/sdk";
 import { useAtomValue } from "@effect/atom-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import * as Effect from "effect/Effect";
+import {
+  type Dispatch,
+  type SetStateAction,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { toast } from "sonner";
 import { AuthScreen } from "@/components/AuthScreen";
 import { ServerMemberList } from "@/components/members/ServerMemberList";
@@ -26,6 +34,7 @@ import {
   authAtom,
   getActiveAccount,
   getActiveAccountAuth,
+  setAuthError,
 } from "@/lib/auth-store";
 import { type AppRoute, getContentRoute } from "@/lib/app-route";
 import {
@@ -34,9 +43,12 @@ import {
   moveChannel,
 } from "@/lib/channels-store";
 import { navigationAtom } from "@/lib/navigation-store";
+import { requestFailureMessage } from "@/lib/request-failure";
 import {
   cancelPendingAuthentication as cancelPendingAuthenticationEffect,
   connectionAtom,
+  SessionChangedError,
+  type RequestEffect,
 } from "@/lib/runelink-session";
 import {
   deleteMembership,
@@ -75,6 +87,31 @@ function getTargetHost(serverHost: string, activeHost: string): string | null {
   return serverHost === activeHost ? null : serverHost;
 }
 
+// Loads a server's channels, recording why it failed, such as an unreachable
+// peer host, for the channel list
+function loadServerDetails(
+  serverId: string,
+  serverHost: string,
+  activeHost: string,
+  setServerErrorById: Dispatch<SetStateAction<Record<string, string>>>
+) {
+  return fetchServerWithChannels(
+    serverId,
+    getTargetHost(serverHost, activeHost)
+  ).pipe(
+    Effect.tapError((error) =>
+      Effect.logWarning("Failed to load server", error).pipe(
+        Effect.map(() =>
+          setServerErrorById((errors) => ({
+            ...errors,
+            [serverId]: `Couldn't load channels from ${serverHost}. ${requestFailureMessage(error)}`,
+          }))
+        )
+      )
+    )
+  );
+}
+
 export function App() {
   const pendingServerDetailsRef = useRef<Set<string>>(new Set());
   const pendingMembersServerIdsRef = useRef<Set<string>>(new Set());
@@ -97,6 +134,9 @@ export function App() {
     string | null
   >(null);
   const [sidebarError, setSidebarError] = useState<string | null>(null);
+  const [serverErrorById, setServerErrorById] = useState<
+    Record<string, string>
+  >({});
 
   const isWideLayout = useIsWideLayout();
   const activeAccount = useAtomValue(authAtom, getActiveAccount);
@@ -233,52 +273,59 @@ export function App() {
     const accountKey = `${account.name}@${account.host}`;
     let isCancelled = false;
 
-    async function loadSidebar() {
+    const loadSidebar = Effect.gen(function* () {
+      const memberships = yield* fetchMembershipsByUser(account);
+      debugRunelink("sidebar memberships loaded", {
+        user: account,
+        serverIds: memberships.map((membership) => membership.server.id),
+      });
+      // A server that fails to load, such as on an unreachable peer host, is
+      // shown from its membership until it loads, so it doesn't keep the
+      // others from being used
+      const [fullServers] = yield* Effect.partition(
+        memberships,
+        (membership) =>
+          loadServerDetails(
+            membership.server.id,
+            membership.server.host,
+            account.host,
+            setServerErrorById
+          ),
+        { concurrency: "unbounded" }
+      );
+      return fullServers;
+    });
+
+    function startSidebarLoad() {
       setIsSidebarLoading(true);
       setResolvedSidebarAccountKey(null);
       setSidebarError(null);
-
-      try {
-        const memberships = await runPromise(fetchMembershipsByUser(account));
-        debugRunelink("sidebar memberships loaded", {
-          user: account,
-          serverIds: memberships.map((membership) => membership.server.id),
-        });
-        // Separate requests, so one failure doesn't cancel the others
-        const fullServers = await Promise.all(
-          memberships.map((membership) =>
-            runPromise(
-              fetchServerWithChannels(
-                membership.server.id,
-                getTargetHost(membership.server.host, account.host)
-              )
-            )
+      setServerErrorById({});
+      void runPromise(
+        loadSidebar.pipe(
+          Effect.match({
+            onSuccess: (fullServers) => {
+              if (!isCancelled) reconcileServers(fullServers);
+            },
+            onFailure: (error) => {
+              if (isCancelled) return;
+              console.warn("Failed to load servers", error);
+              setSidebarError(requestFailureMessage(error));
+              reconcileServers([]);
+            },
+          }),
+          Effect.ensuring(
+            Effect.sync(() => {
+              if (isCancelled) return;
+              setIsSidebarLoading(false);
+              setResolvedSidebarAccountKey(accountKey);
+            })
           )
-        );
-
-        if (isCancelled) {
-          return;
-        }
-
-        reconcileServers(fullServers);
-      } catch (error) {
-        if (isCancelled) {
-          return;
-        }
-
-        setSidebarError(
-          error instanceof Error ? error.message : "Failed to load servers"
-        );
-        reconcileServers([]);
-      } finally {
-        if (!isCancelled) {
-          setIsSidebarLoading(false);
-          setResolvedSidebarAccountKey(accountKey);
-        }
-      }
+        )
+      );
     }
 
-    void loadSidebar();
+    startSidebarLoad();
 
     return () => {
       isCancelled = true;
@@ -350,18 +397,21 @@ export function App() {
 
     for (const membership of membershipsToFetch) {
       pendingServerDetailsRef.current.add(membership.server.id);
-      runPromise(
-        fetchServerWithChannels(
+      void runPromise(
+        loadServerDetails(
           membership.server.id,
-          getTargetHost(membership.server.host, activeAccount.host)
+          membership.server.host,
+          activeAccount.host,
+          setServerErrorById
+        ).pipe(
+          Effect.ignore,
+          Effect.ensuring(
+            Effect.sync(() =>
+              pendingServerDetailsRef.current.delete(membership.server.id)
+            )
+          )
         )
-      )
-        .catch((error: unknown) => {
-          debugRunelink("server hydration failed", { error });
-        })
-        .finally(() => {
-          pendingServerDetailsRef.current.delete(membership.server.id);
-        });
+      );
     }
   }, [activeAccount, connectionStatus, missingMembershipServers]);
 
@@ -373,9 +423,13 @@ export function App() {
     if (activeUserKey in userByRefKey) {
       return;
     }
-    runPromise(fetchUserByRef(activeAccount)).catch((error: unknown) => {
-      debugRunelink("active user fetch failed", { error });
-    });
+    void runPromise(
+      fetchUserByRef(activeAccount).pipe(
+        Effect.catch((error) =>
+          Effect.logWarning("Failed to load the active user", error)
+        )
+      )
+    );
   }, [activeAccount, connectionStatus, userByRefKey]);
 
   useEffect(() => {
@@ -426,6 +480,10 @@ export function App() {
     ? canManageServer(selectedServer.server)
     : false;
   const canModerateSelectedMessages = canDeleteSelectedServer;
+  const selectedServerError =
+    selectedServer && !(selectedServer.server.id in serverWithChannelsById)
+      ? (serverErrorById[selectedServer.server.id] ?? null)
+      : null;
   const isSelectedServerHydrating = selectedServer
     ? !(selectedServer.server.id in serverWithChannelsById)
     : false;
@@ -534,24 +592,27 @@ export function App() {
     }
 
     pendingMembersServerIdsRef.current.add(membersServerId);
-    runPromise(
+    void runPromise(
       fetchMembersByServer(
         membersServerId,
         getTargetHost(server.server.host, activeAccount.host)
+      ).pipe(
+        // Shown in the members list
+        Effect.catch((error) =>
+          Effect.sync(() =>
+            setMembersErrorByServerId((errors) => ({
+              ...errors,
+              [membersServerId]: requestFailureMessage(error),
+            }))
+          )
+        ),
+        Effect.ensuring(
+          Effect.sync(() =>
+            pendingMembersServerIdsRef.current.delete(membersServerId)
+          )
+        )
       )
-    )
-      .catch((error) => {
-        setMembersErrorByServerId((errors) => ({
-          ...errors,
-          [membersServerId]:
-            error instanceof Error
-              ? error.message
-              : "Failed to load server members",
-        }));
-      })
-      .finally(() => {
-        pendingMembersServerIdsRef.current.delete(membersServerId);
-      });
+    );
   }, [
     activeAccount,
     connectionStatus,
@@ -601,14 +662,15 @@ export function App() {
       return;
     }
 
-    runPromise(
+    void runPromise(
       fetchMessagesByTextChannel(
         selectedTextChannelId,
         getTargetHost(selectedServer.server.host, activeAccount.host)
+      ).pipe(
+        // The store shows the error in the message pane.
+        Effect.ignore
       )
-    ).catch(() => {
-      /* The store exposes the error in the message pane. */
-    });
+    );
   }, [
     activeAccount,
     connectionStatus,
@@ -658,6 +720,9 @@ export function App() {
 
   function handleOpenAuth(prefillAccount: boolean) {
     cancelPendingAuthentication();
+    // Cleared here rather than by the auth screen, so the reason a session
+    // ended stays visible when the app opens the screen itself
+    setAuthError(null);
     const currentRoute = getCurrentRoute();
     if (currentRoute.screen !== "auth") {
       authReturnRouteRef.current = currentRoute;
@@ -726,48 +791,44 @@ export function App() {
     backOrReplace(getContentRoute(selectedServerId, selectedChannelId));
   }
 
-  async function handleSendMessage(body: string, replyTo: string | null) {
-    if (!activeAccount || !selectedServer || !selectedTextChannelId) {
-      return;
-    }
-    await runPromise(
-      createMessage(
-        selectedTextChannelId,
-        {
-          author: activeAccount,
-          body,
-          reply_to: replyTo,
-        },
-        getTargetHost(selectedServer.server.host, activeAccount.host)
-      )
+  function handleSendMessage(
+    body: string,
+    replyTo: string | null
+  ): RequestEffect<void> {
+    if (!activeAccount || !selectedServer || !selectedTextChannelId)
+      return Effect.void;
+    return createMessage(
+      selectedTextChannelId,
+      {
+        author: activeAccount,
+        body,
+        reply_to: replyTo,
+      },
+      getTargetHost(selectedServer.server.host, activeAccount.host)
+    ).pipe(Effect.asVoid);
+  }
+
+  function handleDeleteMessage(message: Message): RequestEffect<void> {
+    if (!activeAccount || !selectedServer || !selectedTextChannelId)
+      return Effect.void;
+    return deleteMessage(
+      selectedTextChannelId,
+      message.id,
+      getTargetHost(selectedServer.server.host, activeAccount.host)
     );
   }
 
-  async function handleDeleteMessage(message: Message) {
-    if (!activeAccount || !selectedServer || !selectedTextChannelId) {
-      return;
-    }
-
-    await runPromise(
-      deleteMessage(
-        selectedTextChannelId,
-        message.id,
-        getTargetHost(selectedServer.server.host, activeAccount.host)
-      )
-    );
-  }
-
-  async function handleCreateChannel(
+  function handleCreateChannel(
     server: Server,
     kind: ServerChannelKind,
     title: string,
     parentChannelId: string | null
-  ) {
-    if (!activeAccount) {
-      return;
-    }
-    const channel = await runPromise(
-      createChannel(
+  ): RequestEffect<void> {
+    return Effect.gen(function* () {
+      if (!activeAccount) {
+        return;
+      }
+      const channel = yield* createChannel(
         server.id,
         {
           kind,
@@ -776,152 +837,153 @@ export function App() {
           parent_channel_id: parentChannelId,
         },
         getTargetHost(server.host, activeAccount.host)
-      )
-    );
-    if (channel.kind !== "text") {
-      return;
-    }
+      );
+      if (channel.kind !== "text") {
+        return;
+      }
 
-    navigate(
-      {
-        screen: "channel",
-        serverId: server.id,
-        channelId: channel.id,
-      },
-      "push"
-    );
+      navigate(
+        {
+          screen: "channel",
+          serverId: server.id,
+          channelId: channel.id,
+        },
+        "push"
+      );
+    });
   }
 
-  async function handleDeleteChannel(channel: ServerChannel) {
-    const server = hydratedServerById[channel.server_id]?.server;
-    const currentAccount = getActiveAccount(getState(authAtom));
-    if (
-      !activeAccount ||
-      !currentAccount ||
-      userRefKey(currentAccount) !== userRefKey(activeAccount)
-    ) {
-      throw new Error(
-        "The active account changed. Reopen the confirmation to try again."
-      );
-    }
-    if (!server)
-      throw new Error(
-        "The owning server is unavailable. Reload before deleting this channel."
-      );
-    await runPromise(
-      deleteChannel(
+  function handleDeleteChannel(channel: ServerChannel): RequestEffect<void> {
+    return Effect.gen(function* () {
+      const server = hydratedServerById[channel.server_id]?.server;
+      const currentAccount = getActiveAccount(getState(authAtom));
+      // The account changed, or the server was removed, since the
+      // confirmation opened
+      if (
+        !activeAccount ||
+        !currentAccount ||
+        userRefKey(currentAccount) !== userRefKey(activeAccount) ||
+        !server
+      ) {
+        return yield* new SessionChangedError();
+      }
+      yield* deleteChannel(
         channel.server_id,
         channel.id,
         getTargetHost(server.host, activeAccount.host)
+      );
+      const accountAfterDelete = getActiveAccount(getState(authAtom));
+      if (
+        !accountAfterDelete ||
+        userRefKey(accountAfterDelete) !== userRefKey(activeAccount)
       )
-    );
-    const accountAfterDelete = getActiveAccount(getState(authAtom));
-    if (
-      !accountAfterDelete ||
-      userRefKey(accountAfterDelete) !== userRefKey(activeAccount)
-    )
-      return;
-    const current = getCurrentRoute();
-    if (
-      current.screen === "channel-settings" &&
-      current.serverId === channel.server_id &&
-      current.channelId === channel.id
-    ) {
-      navigate({ screen: "server", serverId: channel.server_id }, "replace");
-    }
+        return;
+      const current = getCurrentRoute();
+      if (
+        current.screen === "channel-settings" &&
+        current.serverId === channel.server_id &&
+        current.channelId === channel.id
+      ) {
+        navigate({ screen: "server", serverId: channel.server_id }, "replace");
+      }
+    });
   }
 
-  async function handleMoveChannel(
+  function handleMoveChannel(
     channel: ServerChannel,
     channelMove: ServerChannelMove
-  ) {
-    if (!activeAccount || !selectedServer) {
-      return;
-    }
-    await runPromise(
-      moveChannel(
-        selectedServer.server.id,
-        channel.id,
-        channelMove,
-        getTargetHost(selectedServer.server.host, activeAccount.host)
-      )
-    );
+  ): RequestEffect<void> {
+    if (!activeAccount || !selectedServer) return Effect.void;
+    return moveChannel(
+      selectedServer.server.id,
+      channel.id,
+      channelMove,
+      getTargetHost(selectedServer.server.host, activeAccount.host)
+    ).pipe(Effect.asVoid);
   }
 
-  async function handleCreateServer(
+  function handleCreateServer(
     host: string,
     title: string,
     description: string
-  ) {
-    if (!activeAccount) return;
+  ): RequestEffect<void> {
+    return Effect.gen(function* () {
+      if (!activeAccount) return;
 
-    const targetHost = getTargetHost(host.trim(), activeAccount.host);
-    const server = await runPromise(
-      createServer(
+      const targetHost = getTargetHost(host.trim(), activeAccount.host);
+      const server = yield* createServer(
         {
           title,
           description: description.trim() || null,
           default_channels: true,
         },
         targetHost
-      )
-    );
+      );
 
-    await runPromise(fetchServerWithChannels(server.id, targetHost));
-    navigate({ screen: "server", serverId: server.id }, "push");
-  }
-
-  async function handleSearchServers(host: string) {
-    if (!activeAccount) return [];
-    return runPromise(fetchServers(getTargetHost(host, activeAccount.host)));
-  }
-
-  async function handleJoinServer(serverId: string, serverHost: string) {
-    if (!activeAccount) return;
-
-    debugRunelink("join server start", {
-      serverId,
-      serverHost,
-      activeAccount,
+      yield* fetchServerWithChannels(server.id, targetHost);
+      navigate({ screen: "server", serverId: server.id }, "push");
     });
+  }
 
-    await runPromise(
-      upsertMembership(serverId, {
+  function handleSearchServers(
+    host: string
+  ): RequestEffect<ReadonlyArray<Server>> {
+    if (!activeAccount) return Effect.succeed([]);
+    return fetchServers(getTargetHost(host, activeAccount.host));
+  }
+
+  function handleJoinServer(
+    serverId: string,
+    serverHost: string
+  ): RequestEffect<void> {
+    return Effect.gen(function* () {
+      if (!activeAccount) return;
+
+      debugRunelink("join server start", {
+        serverId,
+        serverHost,
+        activeAccount,
+      });
+
+      yield* upsertMembership(serverId, {
         user_ref: activeAccount,
         server_id: serverId,
         server_host: serverHost,
         role: "member",
-      })
-    );
-    await runPromise(
-      fetchServerWithChannels(
+      });
+      yield* fetchServerWithChannels(
         serverId,
         getTargetHost(serverHost, activeAccount.host)
-      )
-    );
-    debugRunelink("join server finished", {
-      serverId,
-      serverHost,
-      activeAccount,
-    });
-    navigate({ screen: "server", serverId }, "push");
-  }
-
-  async function handleLeaveServer(serverId: string, serverHost: string) {
-    if (!activeAccount) return;
-    await runPromise(
-      deleteMembership(
+      );
+      debugRunelink("join server finished", {
         serverId,
+        serverHost,
         activeAccount,
-        getTargetHost(serverHost, activeAccount.host)
-      )
+      });
+      navigate({ screen: "server", serverId }, "push");
+    });
+  }
+
+  function handleLeaveServer(
+    serverId: string,
+    serverHost: string
+  ): RequestEffect<void> {
+    if (!activeAccount) return Effect.void;
+    return deleteMembership(
+      serverId,
+      activeAccount,
+      getTargetHost(serverHost, activeAccount.host)
     );
   }
 
-  async function handleDeleteServer(serverId: string, serverHost: string) {
-    if (!activeAccount) return;
-    await runPromise(
-      deleteServer(serverId, getTargetHost(serverHost, activeAccount.host))
+  function handleDeleteServer(
+    serverId: string,
+    serverHost: string
+  ): RequestEffect<void> {
+    if (!activeAccount) return Effect.void;
+    return deleteServer(
+      serverId,
+      getTargetHost(serverHost, activeAccount.host)
     );
   }
 
@@ -945,7 +1007,7 @@ export function App() {
           selectedChannelId={selectedChannelId}
           selectedChannelIdByServerId={selectedChannelIdByServerId}
           isLoading={isSidebarLoading}
-          error={sidebarError}
+          error={sidebarError ?? selectedServerError}
           isSelectedServerHydrating={isSelectedServerHydrating}
           activeHost={activeAccount?.host ?? null}
           accountRailOnly={shouldShowAuthScreen}

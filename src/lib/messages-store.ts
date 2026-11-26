@@ -4,11 +4,13 @@ import {
 } from "@/lib/channel-navigation-hints";
 import { mergeMessages } from "./message-cache";
 import { type Message, type NewMessage } from "@runelink/sdk";
+import * as Cause from "effect/Cause";
 import * as Effect from "effect/Effect";
 import * as Deferred from "effect/Deferred";
+import * as Option from "effect/Option";
 import { getState, setState, stateAtom } from "@/lib/atom-registry";
+import { requestFailureMessage } from "@/lib/request-failure";
 import {
-  failureMessage,
   request,
   type RequestFailure,
   type RunelinkSession,
@@ -141,10 +143,10 @@ export function fetchMessagesByTextChannel(
               },
               errorByTextChannelId: {
                 ...state.errorByTextChannelId,
-                [textChannelId]: failureMessage(
-                  cause,
-                  "Failed to load channel messages"
-                ),
+                [textChannelId]: Option.match(Cause.findErrorOption(cause), {
+                  onNone: () => "Failed to load channel messages",
+                  onSome: requestFailureMessage,
+                }),
               },
             }));
           })

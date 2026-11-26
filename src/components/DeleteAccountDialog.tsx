@@ -1,7 +1,6 @@
 import { useAtomValue } from "@effect/atom-react";
 import { padHost, type UserRef } from "@runelink/sdk";
 import { useState } from "react";
-import { toast } from "sonner";
 import { TypedConfirmationField } from "@/components/TypedConfirmationField";
 import {
   AlertDialog,
@@ -18,6 +17,8 @@ import { accountStorageKey, sameUserRef } from "@/lib/account-storage";
 import { isSavedAccount } from "@/lib/auth-store";
 import { connectionAtom, request } from "@/lib/runelink-session";
 import { runPromise } from "@/lib/runtime";
+import * as Effect from "effect/Effect";
+import { toastFailure } from "@/lib/toast-failure";
 
 type DeleteAccountDialogProps = {
   account: UserRef | null;
@@ -61,28 +62,23 @@ export function DeleteAccountDialog({
 
     setIsDeleting(true);
     setError(null);
-    try {
-      await runPromise(
-        request({ type: "users_delete", data: { user_ref: account } })
-      );
-      forgetDeletedAccount(account);
-      onOpenChange(false);
-    } catch (nextError) {
-      // The host's user_deleted update can lead to the account being removed
-      // before the reply arrives, tearing down the connection and failing the
-      // request even though the deletion succeeded.
-      if (!isSavedAccount(account)) {
-        return;
-      }
-      toast.error("Failed to delete account.");
-      setError(
-        nextError instanceof Error
-          ? nextError.message
-          : "Failed to delete account"
-      );
-    } finally {
-      setIsDeleting(false);
-    }
+    await runPromise(
+      request({ type: "users_delete", data: { user_ref: account } }).pipe(
+        Effect.match({
+          onSuccess: () => {
+            forgetDeletedAccount(account);
+            onOpenChange(false);
+          },
+          onFailure: (failure) => {
+            // The host's user_deleted update can lead to the account being
+            // removed before the reply arrives, tearing down the connection and
+            // failing the request even though the deletion succeeded.
+            if (!isSavedAccount(account)) return;
+            setError(toastFailure("Couldn't delete account", failure));
+          },
+        })
+      )
+    ).finally(() => setIsDeleting(false));
   }
 
   return (

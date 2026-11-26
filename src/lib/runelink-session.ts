@@ -1,6 +1,7 @@
 import {
   RunelinkConnection,
   RunelinkIncompatibleHostError,
+  RunelinkProtocolError,
   getWsUrl,
   type CapabilityIssue,
   type ReplyFor,
@@ -42,7 +43,6 @@ import {
   getActiveAccountAuth,
   isSavedAccount,
   persistAuthenticatedAccount,
-  setAuthError,
   storeAccountToken,
 } from "@/lib/auth-store";
 import { handleRunelinkUpdate } from "@/lib/runelink-updates";
@@ -76,11 +76,46 @@ export const connectionAtom = stateAtom<ConnectionState>({
   incompatibleHost: null,
 });
 
-// The active session cannot be used, or changed while it was being used.
-export class SessionError extends Schema.TaggedError<SessionError>()(
-  "SessionError",
-  { message: Schema.String }
-) {}
+// No account is connected, so the request was not sent
+export class NotConnectedError extends Schema.TaggedError<NotConnectedError>()(
+  "NotConnectedError",
+  {}
+) {
+  override get message(): string {
+    return "RuneLink connection is not available";
+  }
+}
+
+// The session changed, such as by reconnecting or switching accounts, before
+// the request finished
+export class SessionChangedError extends Schema.TaggedError<SessionChangedError>()(
+  "SessionChangedError",
+  {}
+) {
+  override get message(): string {
+    return "RuneLink connection changed before the request finished";
+  }
+}
+
+// A newer connection attempt or a cancelled login replaced this attempt
+class ConnectionCancelledError extends Schema.TaggedError<ConnectionCancelledError>()(
+  "ConnectionCancelledError",
+  {}
+) {
+  override get message(): string {
+    return "The connection attempt was cancelled.";
+  }
+}
+
+// Storage can throw, such as when it is full.
+class SessionStorageError extends Schema.TaggedError<SessionStorageError>()(
+  "SessionStorageError",
+  { cause: Schema.Defect() }
+) {
+  override get message(): string {
+    return "Unable to save the session";
+  }
+}
 
 // An account name or host that cannot be used to sign in
 class InvalidAccountError extends Schema.TaggedError<InvalidAccountError>()(
@@ -88,13 +123,21 @@ class InvalidAccountError extends Schema.TaggedError<InvalidAccountError>()(
   { message: Schema.String }
 ) {}
 
-export type RequestFailure = RunelinkRequestFailure | SessionError;
-type ConnectFailure =
+export type RequestFailure =
+  RunelinkRequestFailure | NotConnectedError | SessionChangedError;
+// An effect that requests through the session, such as a user action
+export type RequestEffect<A> = Effect.Effect<
+  A,
+  RequestFailure,
+  RunelinkSession
+>;
+export type AuthFailure =
   | RunelinkRequestFailure
-  | SessionError
   | HostUnreachableError
-  | HostTransportError;
-type AuthFailure = ConnectFailure | InvalidAccountError;
+  | HostTransportError
+  | ConnectionCancelledError
+  | SessionStorageError
+  | InvalidAccountError;
 
 type AccountCredentials = {
   host: string;
@@ -145,17 +188,6 @@ const AUTH_REQUEST_TIMEOUT_MS = 10_000;
 const RESUME_RECONNECT_AFTER_MS = 60_000;
 const AUTH_RETRY_INITIAL_DELAY_MS = 1_000;
 const AUTH_RETRY_MAX_DELAY_MS = 30_000;
-// Error codes the host returns when a refresh token is unknown, expired, or
-// revoked. Anything else (network failures, timeouts, internal errors) is
-// treated as transient so the stored session survives it.
-const AUTH_REJECTION_ERROR_CODES = new Set(["auth_error", "not_found"]);
-
-function isAuthRejection(error: ConnectFailure): boolean {
-  return (
-    error._tag === "RunelinkRequestError" &&
-    AUTH_REJECTION_ERROR_CODES.has(error.code)
-  );
-}
 
 function setConnectionState(patch: Partial<ConnectionState>): void {
   setState(connectionAtom, patch);
@@ -222,13 +254,6 @@ const requireCapabilities = Effect.fn("RunelinkSession.requireCapabilities")(
   }
 );
 
-function authTimeout(message: string) {
-  return Effect.timeoutOrElse({
-    duration: AUTH_REQUEST_TIMEOUT_MS,
-    orElse: () => Effect.fail(new SessionError({ message })),
-  });
-}
-
 const authenticateWithAccessToken = Effect.fn(
   "RunelinkSession.authenticateWithAccessToken"
 )(function* (connection: Connection, userRef: UserRef, accessToken: string) {
@@ -237,14 +262,14 @@ const authenticateWithAccessToken = Effect.fn(
       type: "auth_token_access",
       data: { access_token: accessToken },
     })
-    .pipe(authTimeout("Timed out authenticating websocket"));
+    .pipe(Effect.timeout(AUTH_REQUEST_TIMEOUT_MS));
 
   if (
     reply.data.type !== "authenticated" ||
     !sameUserRef(reply.data.data.user_ref, userRef)
   ) {
-    return yield* new SessionError({
-      message: "Websocket authentication returned an unexpected account",
+    return yield* new RunelinkProtocolError({
+      reason: "Websocket authentication returned an unexpected account",
     });
   }
 });
@@ -266,12 +291,10 @@ const authenticateWithRefreshToken = Effect.fn(
         scope: auth.scope ?? null,
       },
     })
-    .pipe(authTimeout("Timed out refreshing session"));
+    .pipe(Effect.timeout(AUTH_REQUEST_TIMEOUT_MS));
 
   if (!isActiveSession(userRef, auth)) {
-    return yield* new SessionError({
-      message: "Session changed while refreshing",
-    });
+    return yield* new SessionChangedError();
   }
   yield* saveSession(() => storeAccountToken(userRef, reply.data, clientId));
   // The host replaces the refresh token, so the session continues with the
@@ -280,37 +303,16 @@ const authenticateWithRefreshToken = Effect.fn(
 });
 
 // The message of a failure, or of an unexpected error, to show the user
-export function failureMessage(
-  cause: Cause.Cause<unknown>,
-  fallback: string
-): string {
+function failureMessage(cause: Cause.Cause<unknown>, fallback: string): string {
   const error = Cause.squash(cause);
   return error instanceof Error ? error.message : fallback;
 }
 
-// Shows why a login or signup failed on the auth screen
-const showAuthError =
-  (fallback: string) =>
-  <A, E, R>(self: Effect.Effect<A, E, R>) =>
-    Effect.tapCause(self, (cause) =>
-      Cause.hasInterruptsOnly(cause)
-        ? Effect.void
-        : Effect.sync(() => setAuthError(failureMessage(cause, fallback)))
-    );
-
-// Storage can throw, such as when it is full.
 const saveSession = (save: () => void) =>
   Effect.try({
     try: save,
-    catch: (error) =>
-      new SessionError({
-        message:
-          error instanceof Error ? error.message : "Unable to save the session",
-      }),
+    catch: (cause) => new SessionStorageError({ cause }),
   });
-
-const transportCancelled = () =>
-  new SessionError({ message: "The connection attempt was cancelled." });
 
 // An unexpected error in a listener is logged rather than stopping it.
 const logDefect = Effect.catchDefect((defect) =>
@@ -337,7 +339,8 @@ const make = Effect.gen(function* () {
     | undefined;
   let currentAuthenticated = false;
   // Cancels the host transport check of the connection being replaced
-  let cancelTransport: Deferred.Deferred<never, SessionError> | undefined;
+  let cancelTransport:
+    Deferred.Deferred<never, ConnectionCancelledError> | undefined;
   let replaceInProgress = false;
   let explicitAuthenticationInProgress = false;
   let syncGeneration = 0;
@@ -376,7 +379,7 @@ const make = Effect.gen(function* () {
     // cancelled attempt cannot resume inside the caller.
     if (cancel) {
       queueMicrotask(() =>
-        Deferred.doneUnsafe(cancel, Exit.fail(transportCancelled()))
+        Deferred.doneUnsafe(cancel, Exit.fail(new ConnectionCancelledError()))
       );
     }
   }
@@ -503,10 +506,11 @@ const make = Effect.gen(function* () {
       // the requests that closing fails can start another attempt, which
       // then supersedes this one.
       cancelHostTransport();
-      const cancel = Deferred.makeUnsafe<never, SessionError>();
+      const cancel = Deferred.makeUnsafe<never, ConnectionCancelledError>();
       cancelTransport = cancel;
       closeConnection();
-      if (cancelTransport !== cancel) return yield* transportCancelled();
+      if (cancelTransport !== cancel)
+        return yield* new ConnectionCancelledError();
       replaceInProgress = true;
 
       const secure = yield* Effect.raceFirst(
@@ -521,7 +525,8 @@ const make = Effect.gen(function* () {
           })
         )
       );
-      if (cancelTransport !== cancel) return yield* transportCancelled();
+      if (cancelTransport !== cancel)
+        return yield* new ConnectionCancelledError();
       cancelTransport = undefined;
 
       const scope = yield* Scope.fork(layerScope);
@@ -685,14 +690,19 @@ const make = Effect.gen(function* () {
       return;
     }
 
-    if (!error || !isAuthRejection(error)) {
-      // Keep the stored refresh token and try again on a fresh socket. This
-      // covers dropped or half-open sockets, timeouts, and host restarts.
+    // The host rejects an unknown, expired, or revoked refresh token with
+    // these. Anything else (dropped or half-open sockets, timeouts, host
+    // restarts, internal errors) is transient, so the stored refresh token is
+    // kept and tried again on a fresh socket.
+    if (
+      error?._tag !== "RunelinkAuthError" &&
+      error?._tag !== "RunelinkNotFoundError"
+    ) {
       yield* scheduleAuthRetry(errorMessage);
       return;
     }
 
-    clearAccountAuth(userRef, errorMessage);
+    clearAccountAuth(userRef, "Your session expired. Log in again.");
     run(connection.disconnect);
     // The session may have been rejected because the user was deleted while
     // this browser was offline.
@@ -757,7 +767,7 @@ const make = Effect.gen(function* () {
 
   // Waits until the account is connected, or fails once disconnected
   const waitForConnectedAccount = (account: UserRef | null) =>
-    Effect.callback<Connection, SessionError>((resume) => {
+    Effect.callback<Connection, NotConnectedError>((resume) => {
       function check(state: ConnectionState): boolean {
         if (
           current &&
@@ -769,14 +779,7 @@ const make = Effect.gen(function* () {
           return true;
         }
         if (state.status === "disconnected") {
-          resume(
-            Effect.fail(
-              new SessionError({
-                message:
-                  state.lastError ?? "RuneLink connection is not available",
-              })
-            )
-          );
+          resume(Effect.fail(new NotConnectedError()));
           return true;
         }
         return false;
@@ -812,9 +815,7 @@ const make = Effect.gen(function* () {
     const generation = syncGeneration;
     const connection = yield* waitForAuthenticatedConnection;
     if (generation !== syncGeneration || !isCurrent(connection)) {
-      return yield* new SessionError({
-        message: "RuneLink connection changed before request could be sent",
-      });
+      return yield* new SessionChangedError();
     }
     return yield* connection.request(message);
   });
@@ -887,7 +888,7 @@ const make = Effect.gen(function* () {
       yield* saveSession(() =>
         persistAuthenticatedAccount(userRef, tokenResponse, clientId)
       );
-    }, showAuthError(fallbackError));
+    });
   }
 
   const cancelPendingAuthentication = Effect.gen(function* () {

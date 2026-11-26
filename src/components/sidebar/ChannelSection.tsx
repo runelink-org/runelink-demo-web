@@ -6,7 +6,6 @@ import type {
 } from "@runelink/sdk";
 import { FolderPlus, Hash, Plus } from "lucide-react";
 import { useRef, useState } from "react";
-import { toast } from "sonner";
 import { CategoryListItem } from "@/components/sidebar/CategoryListItem";
 import { ChannelListItem } from "@/components/sidebar/ChannelListItem";
 import { Button } from "@/components/ui/button";
@@ -24,6 +23,10 @@ import {
   visibleRows,
 } from "@/lib/channel-tree";
 import { cn } from "@/lib/utils";
+import type { RequestEffect } from "@/lib/runelink-session";
+import * as Effect from "effect/Effect";
+import { toastFailure } from "@/lib/toast-failure";
+import { runPromise } from "@/lib/runtime";
 
 const INDENT_PX = 14;
 // How far a pressed pointer moves before a click becomes a drag
@@ -46,7 +49,7 @@ type ChannelSectionProps = {
   onMoveChannel: (
     channel: ServerChannel,
     channelMove: ServerChannelMove
-  ) => Promise<void>;
+  ) => RequestEffect<void>;
 };
 
 type DragState = {
@@ -245,13 +248,15 @@ export function ChannelSection({
         return next;
       });
     }
-    onMoveChannel(channel, channelMove).catch((moveError: unknown) => {
-      toast.error(
-        moveError instanceof Error
-          ? moveError.message
-          : `Failed to move ${channel.title}.`
-      );
-    });
+    void runPromise(
+      onMoveChannel(channel, channelMove).pipe(
+        Effect.catch((failure) =>
+          Effect.sync(() =>
+            toastFailure(`Couldn't move ${channel.title}`, failure)
+          )
+        )
+      )
+    );
   }
 
   return (

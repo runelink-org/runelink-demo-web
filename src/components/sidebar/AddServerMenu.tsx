@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { CreateServerDialog } from "./CreateServerDialog";
 import { JoinServerDialog } from "./JoinServerDialog";
+import type { RequestEffect } from "@/lib/runelink-session";
 
 type AddServerMenuProps = {
   contextMenu: ReturnType<typeof useContextActionsMenu>;
@@ -20,9 +21,9 @@ type AddServerMenuProps = {
     host: string,
     title: string,
     description: string
-  ) => Promise<void>;
-  onSearchServers: (host: string) => Promise<ReadonlyArray<Server>>;
-  onJoinServer: (serverId: string, serverHost: string) => Promise<void>;
+  ) => RequestEffect<void>;
+  onSearchServers: (host: string) => RequestEffect<ReadonlyArray<Server>>;
+  onJoinServer: (serverId: string, serverHost: string) => RequestEffect<void>;
 };
 
 export function AddServerMenu({

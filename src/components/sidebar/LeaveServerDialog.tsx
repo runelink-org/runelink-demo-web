@@ -11,11 +11,15 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import type { RequestEffect } from "@/lib/runelink-session";
+import * as Effect from "effect/Effect";
+import { toastFailure } from "@/lib/toast-failure";
+import { runPromise } from "@/lib/runtime";
 
 type LeaveServerDialogProps = {
   server: Server | null;
   onOpenChange: (open: boolean) => void;
-  onLeaveServer: (serverId: string, serverHost: string) => Promise<void>;
+  onLeaveServer: (serverId: string, serverHost: string) => RequestEffect<void>;
 };
 
 export function LeaveServerDialog({
@@ -34,20 +38,18 @@ export function LeaveServerDialog({
     setIsLeaving(true);
     setError(null);
 
-    try {
-      await onLeaveServer(server.id, server.host);
-      toast.success(`Left server: ${server.title}`);
-      onOpenChange(false);
-    } catch (nextError) {
-      toast.error("Failed to leave server.");
-      setError(
-        nextError instanceof Error
-          ? nextError.message
-          : "Failed to leave server"
-      );
-    } finally {
-      setIsLeaving(false);
-    }
+    await runPromise(
+      onLeaveServer(server.id, server.host).pipe(
+        Effect.match({
+          onSuccess: () => {
+            toast.success(`Left server: ${server.title}`);
+            onOpenChange(false);
+          },
+          onFailure: (failure) =>
+            setError(toastFailure("Couldn't leave server", failure)),
+        })
+      )
+    ).finally(() => setIsLeaving(false));
   }
 
   return (

@@ -10,6 +10,7 @@ let registry;
 let hints;
 let updates;
 let run;
+let NotConnectedError;
 const requests = [];
 const storage = new Map();
 const originalWindow = globalThis.window;
@@ -38,9 +39,9 @@ before(async () => {
     // Keep a running dev server's optimized dependencies intact.
     cacheDir: "node_modules/.vite-test",
   });
-  const { RunelinkSession } = await server.ssrLoadModule(
-    "/src/lib/runelink-session.ts"
-  );
+  const session$ = await server.ssrLoadModule("/src/lib/runelink-session.ts");
+  const { RunelinkSession } = session$;
+  ({ NotConnectedError } = session$);
   // Requests wait until a test settles them.
   const session = Layer.succeed(
     RunelinkSession,
@@ -126,9 +127,13 @@ test("history preserves live edits received during a prefetch", async () => {
 
 test("a failed prefetch can retry when the channel opens", async () => {
   const pending = fetchMessages("channel");
-  requests[0].reject(new Error("offline"));
-  await assert.rejects(pending, /offline/);
+  requests[0].reject(new NotConnectedError());
+  await assert.rejects(pending, { _tag: "NotConnectedError" });
   assert.equal(state().isLoadingByTextChannelId.channel, false);
+  assert.equal(
+    state().errorByTextChannelId.channel,
+    "You're not connected. Try again once you're connected."
+  );
   const retry = fetchMessages("channel");
   assert.equal(state().errorByTextChannelId.channel, null);
   assert.equal(requests.length, 2);
