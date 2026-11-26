@@ -24,6 +24,8 @@ import { ServerRailButton } from "@/components/sidebar/ServerRailButton";
 import { Separator } from "@/components/ui/separator";
 import { useContextActionsMenu } from "@/lib/use-context-actions-menu";
 import { getAppRoutePath, getContentRoute } from "@/lib/app-route";
+import type { RequestEffect } from "@/lib/runelink-session";
+import * as Effect from "effect/Effect";
 
 type SidebarProps = {
   servers: ReadonlyArray<ServerWithChannels>;
@@ -43,12 +45,12 @@ type SidebarProps = {
     host: string,
     title: string,
     description: string
-  ) => Promise<void>;
-  onSearchServers: (host: string) => Promise<ReadonlyArray<Server>>;
-  onJoinServer: (serverId: string, serverHost: string) => Promise<void>;
+  ) => RequestEffect<void>;
+  onSearchServers: (host: string) => RequestEffect<ReadonlyArray<Server>>;
+  onJoinServer: (serverId: string, serverHost: string) => RequestEffect<void>;
   onOpenServerSettings: (server: Server) => void;
-  onLeaveServer: (serverId: string, serverHost: string) => Promise<void>;
-  onDeleteServer: (serverId: string, serverHost: string) => Promise<void>;
+  onLeaveServer: (serverId: string, serverHost: string) => RequestEffect<void>;
+  onDeleteServer: (serverId: string, serverHost: string) => RequestEffect<void>;
   canDeleteSelectedServer: boolean;
   canManageServer: (server: Server) => boolean;
   onCreateChannel: (
@@ -56,13 +58,13 @@ type SidebarProps = {
     kind: ServerChannelKind,
     title: string,
     parentChannelId: string | null
-  ) => Promise<void>;
-  onDeleteChannel: (channel: ServerChannel) => Promise<void>;
+  ) => RequestEffect<void>;
+  onDeleteChannel: (channel: ServerChannel) => RequestEffect<void>;
   onEditChannel: (channel: ServerChannel) => void;
   onMoveChannel: (
     channel: ServerChannel,
     channelMove: ServerChannelMove
-  ) => Promise<void>;
+  ) => RequestEffect<void>;
 };
 
 const CHANNEL_PANEL_WIDTH_KEY = "runelink.demo.channels-sidebar-width";
@@ -464,8 +466,8 @@ export function Sidebar({
           }
         }}
         onCreateChannel={(kind, title, parentChannelId) => {
-          if (!createChannelRequest)
-            throw new Error("No channel creation request.");
+          // The dialog only opens for a request
+          if (!createChannelRequest) return Effect.void;
           return onCreateChannel(
             createChannelRequest.server,
             kind,

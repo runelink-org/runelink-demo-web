@@ -29,6 +29,9 @@ import { deleteMembership } from "@/lib/memberships-store";
 import { userRefKey } from "@/lib/runelink-store-utils";
 import { deleteServer } from "@/lib/servers-store";
 import { usersAtom } from "@/lib/users-store";
+import * as Effect from "effect/Effect";
+import { requestFailureMessage } from "@/lib/request-failure";
+import type { RequestEffect } from "@/lib/runelink-session";
 
 type ServerSettingsPageProps = {
   server: ServerWithChannels | null;
@@ -152,66 +155,68 @@ function ServerSettingsContent({
     setIsSaving(true);
     setError(null);
     setSaved(false);
-    try {
-      const reply = await runPromise(
-        request({
-          type: "servers_update",
-          data: {
-            server_id: baseline.id,
-            server_update: {
-              title: submittedTitle,
-              description: submittedDescription || null,
-              expected_updated_at: baseline.updated_at,
-            },
-            target_host: getTargetHost(baseline.host, account.host),
+    await runPromise(
+      request({
+        type: "servers_update",
+        data: {
+          server_id: baseline.id,
+          server_update: {
+            title: submittedTitle,
+            description: submittedDescription || null,
+            expected_updated_at: baseline.updated_at,
+          },
+          target_host: getTargetHost(baseline.host, account.host),
+        },
+      }).pipe(
+        Effect.match({
+          onSuccess: (reply) => {
+            const active = getActiveAccount(getState(authAtom));
+            if (active?.name !== account.name || active?.host !== account.host)
+              return;
+            handleRunelinkUpdate({ type: "server_upserted", data: reply.data });
+            if (!mountedRef.current) return;
+            setBaseline(reply.data);
+            setTitle(reply.data.title);
+            setDescription(reply.data.description ?? "");
+            setSaved(true);
+          },
+          onFailure: (failure) => {
+            if (mountedRef.current) setError(requestFailureMessage(failure));
           },
         })
-      );
-      const active = getActiveAccount(getState(authAtom));
-      if (active?.name !== account.name || active?.host !== account.host)
-        return;
-      handleRunelinkUpdate({ type: "server_upserted", data: reply.data });
-      if (!mountedRef.current) return;
-      setBaseline(reply.data);
-      setTitle(reply.data.title);
-      setDescription(reply.data.description ?? "");
-      setSaved(true);
-    } catch (error) {
-      if (mountedRef.current)
-        setError(
-          error instanceof Error
-            ? error.message
-            : "Could not save server settings."
-        );
-    } finally {
+      )
+    ).finally(() => {
       if (mountedRef.current) setIsSaving(false);
-    }
+    });
   }
 
-  async function handleLeaveServer(serverId: string, serverHost: string) {
-    if (!activeAccount) {
-      return;
-    }
-
-    await runPromise(
-      deleteMembership(
+  function handleLeaveServer(
+    serverId: string,
+    serverHost: string
+  ): RequestEffect<void> {
+    return Effect.gen(function* () {
+      if (!activeAccount) return;
+      yield* deleteMembership(
         serverId,
         activeAccount,
         getTargetHost(serverHost, activeAccount.host)
-      )
-    );
-    onDone();
+      );
+      onDone();
+    });
   }
 
-  async function handleDeleteServer(serverId: string, serverHost: string) {
-    if (!activeAccount) {
-      return;
-    }
-
-    await runPromise(
-      deleteServer(serverId, getTargetHost(serverHost, activeAccount.host))
-    );
-    onDone();
+  function handleDeleteServer(
+    serverId: string,
+    serverHost: string
+  ): RequestEffect<void> {
+    return Effect.gen(function* () {
+      if (!activeAccount) return;
+      yield* deleteServer(
+        serverId,
+        getTargetHost(serverHost, activeAccount.host)
+      );
+      onDone();
+    });
   }
 
   return (

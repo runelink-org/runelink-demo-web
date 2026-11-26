@@ -155,7 +155,10 @@ export const deleteMembership = Effect.fn("Memberships.delete")(function* (
       user_ref: userRef,
       target_host: targetHost,
     },
-  });
+  }).pipe(
+    // Already removed, such as by an admin or another tab
+    Effect.catchTags({ RunelinkNotFoundError: () => Effect.void })
+  );
 
   const userKey = userRefKey(userRef);
   setState(membershipsAtom, (state) => ({

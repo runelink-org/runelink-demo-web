@@ -12,11 +12,15 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import type { RequestEffect } from "@/lib/runelink-session";
+import * as Effect from "effect/Effect";
+import { toastFailure } from "@/lib/toast-failure";
+import { runPromise } from "@/lib/runtime";
 
 type DeleteServerDialogProps = {
   server: Server | null;
   onOpenChange: (open: boolean) => void;
-  onDeleteServer: (serverId: string, serverHost: string) => Promise<void>;
+  onDeleteServer: (serverId: string, serverHost: string) => RequestEffect<void>;
 };
 
 function normalizeWhitespace(value: string): string {
@@ -50,20 +54,18 @@ export function DeleteServerDialog({
     setIsDeleting(true);
     setError(null);
 
-    try {
-      await onDeleteServer(server.id, server.host);
-      toast.success(`Deleted server: ${server.title}`);
-      onOpenChange(false);
-    } catch (nextError) {
-      toast.error("Failed to delete server.");
-      setError(
-        nextError instanceof Error
-          ? nextError.message
-          : "Failed to delete server"
-      );
-    } finally {
-      setIsDeleting(false);
-    }
+    await runPromise(
+      onDeleteServer(server.id, server.host).pipe(
+        Effect.match({
+          onSuccess: () => {
+            toast.success(`Deleted server: ${server.title}`);
+            onOpenChange(false);
+          },
+          onFailure: (failure) =>
+            setError(toastFailure("Couldn't delete server", failure)),
+        })
+      )
+    ).finally(() => setIsDeleting(false));
   }
 
   return (

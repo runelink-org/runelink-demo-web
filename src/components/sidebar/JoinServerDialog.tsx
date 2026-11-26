@@ -15,14 +15,18 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { getServerMonogram } from "./server-display";
+import type { RequestEffect } from "@/lib/runelink-session";
+import * as Effect from "effect/Effect";
+import { requestFailureMessage } from "@/lib/request-failure";
+import { runPromise } from "@/lib/runtime";
 
 type JoinServerDialogProps = {
   open: boolean;
   activeHost: string | null;
   joinedServerIds: Set<string>;
   onOpenChange: (open: boolean) => void;
-  onSearchServers: (host: string) => Promise<ReadonlyArray<Server>>;
-  onJoinServer: (serverId: string, serverHost: string) => Promise<void>;
+  onSearchServers: (host: string) => RequestEffect<ReadonlyArray<Server>>;
+  onJoinServer: (serverId: string, serverHost: string) => RequestEffect<void>;
 };
 
 export function JoinServerDialog(props: JoinServerDialogProps) {
@@ -62,19 +66,21 @@ function JoinServerDialogForm({
     setIsSearching(true);
     setError(null);
     setHasSearched(true);
-    try {
-      const servers = await onSearchServers(nextHost);
-      if (isMounted()) setResults(servers);
-    } catch (nextError) {
-      setResults([]);
-      setError(
-        nextError instanceof Error
-          ? nextError.message
-          : "Failed to load servers"
-      );
-    } finally {
+    await runPromise(
+      onSearchServers(nextHost).pipe(
+        Effect.match({
+          onSuccess: (servers) => {
+            if (isMounted()) setResults(servers);
+          },
+          onFailure: (failure) => {
+            setResults([]);
+            setError(requestFailureMessage(failure));
+          },
+        })
+      )
+    ).finally(() => {
       if (isMounted()) setIsSearching(false);
-    }
+    });
   }
 
   const searchInitialServers = useEffectEvent(onSearchServers);
@@ -83,22 +89,20 @@ function JoinServerDialogForm({
     const nextHost = activeHost?.trim();
     if (!open || !nextHost) return;
     let cancelled = false;
-    void searchInitialServers(nextHost)
-      .then((servers) => {
-        if (!cancelled) setResults(servers);
-      })
-      .catch((nextError) => {
-        if (!cancelled) {
-          setError(
-            nextError instanceof Error
-              ? nextError.message
-              : "Failed to load servers"
-          );
-        }
-      })
-      .finally(() => {
-        if (!cancelled) setIsSearching(false);
-      });
+    void runPromise(
+      searchInitialServers(nextHost).pipe(
+        Effect.match({
+          onSuccess: (servers) => {
+            if (!cancelled) setResults(servers);
+          },
+          onFailure: (failure) => {
+            if (!cancelled) setError(requestFailureMessage(failure));
+          },
+        })
+      )
+    ).finally(() => {
+      if (!cancelled) setIsSearching(false);
+    });
     return () => {
       cancelled = true;
     };
@@ -113,17 +117,20 @@ function JoinServerDialogForm({
     setJoiningServerId(server.id);
     setError(null);
 
-    try {
-      await onJoinServer(server.id, server.host);
-      if (isMounted()) onOpenChange(false);
-    } catch (nextError) {
-      if (!isMounted()) return;
-      setError(
-        nextError instanceof Error ? nextError.message : "Failed to join server"
-      );
-    } finally {
+    await runPromise(
+      onJoinServer(server.id, server.host).pipe(
+        Effect.match({
+          onSuccess: () => {
+            if (isMounted()) onOpenChange(false);
+          },
+          onFailure: (failure) => {
+            if (isMounted()) setError(requestFailureMessage(failure));
+          },
+        })
+      )
+    ).finally(() => {
       if (isMounted()) setJoiningServerId(null);
-    }
+    });
   }
 
   return (

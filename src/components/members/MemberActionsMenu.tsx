@@ -24,6 +24,8 @@ import { authAtom, getActiveAccount } from "@/lib/auth-store";
 import { deleteMembership, upsertMembership } from "@/lib/memberships-store";
 import { runPromise } from "@/lib/runtime";
 import type { useContextActionsMenu } from "@/lib/use-context-actions-menu";
+import * as Effect from "effect/Effect";
+import { toastFailure } from "@/lib/toast-failure";
 
 type MemberActionsMenuProps = {
   contextMenu?: ReturnType<typeof useContextActionsMenu>;
@@ -77,31 +79,32 @@ export function MemberActionsMenu({
     if (!canModerateMembers || !role) return;
     setIsUpdatingRole(true);
 
-    try {
-      await runPromise(
-        upsertMembership(serverId, {
-          user_ref: user,
-          server_id: serverId,
-          server_host: serverHost,
-          role: nextRole,
+    await runPromise(
+      upsertMembership(serverId, {
+        user_ref: user,
+        server_id: serverId,
+        server_host: serverHost,
+        role: nextRole,
+      }).pipe(
+        Effect.match({
+          onSuccess: () => {
+            toast.success(
+              nextRole === "admin"
+                ? `Promoted ${user.name} to admin.`
+                : `Removed admin from ${user.name}.`
+            );
+            setIsConfirmingSelfDemotion(false);
+          },
+          onFailure: (failure) =>
+            toastFailure(
+              nextRole === "admin"
+                ? `Couldn't promote ${user.name} to admin`
+                : `Couldn't remove admin from ${user.name}`,
+              failure
+            ),
         })
-      );
-      toast.success(
-        nextRole === "admin"
-          ? `Promoted ${user.name} to admin.`
-          : `Removed admin from ${user.name}.`
-      );
-      setIsConfirmingSelfDemotion(false);
-    } catch (error) {
-      toast.error(
-        nextRole === "admin"
-          ? `Failed to promote ${user.name} to admin.`
-          : `Failed to remove admin from ${user.name}.`
-      );
-      throw error;
-    } finally {
-      setIsUpdatingRole(false);
-    }
+      )
+    ).finally(() => setIsUpdatingRole(false));
   }
 
   async function handleKickMember() {
@@ -109,19 +112,20 @@ export function MemberActionsMenu({
       return;
     }
 
-    try {
-      await runPromise(
-        deleteMembership(
-          serverId,
-          user,
-          getTargetHost(serverHost, activeAccount.host)
-        )
-      );
-      toast.success(`Kicked ${user.name} from the server.`);
-    } catch (error) {
-      toast.error(`Failed to kick ${user.name}.`);
-      throw error;
-    }
+    await runPromise(
+      deleteMembership(
+        serverId,
+        user,
+        getTargetHost(serverHost, activeAccount.host)
+      ).pipe(
+        Effect.match({
+          onSuccess: () =>
+            toast.success(`Kicked ${user.name} from the server.`),
+          onFailure: (failure) =>
+            toastFailure(`Couldn't kick ${user.name}`, failure),
+        })
+      )
+    );
   }
 
   const isActiveAccount =

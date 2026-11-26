@@ -19,6 +19,8 @@ import { authAtom, getActiveAccount } from "@/lib/auth-store";
 import { request } from "@/lib/runelink-session";
 import { runPromise } from "@/lib/runtime";
 import { handleRunelinkUpdate } from "@/lib/runelink-updates";
+import * as Effect from "effect/Effect";
+import { requestFailureMessage } from "@/lib/request-failure";
 
 export function InlineMessageEditor({
   message,
@@ -86,30 +88,36 @@ export function InlineMessageEditor({
       return;
     }
     updateEdit(channelKey, session, { isSaving: true, error: null });
-    try {
-      const reply = await runPromise(
-        request({
-          type: "messages_update",
-          data: {
-            message_id: message.id,
-            message_update: { body, expected_updated_at: message.updated_at },
-            target_host: host === account.host ? null : host,
+    await runPromise(
+      request({
+        type: "messages_update",
+        data: {
+          message_id: message.id,
+          message_update: { body, expected_updated_at: message.updated_at },
+          target_host: host === account.host ? null : host,
+        },
+      }).pipe(
+        Effect.match({
+          onSuccess: (reply) => {
+            const active = getActiveAccount(getState(authAtom));
+            if (
+              active?.name === account.name &&
+              active?.host === account.host
+            ) {
+              handleRunelinkUpdate({
+                type: "message_upserted",
+                data: reply.data,
+              });
+            }
+            close("saved");
           },
+          onFailure: (failure) =>
+            updateEdit(channelKey, session, {
+              error: requestFailureMessage(failure),
+            }),
         })
-      );
-      const active = getActiveAccount(getState(authAtom));
-      if (active?.name === account.name && active?.host === account.host) {
-        handleRunelinkUpdate({ type: "message_upserted", data: reply.data });
-      }
-      close("saved");
-    } catch (error) {
-      updateEdit(channelKey, session, {
-        error:
-          error instanceof Error ? error.message : "Could not save changes.",
-      });
-    } finally {
-      updateEdit(channelKey, session, { isSaving: false });
-    }
+      )
+    ).finally(() => updateEdit(channelKey, session, { isSaving: false }));
   }
 
   return (

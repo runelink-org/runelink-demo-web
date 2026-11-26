@@ -81,6 +81,7 @@ export function ProfileSelector({
     connectionAtom,
     (state) => state.incompatibleHost
   );
+  const lastError = useAtomValue(connectionAtom, (state) => state.lastError);
   const isLimited =
     connectionStatus === "connected" && capabilityIssues.length > 0;
   const warning = incompatibleHost
@@ -95,7 +96,16 @@ export function ProfileSelector({
           detail: `${activeAccount?.host}: ${capabilityIssues.map((issue) => issue.message).join("; ")}`,
           color: "text-amber-500",
         }
-      : null;
+      : // Why the connection is down, shown once rather than per attempt
+        (connectionStatus === "reconnecting" ||
+            connectionStatus === "disconnected") &&
+          lastError
+        ? {
+            label: statusLabels[connectionStatus],
+            detail: lastError,
+            color: "text-amber-500",
+          }
+        : null;
   const warningIcon = warning ? (
     <TriangleAlert className={warning.color} />
   ) : null;

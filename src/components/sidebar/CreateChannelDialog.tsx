@@ -24,6 +24,10 @@ import {
 } from "@/components/ui/select";
 import { categoryRows } from "@/lib/channel-tree";
 import { cn } from "@/lib/utils";
+import type { RequestEffect } from "@/lib/runelink-session";
+import * as Effect from "effect/Effect";
+import { requestFailureMessage } from "@/lib/request-failure";
+import { runPromise } from "@/lib/runtime";
 
 // Select values can't be null, so the server root uses a sentinel
 const ROOT_VALUE = "root";
@@ -42,7 +46,7 @@ type CreateChannelDialogProps = {
     kind: ServerChannelKind,
     title: string,
     parentChannelId: string | null
-  ) => Promise<void>;
+  ) => RequestEffect<void>;
 };
 
 export function CreateChannelDialog(props: CreateChannelDialogProps) {
@@ -109,23 +113,24 @@ function CreateChannelDialogForm({
     setIsCreating(true);
     setError(null);
 
-    try {
-      await onCreateChannel(
+    await runPromise(
+      onCreateChannel(
         kind,
         nextTitle,
         parent === ROOT_VALUE ? null : parent
-      );
-      if (isMounted()) onOpenChange(false);
-    } catch (nextError) {
-      if (!isMounted()) return;
-      setError(
-        nextError instanceof Error
-          ? nextError.message
-          : `Failed to create ${noun}`
-      );
-    } finally {
+      ).pipe(
+        Effect.match({
+          onSuccess: () => {
+            if (isMounted()) onOpenChange(false);
+          },
+          onFailure: (failure) => {
+            if (isMounted()) setError(requestFailureMessage(failure));
+          },
+        })
+      )
+    ).finally(() => {
       if (isMounted()) setIsCreating(false);
-    }
+    });
   }
 
   return (
