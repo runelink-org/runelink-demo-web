@@ -838,6 +838,7 @@ export function App() {
       {
         title,
         description: description.trim() || null,
+        default_channels: true,
       },
       getTargetHost(host.trim(), activeAccount.host)
     );
