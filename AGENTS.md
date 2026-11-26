@@ -14,7 +14,8 @@
 - The app uses [Effect](https://effect.website) 4, pinned to the version the SDK uses. Follow the Effect conventions of [T3 Code](https://github.com/pingdotgg/t3code) where they fit.
 - `RunelinkSession` (`src/lib/runelink-session.ts`) is the `Context.Service` that owns the active account's connection: one scope per connection, its stream listeners, reconnects, and authentication. Data modules call its `request` helper, and `src/lib/runtime.ts` provides it through a `ManagedRuntime`.
 - App state lives in keep-alive atoms (`stateAtom`) in `appAtomRegistry`. Components read them with `useAtomValue(atom, selector)` from `@effect/atom-react`, and other code uses `getState` and `setState`. State that belongs to one account resets with `bindStoreToActiveAccount`.
-- Write reusable effects with `Effect.fn("Module.operation")`, and expected failures as `Schema.TaggedError` classes with a user-facing `message`. Event handlers run effects with `runPromise` or `runPromiseExit` from `src/lib/runtime.ts`; `runPromise` rejects with the failure, so `error.message` can be shown directly.
+- Write reusable effects with `Effect.fn("Module.operation")`, and expected failures as `Schema.TaggedError` classes whose `message` is fixed or built from their fields. Catch specific failures with `Effect.catchTags`.
+- Event handlers and React effects run effects with `runPromise` or `runFork` from `src/lib/runtime.ts`, which only accept effects that cannot fail, so the compiler checks that every failure is handled. Components receive actions as effects (`RequestEffect`) and handle their failures: user actions show `toastFailure` (or an inline `requestFailureMessage`), and background loads log a warning or show the failure where their data appears.
 - Tests run on `node:test` and load modules through Vite. Provide a test `RunelinkSession` layer rather than mocking modules.
 
 ## UI Components
