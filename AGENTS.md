@@ -7,7 +7,15 @@
   2. `pnpm lint` - Lint for potential issues
   3. `pnpm build` - Verify TypeScript compilation and bundling
 - The current Vite build may emit an existing chunk-size warning; treat it as expected and do not call it out in summaries.
-- Validate unknown types with Zod schemas instead of using `as any` or type assertions
+- Validate unknown types with Effect Schema instead of using `as any` or type assertions. Hoist decoders such as `Schema.decodeUnknownOption(Schema.fromJsonString(...))` to module level, and reuse the SDK's schemas for protocol data.
+
+## Effect and State
+
+- The app uses [Effect](https://effect.website) 4, pinned to the version the SDK uses. Follow the Effect conventions of [T3 Code](https://github.com/pingdotgg/t3code) where they fit.
+- `RunelinkSession` (`src/lib/runelink-session.ts`) is the `Context.Service` that owns the active account's connection: one scope per connection, its stream listeners, reconnects, and authentication. Data modules call its `request` helper, and `src/lib/runtime.ts` provides it through a `ManagedRuntime`.
+- App state lives in keep-alive atoms (`stateAtom`) in `appAtomRegistry`. Components read them with `useAtomValue(atom, selector)` from `@effect/atom-react`, and other code uses `getState` and `setState`. State that belongs to one account resets with `bindStoreToActiveAccount`.
+- Write reusable effects with `Effect.fn("Module.operation")`, and expected failures as `Schema.TaggedError` classes with a user-facing `message`. Event handlers run effects with `runPromise` or `runPromiseExit` from `src/lib/runtime.ts`; `runPromise` rejects with the failure, so `error.message` can be shown directly.
+- Tests run on `node:test` and load modules through Vite. Provide a test `RunelinkSession` layer rather than mocking modules.
 
 ## UI Components
 
