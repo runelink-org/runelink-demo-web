@@ -11,7 +11,10 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { requestExpected } from "@/lib/runelink-request";
+import { useAtomValue } from "@effect/atom-react";
+import { getState } from "@/lib/atom-registry";
+import { request } from "@/lib/runelink-session";
+import { runPromise } from "@/lib/runtime";
 import { handleRunelinkUpdate } from "@/lib/runelink-updates";
 import type { ServerMember, ServerWithChannels } from "@runelink/sdk";
 import { ArrowLeft, LogOut, Trash2, Users } from "lucide-react";
@@ -21,15 +24,15 @@ import { LeaveServerDialog } from "@/components/sidebar/LeaveServerDialog";
 import { Button } from "@/components/ui/button";
 import { compareMemberNames } from "@/components/members/member-display";
 import { ServerMembersTable } from "@/components/server-settings/ServerMembersTable";
-import { getActiveAccount, useAuthStore } from "@/lib/auth-store";
-import { useMembershipsStore } from "@/lib/memberships-store";
+import { authAtom, getActiveAccount } from "@/lib/auth-store";
+import { deleteMembership } from "@/lib/memberships-store";
 import { userRefKey } from "@/lib/runelink-store-utils";
-import { useServersStore } from "@/lib/servers-store";
-import { useUsersStore } from "@/lib/users-store";
+import { deleteServer } from "@/lib/servers-store";
+import { usersAtom } from "@/lib/users-store";
 
 type ServerSettingsPageProps = {
   server: ServerWithChannels | null;
-  members: ServerMember[];
+  members: ReadonlyArray<ServerMember>;
   isLoadingMembers: boolean;
   membersError: string | null;
   onDone: () => void;
@@ -50,7 +53,7 @@ function formatServerTimestamp(value: string): string {
 }
 
 export function ServerSettingsPage(props: ServerSettingsPageProps) {
-  const account = useAuthStore(getActiveAccount);
+  const account = useAtomValue(authAtom, getActiveAccount);
   return (
     <ServerSettingsContent
       key={`${account ? userRefKey(account) : "none"}:${props.server?.server.id ?? "none"}`}
@@ -94,12 +97,8 @@ function ServerSettingsContent({
   }, []);
   const [isLeaveDialogOpen, setIsLeaveDialogOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
-  const activeAccount = useAuthStore(getActiveAccount);
-  const deleteMembership = useMembershipsStore(
-    (state) => state.deleteMembership
-  );
-  const deleteServer = useServersStore((state) => state.deleteServer);
-  const activeUser = useUsersStore((state) =>
+  const activeAccount = useAtomValue(authAtom, getActiveAccount);
+  const activeUser = useAtomValue(usersAtom, (state) =>
     activeAccount
       ? (state.userByRefKey[userRefKey(activeAccount)] ?? null)
       : null
@@ -154,19 +153,21 @@ function ServerSettingsContent({
     setError(null);
     setSaved(false);
     try {
-      const reply = await requestExpected("servers_update", {
-        type: "servers_update",
-        data: {
-          server_id: baseline.id,
-          server_update: {
-            title: submittedTitle,
-            description: submittedDescription || null,
-            expected_updated_at: baseline.updated_at,
+      const reply = await runPromise(
+        request({
+          type: "servers_update",
+          data: {
+            server_id: baseline.id,
+            server_update: {
+              title: submittedTitle,
+              description: submittedDescription || null,
+              expected_updated_at: baseline.updated_at,
+            },
+            target_host: getTargetHost(baseline.host, account.host),
           },
-          target_host: getTargetHost(baseline.host, account.host),
-        },
-      });
-      const active = getActiveAccount(useAuthStore.getState());
+        })
+      );
+      const active = getActiveAccount(getState(authAtom));
       if (active?.name !== account.name || active?.host !== account.host)
         return;
       handleRunelinkUpdate({ type: "server_upserted", data: reply.data });
@@ -192,10 +193,12 @@ function ServerSettingsContent({
       return;
     }
 
-    await deleteMembership(
-      serverId,
-      activeAccount,
-      getTargetHost(serverHost, activeAccount.host)
+    await runPromise(
+      deleteMembership(
+        serverId,
+        activeAccount,
+        getTargetHost(serverHost, activeAccount.host)
+      )
     );
     onDone();
   }
@@ -205,7 +208,9 @@ function ServerSettingsContent({
       return;
     }
 
-    await deleteServer(serverId, getTargetHost(serverHost, activeAccount.host));
+    await runPromise(
+      deleteServer(serverId, getTargetHost(serverHost, activeAccount.host))
+    );
     onDone();
   }
 

@@ -21,7 +21,7 @@ type AddServerMenuProps = {
     title: string,
     description: string
   ) => Promise<void>;
-  onSearchServers: (host: string) => Promise<Server[]>;
+  onSearchServers: (host: string) => Promise<ReadonlyArray<Server>>;
   onJoinServer: (serverId: string, serverHost: string) => Promise<void>;
 };
 

@@ -1,22 +1,33 @@
 import type { Message, ServerWithChannels, UserRef } from "@runelink/sdk";
-import { z } from "zod";
+import * as Effect from "effect/Effect";
+import * as Fiber from "effect/Fiber";
+import * as Option from "effect/Option";
+import * as Schema from "effect/Schema";
 import { accountStorageKey } from "@/lib/account-storage";
 import type { AppRoute } from "@/lib/app-route";
 import { mergeMessages } from "@/lib/message-cache";
-import { requestExpected } from "@/lib/runelink-request";
+import { request } from "@/lib/runelink-session";
 
 const STORAGE_KEY = "runelink.demo.channel-navigation-hints";
-const ServerHintsSchema = z.object({
-  host: z.string().min(1),
-  channels: z.record(z.uuid(), z.uuid()),
+const Uuid = Schema.String.check(Schema.isUUID());
+const ServerHintsSchema = Schema.Struct({
+  host: Schema.String.check(Schema.isMinLength(1)),
+  channels: Schema.Record(Uuid, Uuid),
 });
-const HintsSchema = z.record(z.string(), z.record(z.uuid(), ServerHintsSchema));
+const HintsSchema = Schema.Record(
+  Schema.String,
+  Schema.Record(Uuid, ServerHintsSchema)
+);
+const decodeHints = Schema.decodeUnknownOption(
+  Schema.fromJsonString(HintsSchema)
+);
 
-function readHints(): z.infer<typeof HintsSchema> {
+type Hints = Record<string, (typeof HintsSchema.Type)[string]>;
+
+function readHints(): Hints {
   try {
     const raw = window.localStorage.getItem(STORAGE_KEY);
-    const result = HintsSchema.safeParse(raw ? JSON.parse(raw) : {});
-    return result.success ? result.data : {};
+    return raw ? { ...Option.getOrElse(decodeHints(raw), () => ({})) } : {};
   } catch {
     return {};
   }
@@ -55,21 +66,27 @@ export function rememberChannelNavigationHints(
 type NavigationPrefetch = {
   textChannelId: string;
   targetHost: string | null;
-  history: Promise<Message[] | null>;
+  history: Fiber.Fiber<ReadonlyArray<Message> | null>;
   updates: Message[];
 };
 let pending: NavigationPrefetch | null = null;
 
+// Stops the prefetch, unless a fetch has taken it
 export function cancelChannelNavigationPrefetch(): void {
+  pending?.history.interruptUnsafe();
   pending = null;
 }
 
-export function startChannelNavigationPrefetch(
+// Requests the history of the channel a new tab opens on before its metadata
+// arrives, using the mappings saved by an earlier visit.
+export const startChannelNavigationPrefetch = Effect.fn(
+  "ChannelNavigationHints.startPrefetch"
+)(function* (
   account: UserRef,
   route: AppRoute,
-  cachedMessages: Record<string, Message[]> = {}
-): void {
-  pending = null;
+  cachedMessages: Record<string, ReadonlyArray<Message>> = {}
+) {
+  cancelChannelNavigationPrefetch();
   if (route.screen !== "channel" && route.screen !== "channel-members") return;
   const server = readHints()[accountStorageKey(account)]?.[route.serverId];
   const textChannelId = server?.channels[route.channelId];
@@ -77,35 +94,38 @@ export function startChannelNavigationPrefetch(
   // Reconnects can rerun startup while a channel is already cached or loading.
   if (textChannelId in cachedMessages) return;
   const targetHost = server.host === account.host ? null : server.host;
-  pending = {
-    textChannelId,
-    targetHost,
-    history: requestExpected("messages_get_by_text_channel", {
-      type: "messages_get_by_text_channel",
-      data: { text_channel_id: textChannelId, target_host: targetHost },
-    })
-      .then((reply) => reply.data)
-      .catch(() => null),
-    updates: [],
-  };
-}
+  const history = yield* request({
+    type: "messages_get_by_text_channel",
+    data: { text_channel_id: textChannelId, target_host: targetHost },
+  }).pipe(
+    Effect.map((reply) => reply.data),
+    // Any failure falls back to an ordinary fetch.
+    Effect.catchCause(() => Effect.succeed(null)),
+    Effect.forkDetach({ startImmediately: true })
+  );
+  pending = { textChannelId, targetHost, history, updates: [] };
+});
 
 // History and live updates stay outside the message cache until a normal fetch
 // supplies a text-channel ID and host confirmed by fresh channel metadata.
 export function takeChannelNavigationPrefetch(
   textChannelId: string,
   targetHost: string | null
-): Promise<Message[] | null> | null {
+): Effect.Effect<ReadonlyArray<Message> | null> | null {
   const prefetch = pending;
   if (!prefetch) return null;
   pending = null;
   if (
     prefetch.textChannelId !== textChannelId ||
     prefetch.targetHost !== targetHost
-  )
+  ) {
+    prefetch.history.interruptUnsafe();
     return null;
-  return prefetch.history.then((history) =>
-    history === null ? null : mergeMessages(history, prefetch.updates)
+  }
+  return Fiber.join(prefetch.history).pipe(
+    Effect.map((history) =>
+      history === null ? null : mergeMessages(history, prefetch.updates)
+    )
   );
 }
 

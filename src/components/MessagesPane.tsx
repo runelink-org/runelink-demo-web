@@ -43,11 +43,14 @@ import {
 } from "@/components/ui/tooltip";
 import { sameUserRef } from "@/lib/account-storage";
 import type { AppRoute } from "@/lib/app-route";
+import { useAtomValue } from "@effect/atom-react";
 import {
   EMPTY_COMPOSER,
-  useMessageComposerStore,
+  getComposer,
+  messageComposerAtom,
+  updateComposer as updateChannel,
 } from "@/lib/message-composer-store";
-import { useMessageScrollStore } from "@/lib/message-scroll-store";
+import { messageScrollAtom, setScrollTop } from "@/lib/message-scroll-store";
 import { useContextActionsMenu } from "@/lib/use-context-actions-menu";
 import { DeleteMessageDialog } from "./messages/DeleteMessageDialog";
 import { MessageListItem } from "./messages/MessageListItem";
@@ -56,7 +59,7 @@ type MessagesPaneProps = {
   selectedServer: ServerWithChannels | null;
   selectedChannel: ServerWithChannels["channels"][number] | undefined;
   selectedChannelKey: string | null;
-  selectedMessages: Message[];
+  selectedMessages: ReadonlyArray<Message>;
   targetMessageId: string | null;
   hasLoadedMessages: boolean;
   isSidebarLoading: boolean;
@@ -264,7 +267,7 @@ function MessageList({
 }: {
   host: string;
   channelRoute: Extract<AppRoute, { screen: "channel" }>;
-  messages: Message[];
+  messages: ReadonlyArray<Message>;
   scrollContainerRef: RefObject<HTMLDivElement | null>;
   composerRef: RefObject<HTMLTextAreaElement | null>;
   onScroll: () => void;
@@ -394,12 +397,11 @@ export function MessagesPane({
     loadStoredMembersPaneWidth()
   );
   const isMembersPaneShown = !!membersPane && isMembersPaneOpen;
-  const composer = useMessageComposerStore((state) =>
+  const composer = useAtomValue(messageComposerAtom, (byChannelKey) =>
     selectedChannelKey
-      ? (state.byChannelKey[selectedChannelKey] ?? EMPTY_COMPOSER)
+      ? (byChannelKey[selectedChannelKey] ?? EMPTY_COMPOSER)
       : EMPTY_COMPOSER
   );
-  const updateChannel = useMessageComposerStore((state) => state.updateChannel);
   const { draft, editing, sendError } = composer;
   const editingMessage = editing?.message ?? null;
   const isSending = composer.sending !== null;
@@ -461,10 +463,7 @@ export function MessagesPane({
   const previousMessageCountRef = useRef(0);
   const wasAtBottomRef = useRef(true);
   const lastKnownScrollTopRef = useRef(0);
-  const scrollByChannelKey = useMessageScrollStore(
-    (state) => state.scrollByChannelKey
-  );
-  const setScrollTop = useMessageScrollStore((state) => state.setScrollTop);
+  const scrollTopByChannelKey = useAtomValue(messageScrollAtom);
 
   const canCompose = !!selectedServer && !!selectedChannel && !sidebarError;
   const linkedMessage = targetMessageId
@@ -548,7 +547,7 @@ export function MessagesPane({
       lastKnownScrollTopRef.current = nextScrollTop;
       setScrollTop(channelKey, nextScrollTop);
     },
-    [setScrollTop]
+    []
   );
 
   const saveCurrentScrollPosition = useCallback(() => {
@@ -575,15 +574,12 @@ export function MessagesPane({
     return () => {
       window.clearTimeout(timeoutId);
     };
-  }, [sendError, selectedChannelKey, updateChannel]);
+  }, [sendError, selectedChannelKey]);
 
   useLayoutEffect(() => {
     const input = textareaRef.current;
     if (!input || !selectedChannelKey) return;
-    const selection =
-      useMessageComposerStore.getState().byChannelKey[selectedChannelKey]
-        ?.selection ?? null;
-    restoreTextareaSelection(input, selection);
+    restoreTextareaSelection(input, getComposer(selectedChannelKey).selection);
   }, [canCompose, selectedChannelKey]);
 
   useEffect(() => {
@@ -680,7 +676,7 @@ export function MessagesPane({
     const target = targetMessageId
       ? document.getElementById(`message-${targetMessageId}`)
       : null;
-    const savedScrollState = scrollByChannelKey[selectedChannelKey];
+    const savedScrollTop = scrollTopByChannelKey[selectedChannelKey];
     if (target && element.contains(target)) {
       element.scrollTo({
         top:
@@ -691,8 +687,8 @@ export function MessagesPane({
         behavior: "instant",
       });
       highlightMessage(target);
-    } else if (savedScrollState) {
-      element.scrollTop = savedScrollState.scrollTop;
+    } else if (savedScrollTop !== undefined) {
+      element.scrollTop = savedScrollTop;
     } else {
       scrollToBottom();
     }

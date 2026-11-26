@@ -1,10 +1,7 @@
-import { create } from "zustand";
 import { type TokenResponse, type UserRef } from "@runelink/sdk";
-import {
-  loginAuthSessionWithConnection,
-  registerAuthSessionStateBridge,
-  signupAuthSessionWithConnection,
-} from "@/lib/auth-session-bridge";
+import * as Effect from "effect/Effect";
+import * as Scope from "effect/Scope";
+import { getState, setState, stateAtom } from "@/lib/atom-registry";
 import {
   AUTH_CACHE_STORAGE_KEY,
   accountStorageKey,
@@ -21,42 +18,17 @@ import {
   type StoredAccountAuth,
 } from "@/lib/account-storage";
 
-type AccountCredentials = {
-  host: string;
-  name: string;
-  password: string;
-};
-
-type AuthResult = {
-  success: boolean;
-  error?: string;
-};
-
-type AuthStore = {
+type AuthState = {
   config: BrowserAppConfig;
   authCache: BrowserAuthCache;
   authError: string | null;
-  selectAccount: (userRef: UserRef) => void;
-  openAccount: (userRef: UserRef) => void;
-  clearAuthError: () => void;
-  signup: (credentials: AccountCredentials) => Promise<AuthResult>;
-  login: (credentials: AccountCredentials) => Promise<AuthResult>;
-  logoutActive: () => void;
-  // Returns false if the account was not saved.
-  removeAccount: (
-    userRef: UserRef,
-    options?: { selectNext?: boolean }
-  ) => boolean;
-  storeAccountToken: (
-    userRef: UserRef,
-    tokenResponse: TokenResponse,
-    clientId: string
-  ) => void;
-  clearAccountAuth: (userRef: UserRef, errorMessage?: string) => void;
 };
 
-const initialConfig = loadBrowserAppConfig();
-const initialAuthCache = loadBrowserAuthCache();
+export const authAtom = stateAtom<AuthState>({
+  config: loadBrowserAppConfig(),
+  authCache: loadBrowserAuthCache(),
+  authError: null,
+});
 
 function persistState(
   config: BrowserAppConfig,
@@ -91,12 +63,7 @@ function clearTokenState(
 
 function buildStoredAuth(
   previousAuth: StoredAccountAuth | undefined,
-  tokenResponse: {
-    access_token: string;
-    expires_in: number;
-    refresh_token: string;
-    scope: string;
-  },
+  tokenResponse: TokenResponse,
   clientId: string
 ): StoredAccountAuth {
   const nowInSeconds = Math.floor(Date.now() / 1000);
@@ -125,37 +92,35 @@ function storeLatestToken(
   );
 }
 
-function persistAuthenticatedAccount(
-  state: AuthStore,
+export function persistAuthenticatedAccount(
   userRef: UserRef,
   tokenResponse: TokenResponse,
   clientId: string
-): Pick<AuthStore, "config" | "authCache" | "authError"> {
+): void {
   const nextConfig = {
     active_account: userRef,
-    accounts: upsertAccount(state.config.accounts, userRef),
+    accounts: upsertAccount(getState(authAtom).config.accounts, userRef),
   };
   const nextAuthCache = storeLatestToken(userRef, tokenResponse, clientId);
 
   persistState(nextConfig, nextAuthCache);
-
-  return {
+  setState(authAtom, {
     config: nextConfig,
     authCache: nextAuthCache,
     authError: null,
-  };
+  });
 }
 
 export function isSavedAccount(userRef: UserRef): boolean {
-  return hasAccount(useAuthStore.getState().config.accounts, userRef);
+  return hasAccount(getState(authAtom).config.accounts, userRef);
 }
 
-export function getActiveAccount(state: AuthStore): UserRef | null {
+export function getActiveAccount(state: AuthState): UserRef | null {
   return state.config.active_account;
 }
 
 export function getActiveAccountAuth(
-  state: AuthStore
+  state: AuthState
 ): StoredAccountAuth | null {
   const activeAccount = getActiveAccount(state);
   if (!activeAccount) {
@@ -164,181 +129,115 @@ export function getActiveAccountAuth(
   return state.authCache.accounts[accountStorageKey(activeAccount)] ?? null;
 }
 
-export const useAuthStore = create<AuthStore>((set, get) => ({
-  config: initialConfig,
-  authCache: initialAuthCache,
-  authError: null,
+export function selectAccount(userRef: UserRef): void {
+  const normalizedAccount = normalizeAccountInput(userRef);
 
-  selectAccount(userRef) {
-    const normalizedAccount = normalizeAccountInput(userRef);
-
-    set((state) => {
-      const nextConfig = {
-        active_account: normalizedAccount,
-        accounts: upsertAccount(state.config.accounts, normalizedAccount),
-      };
-
-      saveBrowserAppConfig(nextConfig);
-
-      return {
-        config: nextConfig,
-        authError: null,
-      };
-    });
-  },
-
-  openAccount(userRef) {
-    get().selectAccount(userRef);
-  },
-
-  clearAuthError() {
-    set({ authError: null });
-  },
-
-  async signup(credentials) {
-    try {
-      const normalizedAccount = normalizeAccountInput(credentials);
-      const { tokenResponse, clientId } = await signupAuthSessionWithConnection(
-        normalizedAccount,
-        credentials.password
-      );
-
-      set((state) => ({
-        ...persistAuthenticatedAccount(
-          state,
-          normalizedAccount,
-          tokenResponse,
-          clientId
-        ),
-      }));
-
-      return { success: true };
-    } catch (error) {
-      const errorMessage =
-        error instanceof Error ? error.message : "Unable to create account";
-      set({ authError: errorMessage });
-      return { success: false, error: errorMessage };
-    }
-  },
-
-  async login(credentials) {
-    try {
-      const normalizedAccount = normalizeAccountInput(credentials);
-      const clientId = crypto.randomUUID();
-      const tokenResponse = await loginAuthSessionWithConnection(
-        normalizedAccount,
-        credentials.password,
-        clientId
-      );
-
-      set((state) => ({
-        ...persistAuthenticatedAccount(
-          state,
-          normalizedAccount,
-          tokenResponse,
-          clientId
-        ),
-      }));
-
-      return { success: true };
-    } catch (error) {
-      const errorMessage =
-        error instanceof Error ? error.message : "Unable to log in";
-      set({ authError: errorMessage });
-      return { success: false, error: errorMessage };
-    }
-  },
-
-  logoutActive() {
-    const activeAccount = get().config.active_account;
-    if (!activeAccount) return;
-    get().clearAccountAuth(activeAccount);
-  },
-
-  removeAccount(userRef, { selectNext = true } = {}) {
-    const state = get();
-    const accounts = state.config.accounts.filter(
-      (account) => !sameUserRef(account, userRef)
-    );
-    if (accounts.length === state.config.accounts.length) {
-      return false;
-    }
-
+  setState(authAtom, (state) => {
     const nextConfig = {
-      active_account: sameUserRef(state.config.active_account, userRef)
-        ? selectNext
-          ? (accounts[0] ?? null)
-          : null
-        : state.config.active_account,
-      accounts,
+      active_account: normalizedAccount,
+      accounts: upsertAccount(state.config.accounts, normalizedAccount),
     };
-    const nextAuthCache = clearTokenState(loadBrowserAuthCache(), userRef);
 
-    persistState(nextConfig, nextAuthCache);
-    set({ config: nextConfig, authCache: nextAuthCache, authError: null });
-    return true;
-  },
+    saveBrowserAppConfig(nextConfig);
 
-  storeAccountToken(userRef, tokenResponse, clientId) {
-    const normalizedAccount = normalizeAccountInput(userRef);
-    // Refreshes only replace tokens, so the account config is left alone.
-    const nextAuthCache = storeLatestToken(
-      normalizedAccount,
-      tokenResponse,
-      clientId
-    );
-    saveBrowserAuthCache(nextAuthCache);
-    set({ authCache: nextAuthCache, authError: null });
-  },
+    return {
+      config: nextConfig,
+      authError: null,
+    };
+  });
+}
 
-  clearAccountAuth(userRef, errorMessage) {
-    const normalizedAccount = normalizeAccountInput(userRef);
-    const nextAuthCache = clearTokenState(
-      loadBrowserAuthCache(),
-      normalizedAccount
-    );
-    saveBrowserAuthCache(nextAuthCache);
-    set({ authCache: nextAuthCache, authError: errorMessage ?? null });
-  },
-}));
+export function setAuthError(authError: string | null): void {
+  setState(authAtom, { authError });
+}
 
-let storedAuthFollowed = false;
+export function logoutActive(): void {
+  const activeAccount = getState(authAtom).config.active_account;
+  if (!activeAccount) return;
+  clearAccountAuth(activeAccount);
+}
+
+// Returns false if the account was not saved.
+export function removeAccount(
+  userRef: UserRef,
+  { selectNext = true }: { selectNext?: boolean } = {}
+): boolean {
+  const state = getState(authAtom);
+  const accounts = state.config.accounts.filter(
+    (account) => !sameUserRef(account, userRef)
+  );
+  if (accounts.length === state.config.accounts.length) {
+    return false;
+  }
+
+  const nextConfig = {
+    active_account: sameUserRef(state.config.active_account, userRef)
+      ? selectNext
+        ? (accounts[0] ?? null)
+        : null
+      : state.config.active_account,
+    accounts,
+  };
+  const nextAuthCache = clearTokenState(loadBrowserAuthCache(), userRef);
+
+  persistState(nextConfig, nextAuthCache);
+  setState(authAtom, {
+    config: nextConfig,
+    authCache: nextAuthCache,
+    authError: null,
+  });
+  return true;
+}
+
+export function storeAccountToken(
+  userRef: UserRef,
+  tokenResponse: TokenResponse,
+  clientId: string
+): void {
+  const normalizedAccount = normalizeAccountInput(userRef);
+  // Refreshes only replace tokens, so the account config is left alone.
+  const nextAuthCache = storeLatestToken(
+    normalizedAccount,
+    tokenResponse,
+    clientId
+  );
+  saveBrowserAuthCache(nextAuthCache);
+  setState(authAtom, { authCache: nextAuthCache, authError: null });
+}
+
+export function clearAccountAuth(userRef: UserRef, errorMessage?: string) {
+  const normalizedAccount = normalizeAccountInput(userRef);
+  const nextAuthCache = clearTokenState(
+    loadBrowserAuthCache(),
+    normalizedAccount
+  );
+  saveBrowserAuthCache(nextAuthCache);
+  setState(authAtom, {
+    authCache: nextAuthCache,
+    authError: errorMessage ?? null,
+  });
+}
 
 function syncStoredAuth(): void {
-  useAuthStore.setState({ authCache: loadBrowserAuthCache() });
+  setState(authAtom, { authCache: loadBrowserAuthCache() });
 }
 
 // Tabs share the stored tokens, and a refresh in one tab replaces the refresh
 // token, so other tabs follow the stored tokens instead of keeping a replaced
 // one. Storage events only fire in the tabs that did not make the change.
-export function followStoredAuth(): void {
-  if (storedAuthFollowed) return;
-  storedAuthFollowed = true;
-  window.addEventListener("storage", (event) => {
-    if (event.key === AUTH_CACHE_STORAGE_KEY || event.key === null) {
+export const followStoredAuth: Effect.Effect<void, never, Scope.Scope> =
+  Effect.acquireRelease(
+    Effect.sync(() => {
+      function handleStorage(event: StorageEvent) {
+        if (event.key === AUTH_CACHE_STORAGE_KEY || event.key === null) {
+          syncStoredAuth();
+        }
+      }
+      window.addEventListener("storage", handleStorage);
+      // Catch up on changes made since the cache was first loaded.
       syncStoredAuth();
-    }
-  });
-  // Catch up on changes made since the cache was first loaded.
-  syncStoredAuth();
-}
-
-registerAuthSessionStateBridge({
-  getSnapshot() {
-    const state = useAuthStore.getState();
-    return {
-      activeAccount: getActiveAccount(state),
-      activeAuth: getActiveAccountAuth(state),
-      authError: state.authError,
-    };
-  },
-  subscribe(listener) {
-    return useAuthStore.subscribe(listener);
-  },
-  storeAccountToken(userRef, tokenResponse, clientId) {
-    useAuthStore.getState().storeAccountToken(userRef, tokenResponse, clientId);
-  },
-  clearAccountAuth(userRef, errorMessage) {
-    useAuthStore.getState().clearAccountAuth(userRef, errorMessage);
-  },
-});
+      return handleStorage;
+    }),
+    (handleStorage) =>
+      Effect.sync(() => window.removeEventListener("storage", handleStorage))
+  ).pipe(Effect.asVoid);

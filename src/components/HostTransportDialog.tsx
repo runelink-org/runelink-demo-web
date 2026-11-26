@@ -8,10 +8,11 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { useHostTransportPrompt } from "@/lib/host-transport";
+import { useAtomValue } from "@effect/atom-react";
+import { hostTransportPromptAtom } from "@/lib/host-transport";
 
 export function HostTransportDialog() {
-  const prompt = useHostTransportPrompt((state) => state.prompt);
+  const prompt = useAtomValue(hostTransportPromptAtom);
   return (
     <AlertDialog
       open={prompt !== null}

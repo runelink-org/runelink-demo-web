@@ -26,7 +26,7 @@ import { useContextActionsMenu } from "@/lib/use-context-actions-menu";
 import { getAppRoutePath, getContentRoute } from "@/lib/app-route";
 
 type SidebarProps = {
-  servers: ServerWithChannels[];
+  servers: ReadonlyArray<ServerWithChannels>;
   selectedServerId: string | null;
   selectedChannelId: string | null;
   selectedChannelIdByServerId: Record<string, string | null>;
@@ -44,7 +44,7 @@ type SidebarProps = {
     title: string,
     description: string
   ) => Promise<void>;
-  onSearchServers: (host: string) => Promise<Server[]>;
+  onSearchServers: (host: string) => Promise<ReadonlyArray<Server>>;
   onJoinServer: (serverId: string, serverHost: string) => Promise<void>;
   onOpenServerSettings: (server: Server) => void;
   onLeaveServer: (serverId: string, serverHost: string) => Promise<void>;

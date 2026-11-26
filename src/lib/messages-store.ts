@@ -4,8 +4,15 @@ import {
 } from "@/lib/channel-navigation-hints";
 import { mergeMessages } from "./message-cache";
 import { type Message, type NewMessage } from "@runelink/sdk";
-import { create } from "zustand";
-import { requestExpected } from "@/lib/runelink-request";
+import * as Effect from "effect/Effect";
+import * as Deferred from "effect/Deferred";
+import { getState, setState, stateAtom } from "@/lib/atom-registry";
+import {
+  failureMessage,
+  request,
+  type RequestFailure,
+  type RunelinkSession,
+} from "@/lib/runelink-session";
 import {
   bindStoreToActiveAccount,
   type MessageId,
@@ -14,90 +21,98 @@ import {
 } from "@/lib/runelink-store-utils";
 
 type MessagesState = {
-  messagesByTextChannelId: Record<string, Message[]>;
+  messagesByTextChannelId: Record<string, ReadonlyArray<Message>>;
   hasFetchedByTextChannelId: Record<string, boolean>;
   isLoadingByTextChannelId: Record<string, boolean>;
   errorByTextChannelId: Record<string, string | null>;
-  fetchMessagesByTextChannel: (
-    textChannelId: TextChannelId,
-    targetHost?: TargetHost
-  ) => Promise<Message[]>;
-  createMessage: (
-    textChannelId: TextChannelId,
-    newMessage: NewMessage,
-    targetHost?: TargetHost
-  ) => Promise<Message>;
-  deleteMessage: (
-    textChannelId: TextChannelId,
-    messageId: MessageId,
-    targetHost?: TargetHost
-  ) => Promise<void>;
-  reset: () => void;
 };
 
-const initialState = {
+const initialState: MessagesState = {
   messagesByTextChannelId: {},
   hasFetchedByTextChannelId: {},
   isLoadingByTextChannelId: {},
   errorByTextChannelId: {},
 };
 
-let pendingFetches = new Map<string, Promise<Message[]>>();
+export const messagesAtom = stateAtom(initialState);
 
-export const useMessagesStore = create<MessagesState>((set, get) => ({
-  ...initialState,
+type History = Deferred.Deferred<ReadonlyArray<Message>, RequestFailure>;
+let pendingFetches = new Map<string, History>();
 
-  fetchMessagesByTextChannel(textChannelId, targetHost = null) {
-    if (get().hasFetchedByTextChannelId[textChannelId]) {
-      return Promise.resolve(
-        get().messagesByTextChannelId[textChannelId] ?? []
+function storeMessages(
+  textChannelId: TextChannelId,
+  messages: ReadonlyArray<Message>
+): void {
+  setState(messagesAtom, (state) => ({
+    messagesByTextChannelId: {
+      ...state.messagesByTextChannelId,
+      [textChannelId]: mergeMessages(
+        state.messagesByTextChannelId[textChannelId] ?? [],
+        messages
+      ),
+    },
+  }));
+}
+
+// Loads a channel's history once. Concurrent callers, such as a hover prefetch
+// and opening the channel, share one request.
+export function fetchMessagesByTextChannel(
+  textChannelId: TextChannelId,
+  targetHost: TargetHost = null
+): Effect.Effect<ReadonlyArray<Message>, RequestFailure, RunelinkSession> {
+  // Uninterruptible until the shared load is running, so it is never
+  // registered without starting
+  return Effect.uninterruptibleMask((restore) =>
+    Effect.suspend(() => {
+      const state = getState(messagesAtom);
+      if (state.hasFetchedByTextChannelId[textChannelId]) {
+        return Effect.succeed(
+          state.messagesByTextChannelId[textChannelId] ?? []
+        );
+      }
+      const pending = pendingFetches.get(textChannelId);
+      if (pending) return restore(Deferred.await(pending));
+
+      // Reset replaces this map so an old account's reply cannot fill its
+      // successor's cache.
+      const requests = pendingFetches;
+      const isReset = () => requests !== pendingFetches;
+      const prefetchedHistory = takeChannelNavigationPrefetch(
+        textChannelId,
+        targetHost
       );
-    }
-    const pending = pendingFetches.get(textChannelId);
-    if (pending) return pending;
+      setState(messagesAtom, (state) => ({
+        // Register the channel before requesting history so updates received
+        // during the first fetch are retained and merged with its response.
+        messagesByTextChannelId: {
+          ...state.messagesByTextChannelId,
+          [textChannelId]: state.messagesByTextChannelId[textChannelId] ?? [],
+        },
+        isLoadingByTextChannelId: {
+          ...state.isLoadingByTextChannelId,
+          [textChannelId]: true,
+        },
+        errorByTextChannelId: {
+          ...state.errorByTextChannelId,
+          [textChannelId]: null,
+        },
+      }));
 
-    // Reset replaces this map so an old account's reply cannot fill its successor's cache.
-    const requests = pendingFetches;
-    const prefetchedHistory = takeChannelNavigationPrefetch(
-      textChannelId,
-      targetHost
-    );
-    set((state) => ({
-      // Register the channel before requesting history so updates received
-      // during the first fetch are retained and merged with its response.
-      messagesByTextChannelId: {
-        ...state.messagesByTextChannelId,
-        [textChannelId]: state.messagesByTextChannelId[textChannelId] ?? [],
-      },
-      isLoadingByTextChannelId: {
-        ...state.isLoadingByTextChannelId,
-        [textChannelId]: true,
-      },
-      errorByTextChannelId: {
-        ...state.errorByTextChannelId,
-        [textChannelId]: null,
-      },
-    }));
-
-    const request = (async () => {
-      try {
-        const history = prefetchedHistory ? await prefetchedHistory : null;
-        if (requests !== pendingFetches) return history ?? [];
+      const load = Effect.gen(function* () {
+        const history = prefetchedHistory ? yield* prefetchedHistory : null;
+        if (isReset()) return history ?? [];
         const messages =
           history ??
-          (
-            await requestExpected("messages_get_by_text_channel", {
-              type: "messages_get_by_text_channel",
-              data: {
-                text_channel_id: textChannelId,
-                target_host: targetHost,
-              },
-            })
-          ).data;
+          (yield* request({
+            type: "messages_get_by_text_channel",
+            data: {
+              text_channel_id: textChannelId,
+              target_host: targetHost,
+            },
+          })).data;
+        if (isReset()) return messages;
 
-        if (requests !== pendingFetches) return messages;
-
-        set((state) => ({
+        setState(messagesAtom, (state) => ({
           hasFetchedByTextChannelId: {
             ...state.hasFetchedByTextChannelId,
             [textChannelId]: true,
@@ -114,83 +129,79 @@ export const useMessagesStore = create<MessagesState>((set, get) => ({
             [textChannelId]: false,
           },
         }));
-
         return messages;
-      } catch (error) {
-        if (requests !== pendingFetches) throw error;
-        const message =
-          error instanceof Error
-            ? error.message
-            : "Failed to load channel messages";
-        set((state) => ({
-          isLoadingByTextChannelId: {
-            ...state.isLoadingByTextChannelId,
-            [textChannelId]: false,
-          },
-          errorByTextChannelId: {
-            ...state.errorByTextChannelId,
-            [textChannelId]: message,
-          },
-        }));
-        throw error;
-      } finally {
-        requests.delete(textChannelId);
-      }
-    })();
-    requests.set(textChannelId, request);
-    return request;
-  },
-
-  async createMessage(textChannelId, newMessage, targetHost = null) {
-    const reply = await requestExpected("messages_create", {
-      type: "messages_create",
-      data: {
-        text_channel_id: textChannelId,
-        new_message: newMessage,
-        target_host: targetHost,
-      },
-    });
-
-    set((state) => ({
-      messagesByTextChannelId: {
-        ...state.messagesByTextChannelId,
-        [textChannelId]: mergeMessages(
-          state.messagesByTextChannelId[textChannelId] ?? [],
-          [reply.data]
+      }).pipe(
+        Effect.onError((cause) =>
+          Effect.sync(() => {
+            if (isReset()) return;
+            setState(messagesAtom, (state) => ({
+              isLoadingByTextChannelId: {
+                ...state.isLoadingByTextChannelId,
+                [textChannelId]: false,
+              },
+              errorByTextChannelId: {
+                ...state.errorByTextChannelId,
+                [textChannelId]: failureMessage(
+                  cause,
+                  "Failed to load channel messages"
+                ),
+              },
+            }));
+          })
         ),
-      },
-    }));
+        Effect.ensuring(Effect.sync(() => requests.delete(textChannelId))),
+        Effect.withSpan("Messages.fetchByTextChannel")
+      );
 
-    return reply.data;
-  },
+      const history: History = Deferred.makeUnsafe();
+      requests.set(textChannelId, history);
+      // Detached, so a caller that stops waiting does not cancel the load for
+      // the others
+      return Effect.forkDetach(Deferred.into(load, history), {
+        startImmediately: true,
+      }).pipe(Effect.andThen(restore(Deferred.await(history))));
+    })
+  );
+}
 
-  async deleteMessage(textChannelId, messageId, targetHost = null) {
-    const reply = await requestExpected("messages_delete", {
-      type: "messages_delete",
-      data: {
-        message_id: messageId,
-        target_host: targetHost,
-      },
-    });
+export const createMessage = Effect.fn("Messages.create")(function* (
+  textChannelId: TextChannelId,
+  newMessage: NewMessage,
+  targetHost: TargetHost = null
+) {
+  const reply = yield* request({
+    type: "messages_create",
+    data: {
+      text_channel_id: textChannelId,
+      new_message: newMessage,
+      target_host: targetHost,
+    },
+  });
 
-    set((state) => ({
-      messagesByTextChannelId: {
-        ...state.messagesByTextChannelId,
-        [textChannelId]: mergeMessages(
-          state.messagesByTextChannelId[textChannelId] ?? [],
-          [reply.data]
-        ),
-      },
-    }));
-  },
-
-  reset() {
-    cancelChannelNavigationPrefetch();
-    pendingFetches = new Map();
-    set(initialState);
-  },
-}));
-
-bindStoreToActiveAccount(() => {
-  useMessagesStore.getState().reset();
+  storeMessages(textChannelId, [reply.data]);
+  return reply.data;
 });
+
+export const deleteMessage = Effect.fn("Messages.delete")(function* (
+  textChannelId: TextChannelId,
+  messageId: MessageId,
+  targetHost: TargetHost = null
+) {
+  const reply = yield* request({
+    type: "messages_delete",
+    data: {
+      message_id: messageId,
+      target_host: targetHost,
+    },
+  });
+
+  storeMessages(textChannelId, [reply.data]);
+});
+
+export function resetMessages(): void {
+  cancelChannelNavigationPrefetch();
+  pendingFetches = new Map();
+  setState(messagesAtom, initialState);
+}
+
+bindStoreToActiveAccount(resetMessages);

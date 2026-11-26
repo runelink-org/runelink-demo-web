@@ -1,9 +1,10 @@
 import type { UserRef } from "@runelink/sdk";
 import { accountStorageKey, sameUserRef } from "@/lib/account-storage";
+import { appAtomRegistry, getState } from "@/lib/atom-registry";
 import {
+  authAtom,
   getActiveAccount,
   getActiveAccountAuth,
-  useAuthStore,
 } from "@/lib/auth-store";
 
 export type TargetHost = string | null;
@@ -16,10 +17,6 @@ export function userRefKey(userRef: UserRef): string {
   return accountStorageKey(userRef);
 }
 
-export function serverUserKey(serverId: ServerId, userRef: UserRef): string {
-  return `${serverId}:${userRefKey(userRef)}`;
-}
-
 export function serverChannelKey(
   serverId: ServerId,
   channelId: ChannelId
@@ -28,10 +25,10 @@ export function serverChannelKey(
 }
 
 export function bindStoreToActiveAccount(reset: () => void): () => void {
-  let previousAccount = getActiveAccount(useAuthStore.getState());
-  let previousHasAuth = !!getActiveAccountAuth(useAuthStore.getState());
+  let previousAccount = getActiveAccount(getState(authAtom));
+  let previousHasAuth = !!getActiveAccountAuth(getState(authAtom));
 
-  return useAuthStore.subscribe((state) => {
+  return appAtomRegistry.subscribe(authAtom, (state) => {
     const nextAccount = getActiveAccount(state);
     const nextHasAuth = !!getActiveAccountAuth(state);
     const accountChanged =

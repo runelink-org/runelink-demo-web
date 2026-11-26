@@ -1,3 +1,4 @@
+import { useAtomValue } from "@effect/atom-react";
 import { padHost, type UserRef } from "@runelink/sdk";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -15,10 +16,8 @@ import {
 import { forgetDeletedAccount } from "@/lib/account-deletion";
 import { accountStorageKey, sameUserRef } from "@/lib/account-storage";
 import { isSavedAccount } from "@/lib/auth-store";
-import {
-  requestRunelink,
-  useRunelinkConnectionStore,
-} from "@/lib/runelink-connection-store";
+import { connectionAtom, request } from "@/lib/runelink-session";
+import { runPromise } from "@/lib/runtime";
 
 type DeleteAccountDialogProps = {
   account: UserRef | null;
@@ -41,7 +40,8 @@ export function DeleteAccountDialog({
   }
   // Deletion is sent over the account's connection, so wait for it rather
   // than queueing a request that could hang while the host is unreachable.
-  const isConnected = useRunelinkConnectionStore(
+  const isConnected = useAtomValue(
+    connectionAtom,
     (state) =>
       state.status === "connected" &&
       sameUserRef(state.connectedAccount, account)
@@ -62,13 +62,9 @@ export function DeleteAccountDialog({
     setIsDeleting(true);
     setError(null);
     try {
-      const reply = await requestRunelink({
-        type: "users_delete",
-        data: { user_ref: account },
-      });
-      if (reply.type !== "users_delete") {
-        throw new Error(`Unexpected reply type: ${reply.type}`);
-      }
+      await runPromise(
+        request({ type: "users_delete", data: { user_ref: account } })
+      );
       forgetDeletedAccount(account);
       onOpenChange(false);
     } catch (nextError) {

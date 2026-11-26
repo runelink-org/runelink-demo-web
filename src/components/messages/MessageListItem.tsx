@@ -8,7 +8,8 @@ import type { ActiveMessage, Message } from "@runelink/sdk";
 import { MessageActionsMenu } from "./MessageActionsMenu";
 import type { AppRoute } from "@/lib/app-route";
 import { MemberActionsMenu } from "@/components/members/MemberActionsMenu";
-import { useMembershipsStore } from "@/lib/memberships-store";
+import { useAtomValue } from "@effect/atom-react";
+import { membershipsAtom } from "@/lib/memberships-store";
 import { sameUserRef } from "@/lib/account-storage";
 import type { MouseEvent } from "react";
 
@@ -53,7 +54,7 @@ export function MessageListItem({
 }: MessageListItemProps) {
   const contextMenu = useContextActionsMenu();
   const authorContextMenu = useContextActionsMenu();
-  const authorRole = useMembershipsStore((state) =>
+  const authorRole = useAtomValue(membershipsAtom, (state) =>
     message.author
       ? state.membersByServerId[channelRoute.serverId]?.find((member) =>
           sameUserRef(member.user, message.author)

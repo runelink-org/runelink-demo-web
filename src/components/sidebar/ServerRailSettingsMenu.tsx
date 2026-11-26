@@ -11,7 +11,13 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { initializeThemeStore, resolveTheme, useThemeStore } from "@/lib/theme";
+import { useAtomValue } from "@effect/atom-react";
+import {
+  initializeThemeStore,
+  resolveTheme,
+  setSelectedTheme,
+  themeAtom,
+} from "@/lib/theme";
 
 export function ServerRailSettingsMenu() {
   const triggerRef = useRef<HTMLSpanElement | null>(null);
@@ -22,9 +28,8 @@ export function ServerRailSettingsMenu() {
     top: number;
     left: number;
   } | null>(null);
-  const selectedTheme = useThemeStore((state) => state.selectedTheme);
-  const systemTheme = useThemeStore((state) => state.systemTheme);
-  const setSelectedTheme = useThemeStore((state) => state.setSelectedTheme);
+  const selectedTheme = useAtomValue(themeAtom, (state) => state.selectedTheme);
+  const systemTheme = useAtomValue(themeAtom, (state) => state.systemTheme);
 
   const effectiveTheme = resolveTheme(selectedTheme, systemTheme);
   const isFollowingSystem = selectedTheme === "system";

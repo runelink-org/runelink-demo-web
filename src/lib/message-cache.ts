@@ -4,8 +4,8 @@ import type { Message } from "@runelink/sdk";
 // Deletion is terminal. Late create replies, events, or history fetches must
 // never restore text after this client has received its deletion tombstone.
 export function mergeMessages(
-  current: Message[],
-  incoming: Message[]
+  current: ReadonlyArray<Message>,
+  incoming: ReadonlyArray<Message>
 ): Message[] {
   const byId = new Map(current.map((message) => [message.id, message]));
   for (const message of incoming) {

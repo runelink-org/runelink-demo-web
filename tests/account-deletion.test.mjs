@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { after, before, beforeEach, test } from "node:test";
+import * as Effect from "effect/Effect";
 import { createServer } from "vite";
 
 const CONFIG_KEY = "runelink.demo.app-config";
@@ -10,7 +11,8 @@ let server;
 let storage;
 let accountStorage;
 let accountDeletion;
-let useAuthStore;
+let authAtom;
+let registry;
 const originalFetch = globalThis.fetch;
 const originalWindow = globalThis.window;
 
@@ -32,7 +34,10 @@ before(async () => {
   });
   accountStorage = await server.ssrLoadModule("/src/lib/account-storage.ts");
   accountDeletion = await server.ssrLoadModule("/src/lib/account-deletion.ts");
-  ({ useAuthStore } = await server.ssrLoadModule("/src/lib/auth-store.ts"));
+  ({ authAtom } = await server.ssrLoadModule("/src/lib/auth-store.ts"));
+  ({ appAtomRegistry: registry } = await server.ssrLoadModule(
+    "/src/lib/atom-registry.ts"
+  ));
 });
 
 after(async () => {
@@ -107,15 +112,18 @@ for (const [label, respond, deleted] of [
       urls.push(url);
       return respond();
     };
-    useAuthStore.setState({
+    registry.update(authAtom, (state) => ({
+      ...state,
       config: { active_account: alice, accounts: [alice] },
       authCache: { accounts: { "alice@example.com": { refresh_token: "t" } } },
-    });
+    }));
 
-    await accountDeletion.checkAccountDeleted(alice);
+    await Effect.runPromise(accountDeletion.checkAccountDeleted(alice));
 
-    assert.deepEqual(urls, ["https://example.com:7000/users/example.com/alice"]);
-    const { config, authCache } = useAuthStore.getState();
+    assert.deepEqual(urls, [
+      "https://example.com:7000/users/example.com/alice",
+    ]);
+    const { config, authCache } = registry.get(authAtom);
     assert.deepEqual(config.accounts, deleted ? [] : [alice]);
     assert.equal(config.active_account, deleted ? null : alice);
     assert.equal("alice@example.com" in authCache.accounts, !deleted);

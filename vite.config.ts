@@ -20,7 +20,8 @@ export default defineConfig({
       "@": path.resolve(import.meta.dirname, "./src"),
       ...(useLocalSdk && { "@runelink/sdk": localSdk }),
     },
-    // Keep one zod instance when SDK source resolves from the sibling checkout.
-    dedupe: ["zod"],
+    // Keep one effect instance when SDK source resolves from the sibling
+    // checkout.
+    dedupe: ["effect"],
   },
 });

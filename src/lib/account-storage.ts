@@ -6,37 +6,55 @@ import {
   validateUsername,
   type UserRef,
 } from "@runelink/sdk";
-import { z } from "zod";
+import * as Effect from "effect/Effect";
+import * as Option from "effect/Option";
+import * as Schema from "effect/Schema";
 
 const APP_CONFIG_STORAGE_KEY = "runelink.demo.app-config";
 export const AUTH_CACHE_STORAGE_KEY = "runelink.demo.auth-cache";
 
-export const StoredAccountAuthSchema = z.object({
-  refresh_token: z.string(),
-  access_token: z.string().optional(),
-  expires_at: z.number().int().optional(),
-  client_id: z.string().optional(),
-  scope: z.string().optional(),
+const StoredAccountAuthSchema = Schema.Struct({
+  refresh_token: Schema.String,
+  access_token: Schema.optional(Schema.String),
+  expires_at: Schema.optional(Schema.Int),
+  client_id: Schema.optional(Schema.String),
+  scope: Schema.optional(Schema.String),
 });
 
-export const BrowserAppConfigSchema = z.object({
-  active_account: UserRefSchema.nullable().default(null),
-  accounts: z.array(UserRefSchema).default([]),
-});
+const BrowserAppConfigFields = {
+  active_account: Schema.NullOr(UserRefSchema).pipe(
+    Schema.withDecodingDefault(Effect.succeed(null))
+  ),
+  accounts: Schema.Array(UserRefSchema).pipe(
+    Schema.withDecodingDefault(Effect.succeed([]))
+  ),
+};
+
+const BrowserAppConfigSchema = Schema.Struct(BrowserAppConfigFields);
 
 // Configs saved before the rename store the active account as
 // `default_account`. Remove once stored configs have been migrated.
-const StoredAppConfigSchema = BrowserAppConfigSchema.extend({
-  default_account: UserRefSchema.nullable().optional(),
+const StoredAppConfigSchema = Schema.Struct({
+  ...BrowserAppConfigFields,
+  default_account: Schema.optional(Schema.NullOr(UserRefSchema)),
 });
 
-export const BrowserAuthCacheSchema = z.object({
-  accounts: z.record(z.string(), StoredAccountAuthSchema).default({}),
+const BrowserAuthCacheSchema = Schema.Struct({
+  accounts: Schema.Record(Schema.String, StoredAccountAuthSchema).pipe(
+    Schema.withDecodingDefault(Effect.succeed({}))
+  ),
 });
 
-export type StoredAccountAuth = z.infer<typeof StoredAccountAuthSchema>;
-export type BrowserAppConfig = z.infer<typeof BrowserAppConfigSchema>;
-export type BrowserAuthCache = z.infer<typeof BrowserAuthCacheSchema>;
+export type StoredAccountAuth = typeof StoredAccountAuthSchema.Type;
+export type BrowserAppConfig = typeof BrowserAppConfigSchema.Type;
+export type BrowserAuthCache = typeof BrowserAuthCacheSchema.Type;
+
+const decodeStoredAppConfig = Schema.decodeUnknownOption(
+  Schema.fromJsonString(StoredAppConfigSchema)
+);
+const decodeBrowserAuthCache = Schema.decodeUnknownOption(
+  Schema.fromJsonString(BrowserAuthCacheSchema)
+);
 
 function canUseStorage(): boolean {
   return (
@@ -44,7 +62,11 @@ function canUseStorage(): boolean {
   );
 }
 
-function loadStoredJson<T>(key: string, schema: z.ZodType<T>, fallback: T): T {
+function loadStoredJson<T>(
+  key: string,
+  decode: (input: unknown) => Option.Option<T>,
+  fallback: T
+): T {
   if (!canUseStorage()) {
     return fallback;
   }
@@ -54,14 +76,7 @@ function loadStoredJson<T>(key: string, schema: z.ZodType<T>, fallback: T): T {
     return fallback;
   }
 
-  try {
-    const parsedValue = JSON.parse(rawValue) as unknown;
-    const result = schema.safeParse(parsedValue);
-
-    return result.success ? result.data : fallback;
-  } catch {
-    return fallback;
-  }
+  return Option.getOrElse(decode(rawValue), () => fallback);
 }
 
 function saveStoredJson<T>(key: string, value: T): void {
@@ -74,7 +89,7 @@ function saveStoredJson<T>(key: string, value: T): void {
 
 // Hosts identify default-port users without the port, so saved accounts do
 // too. Otherwise lookups, deletions, and updates would not match them.
-export function normalizeHost(host: string): string {
+function normalizeHost(host: string): string {
   return stripDefaultPort(validateHost(host));
 }
 
@@ -86,10 +101,10 @@ export function normalizeAccountInput(input: {
   name: string;
   host: string;
 }): UserRef {
-  return UserRefSchema.parse({
+  return {
     name: validateUsername(input.name),
     host: normalizeHost(input.host),
-  });
+  };
 }
 
 export function normalizeHostDraft(host: string): string {
@@ -111,29 +126,33 @@ export function sameUserRef(
   return left.name === right.name && left.host === right.host;
 }
 
-export function hasAccount(accounts: UserRef[], userRef: UserRef): boolean {
+export function hasAccount(
+  accounts: ReadonlyArray<UserRef>,
+  userRef: UserRef
+): boolean {
   return accounts.some((account) => sameUserRef(account, userRef));
 }
 
 export function upsertAccount(
-  accounts: UserRef[],
+  accounts: ReadonlyArray<UserRef>,
   userRef: UserRef
-): UserRef[] {
+): ReadonlyArray<UserRef> {
   return hasAccount(accounts, userRef) ? accounts : [...accounts, userRef];
 }
 
 export function loadBrowserAppConfig(): BrowserAppConfig {
-  const config = loadStoredJson(
-    APP_CONFIG_STORAGE_KEY,
-    StoredAppConfigSchema,
-    StoredAppConfigSchema.parse({})
-  );
+  const config = loadStoredJson(APP_CONFIG_STORAGE_KEY, decodeStoredAppConfig, {
+    active_account: null,
+    accounts: [],
+  });
   const activeAccount = config.active_account ?? config.default_account;
   const migrated: BrowserAppConfig = {
     active_account: activeAccount ? canonicalUserRef(activeAccount) : null,
     // Accounts saved before hosts were canonical may include the default
     // port, so merge accounts that only differed by it.
-    accounts: config.accounts.map(canonicalUserRef).reduce(upsertAccount, []),
+    accounts: config.accounts
+      .map(canonicalUserRef)
+      .reduce<ReadonlyArray<UserRef>>(upsertAccount, []),
   };
   if (config.default_account !== undefined) {
     try {
@@ -150,14 +169,12 @@ export function saveBrowserAppConfig(config: BrowserAppConfig): void {
 }
 
 export function loadBrowserAuthCache(): BrowserAuthCache {
-  const cache = loadStoredJson(
-    AUTH_CACHE_STORAGE_KEY,
-    BrowserAuthCacheSchema,
-    BrowserAuthCacheSchema.parse({})
-  );
+  const cache = loadStoredJson(AUTH_CACHE_STORAGE_KEY, decodeBrowserAuthCache, {
+    accounts: {},
+  });
   // An entry saved under the canonical key is newer than one with the
   // default port, so it wins when both exist.
-  const accounts: BrowserAuthCache["accounts"] = {};
+  const accounts: Record<string, StoredAccountAuth> = {};
   for (const [key, auth] of Object.entries(cache.accounts)) {
     const canonicalKey = stripDefaultPort(key);
     if (key === canonicalKey || !(canonicalKey in cache.accounts)) {

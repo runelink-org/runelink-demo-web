@@ -5,11 +5,19 @@ import {
 } from "@/lib/textarea-selection";
 import type { ActiveMessage } from "@runelink/sdk";
 import { useCallback, useState } from "react";
-import { useMessageComposerStore } from "@/lib/message-composer-store";
+import { useAtomValue } from "@effect/atom-react";
+import {
+  getComposer,
+  messageComposerAtom,
+  updateComposer,
+  updateEdit,
+} from "@/lib/message-composer-store";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { getActiveAccount, useAuthStore } from "@/lib/auth-store";
-import { requestExpected } from "@/lib/runelink-request";
+import { getState } from "@/lib/atom-registry";
+import { authAtom, getActiveAccount } from "@/lib/auth-store";
+import { request } from "@/lib/runelink-session";
+import { runPromise } from "@/lib/runtime";
 import { handleRunelinkUpdate } from "@/lib/runelink-updates";
 
 export function InlineMessageEditor({
@@ -25,10 +33,10 @@ export function InlineMessageEditor({
   onClose: (reason: "cancel" | "saved") => void;
   onDelete: () => void;
 }) {
-  const editing = useMessageComposerStore(
-    (state) => state.byChannelKey[channelKey]?.editing
+  const editing = useAtomValue(
+    messageComposerAtom,
+    (byChannelKey) => byChannelKey[channelKey]?.editing
   );
-  const updateEdit = useMessageComposerStore((state) => state.updateEdit);
   const session = editing?.session;
   const body = editing?.body ?? message.body;
   const error = editing?.error ?? null;
@@ -37,10 +45,10 @@ export function InlineMessageEditor({
   const restoreInput = useCallback(
     (input: HTMLTextAreaElement | null) => {
       if (!input) return;
-      const saved = useMessageComposerStore.getState().byChannelKey[channelKey];
-      if (saved?.editing?.session !== session) return;
-      restoreTextareaSelection(input, saved?.editing?.selection ?? null);
-      if (saved?.focusedInput === "edit") input.focus({ preventScroll: true });
+      const saved = getComposer(channelKey);
+      if (saved.editing?.session !== session) return;
+      restoreTextareaSelection(input, saved.editing?.selection ?? null);
+      if (saved.focusedInput === "edit") input.focus({ preventScroll: true });
     },
     [channelKey, session]
   );
@@ -61,11 +69,11 @@ export function InlineMessageEditor({
     updateEdit(channelKey, session, null);
     onClose(reason);
   }
-  const [account] = useState(() => getActiveAccount(useAuthStore.getState()));
+  const [account] = useState(() => getActiveAccount(getState(authAtom)));
 
   async function save() {
     if (!account || !session || isSaving) return;
-    const active = getActiveAccount(useAuthStore.getState());
+    const active = getActiveAccount(getState(authAtom));
     if (active?.name !== account.name || active?.host !== account.host) {
       updateEdit(channelKey, session, {
         error:
@@ -79,15 +87,17 @@ export function InlineMessageEditor({
     }
     updateEdit(channelKey, session, { isSaving: true, error: null });
     try {
-      const reply = await requestExpected("messages_update", {
-        type: "messages_update",
-        data: {
-          message_id: message.id,
-          message_update: { body, expected_updated_at: message.updated_at },
-          target_host: host === account.host ? null : host,
-        },
-      });
-      const active = getActiveAccount(useAuthStore.getState());
+      const reply = await runPromise(
+        request({
+          type: "messages_update",
+          data: {
+            message_id: message.id,
+            message_update: { body, expected_updated_at: message.updated_at },
+            target_host: host === account.host ? null : host,
+          },
+        })
+      );
+      const active = getActiveAccount(getState(authAtom));
       if (active?.name === account.name && active?.host === account.host) {
         handleRunelinkUpdate({ type: "message_upserted", data: reply.data });
       }
@@ -118,14 +128,11 @@ export function InlineMessageEditor({
         disabled={isSaving}
         className="min-h-0 max-h-80 resize-none bg-background px-3 py-3 text-sm leading-6 focus-visible:border-input focus-visible:ring-0 disabled:bg-background dark:bg-background dark:disabled:bg-background"
         onFocus={() => {
-          useMessageComposerStore
-            .getState()
-            .updateChannel(channelKey, (state) =>
-              state.editing?.session !== session ||
-              state.focusedInput === "edit"
-                ? state
-                : { ...state, focusedInput: "edit" }
-            );
+          updateComposer(channelKey, (state) =>
+            state.editing?.session !== session || state.focusedInput === "edit"
+              ? state
+              : { ...state, focusedInput: "edit" }
+          );
         }}
         onChange={(event) => updateBody(event.currentTarget)}
         onSelect={(event) => updateBody(event.currentTarget)}
