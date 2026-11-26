@@ -6,6 +6,7 @@ import {
   signupAuthSessionWithConnection,
 } from "@/lib/auth-session-bridge";
 import {
+  AUTH_CACHE_STORAGE_KEY,
   accountStorageKey,
   hasAccount,
   loadBrowserAppConfig,
@@ -108,6 +109,22 @@ function buildStoredAuth(
   };
 }
 
+// Starts from the stored tokens, which other tabs may have replaced since this
+// tab last heard about it. Clearing tokens does the same.
+function storeLatestToken(
+  userRef: UserRef,
+  tokenResponse: TokenResponse,
+  clientId: string
+): BrowserAuthCache {
+  const authCache = loadBrowserAuthCache();
+  const previousAuth = authCache.accounts[accountStorageKey(userRef)];
+  return storeTokenState(
+    authCache,
+    userRef,
+    buildStoredAuth(previousAuth, tokenResponse, clientId)
+  );
+}
+
 function persistAuthenticatedAccount(
   state: AuthStore,
   userRef: UserRef,
@@ -118,12 +135,7 @@ function persistAuthenticatedAccount(
     active_account: userRef,
     accounts: upsertAccount(state.config.accounts, userRef),
   };
-  const previousAuth = state.authCache.accounts[accountStorageKey(userRef)];
-  const nextAuthCache = storeTokenState(
-    state.authCache,
-    userRef,
-    buildStoredAuth(previousAuth, tokenResponse, clientId)
-  );
+  const nextAuthCache = storeLatestToken(userRef, tokenResponse, clientId);
 
   persistState(nextConfig, nextAuthCache);
 
@@ -166,7 +178,7 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
         accounts: upsertAccount(state.config.accounts, normalizedAccount),
       };
 
-      persistState(nextConfig, state.authCache);
+      saveBrowserAppConfig(nextConfig);
 
       return {
         config: nextConfig,
@@ -260,7 +272,7 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
         : state.config.active_account,
       accounts,
     };
-    const nextAuthCache = clearTokenState(state.authCache, userRef);
+    const nextAuthCache = clearTokenState(loadBrowserAuthCache(), userRef);
 
     persistState(nextConfig, nextAuthCache);
     set({ config: nextConfig, authCache: nextAuthCache, authError: null });
@@ -269,29 +281,47 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
 
   storeAccountToken(userRef, tokenResponse, clientId) {
     const normalizedAccount = normalizeAccountInput(userRef);
-    set((state) => ({
-      ...persistAuthenticatedAccount(
-        state,
-        normalizedAccount,
-        tokenResponse,
-        clientId
-      ),
-    }));
+    // Refreshes only replace tokens, so the account config is left alone.
+    const nextAuthCache = storeLatestToken(
+      normalizedAccount,
+      tokenResponse,
+      clientId
+    );
+    saveBrowserAuthCache(nextAuthCache);
+    set({ authCache: nextAuthCache, authError: null });
   },
 
   clearAccountAuth(userRef, errorMessage) {
     const normalizedAccount = normalizeAccountInput(userRef);
-    set((state) => {
-      const nextAuthCache = clearTokenState(state.authCache, normalizedAccount);
-      persistState(state.config, nextAuthCache);
-
-      return {
-        authCache: nextAuthCache,
-        authError: errorMessage ?? null,
-      };
-    });
+    const nextAuthCache = clearTokenState(
+      loadBrowserAuthCache(),
+      normalizedAccount
+    );
+    saveBrowserAuthCache(nextAuthCache);
+    set({ authCache: nextAuthCache, authError: errorMessage ?? null });
   },
 }));
+
+let storedAuthFollowed = false;
+
+function syncStoredAuth(): void {
+  useAuthStore.setState({ authCache: loadBrowserAuthCache() });
+}
+
+// Tabs share the stored tokens, and a refresh in one tab replaces the refresh
+// token, so other tabs follow the stored tokens instead of keeping a replaced
+// one. Storage events only fire in the tabs that did not make the change.
+export function followStoredAuth(): void {
+  if (storedAuthFollowed) return;
+  storedAuthFollowed = true;
+  window.addEventListener("storage", (event) => {
+    if (event.key === AUTH_CACHE_STORAGE_KEY || event.key === null) {
+      syncStoredAuth();
+    }
+  });
+  // Catch up on changes made since the cache was first loaded.
+  syncStoredAuth();
+}
 
 registerAuthSessionStateBridge({
   getSnapshot() {
