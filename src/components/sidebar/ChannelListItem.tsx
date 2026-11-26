@@ -13,6 +13,7 @@ import { sameUserRef } from "@/lib/account-storage";
 import { fetchMessagesByTextChannel } from "@/lib/messages-store";
 import { connectionAtom } from "@/lib/runelink-session";
 import { runPromise } from "@/lib/runtime";
+import * as Effect from "effect/Effect";
 
 const PREFETCH_DELAY_MS = 150;
 
@@ -58,14 +59,15 @@ export function ChannelListItem({
     )
       return;
 
-    runPromise(
+    void runPromise(
       fetchMessagesByTextChannel(
         channel.text_channel_id,
         host === account.host ? null : host
+      ).pipe(
+        // Opening the channel retries a failed background fetch.
+        Effect.ignore
       )
-    ).catch(() => {
-      // Opening the channel retries a failed background fetch.
-    });
+    );
   }
   return (
     <div

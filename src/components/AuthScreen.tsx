@@ -1,6 +1,6 @@
 import { useAtomValue } from "@effect/atom-react";
-import * as Exit from "effect/Exit";
-import { useEffect, useState } from "react";
+import * as Effect from "effect/Effect";
+import { useState } from "react";
 import { LockKeyhole, Sparkles } from "lucide-react";
 import { MAX_USERNAME_LENGTH } from "@runelink/sdk";
 import { Button } from "@/components/ui/button";
@@ -22,8 +22,9 @@ import { Input } from "@/components/ui/input";
 import { normalizeHostDraft } from "@/lib/account-storage";
 import { cn } from "@/lib/utils";
 import { authAtom, getActiveAccount, setAuthError } from "@/lib/auth-store";
-import { login, signup } from "@/lib/runelink-session";
-import { runPromiseExit } from "@/lib/runtime";
+import { requestFailureMessage } from "@/lib/request-failure";
+import { type AuthFailure, login, signup } from "@/lib/runelink-session";
+import { runPromise } from "@/lib/runtime";
 
 type AuthMode = "login" | "signup";
 
@@ -44,6 +45,42 @@ function normalizeUsernameDraft(input: string): string {
     .slice(0, MAX_USERNAME_LENGTH);
 }
 
+// Why a login or signup failed, for the auth screen
+function authFailureMessage(error: AuthFailure, mode: AuthMode): string {
+  switch (error._tag) {
+    case "RunelinkAuthError":
+      return mode === "login"
+        ? "The username or password is incorrect."
+        : requestFailureMessage(error);
+    case "RunelinkNotFoundError":
+      return "No account with this username exists on this host.";
+    case "RunelinkConflictError":
+      // Taken, or recently deleted and not yet reusable
+      return mode === "signup"
+        ? "This username isn't available."
+        : requestFailureMessage(error);
+    // These explain themselves, and an incompatible host says which side
+    // needs updating
+    case "HostUnreachableError":
+    case "HostTransportError":
+    case "InvalidAccountError":
+    case "ConnectionCancelledError":
+    case "SessionStorageError":
+    case "RunelinkIncompatibleHostError":
+      return error.message;
+    // Signing in does not reconnect by itself
+    case "RunelinkConnectionError":
+      return "The connection to the host was lost. Try again.";
+    case "RunelinkBadRequestError":
+    case "RunelinkInternalError":
+    case "RunelinkDisconnectedError":
+    case "RunelinkUnsupportedCapabilityError":
+    case "RunelinkProtocolError":
+    case "RunelinkInvalidRequestError":
+      return requestFailureMessage(error);
+  }
+}
+
 export function AuthScreen({
   canClose,
   prefillAccount,
@@ -62,25 +99,47 @@ export function AuthScreen({
   );
   const [password, setPassword] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  // This form's own failures stay local, so a late or stale one can't outlive
+  // the screen; `authError` carries why a session ended
+  const [formError, setFormError] = useState<string | null>(null);
   const shouldFocusPassword = !!activeAccount && prefillAccount;
 
-  useEffect(() => {
+  function switchMode(nextMode: AuthMode) {
+    setMode(nextMode);
+    setFormError(null);
     setAuthError(null);
-  }, [mode]);
+  }
 
   async function handleSubmit(event: React.SubmitEvent<HTMLFormElement>) {
     event.preventDefault();
     setIsSubmitting(true);
 
     const credentials = { host, name, password };
-    // A failure is shown as the auth error.
-    const exit = await runPromiseExit(
-      mode === "signup" ? signup(credentials) : login(credentials)
-    );
+    const succeeded = await runPromise(
+      (mode === "signup" ? signup(credentials) : login(credentials)).pipe(
+        Effect.match({
+          onSuccess: () => true,
+          onFailure: (error) => {
+            setFormError(authFailureMessage(error, mode));
+            return false;
+          },
+        }),
+        // Such as storage that throws
+        Effect.catchDefect((defect) =>
+          Effect.sync(() => {
+            console.error("Unexpected sign-in failure", defect);
+            setFormError(
+              mode === "signup"
+                ? "Unable to create account"
+                : "Unable to log in"
+            );
+            return false;
+          })
+        )
+      )
+    ).finally(() => setIsSubmitting(false));
 
-    setIsSubmitting(false);
-
-    if (Exit.isFailure(exit)) {
+    if (!succeeded) {
       return;
     }
 
@@ -121,7 +180,7 @@ export function AuthScreen({
                   ? "bg-background text-foreground shadow-sm"
                   : "text-muted-foreground hover:text-foreground"
               )}
-              onClick={() => setMode("login")}
+              onClick={() => switchMode("login")}
             >
               Log in
             </button>
@@ -133,7 +192,7 @@ export function AuthScreen({
                   ? "bg-background text-foreground shadow-sm"
                   : "text-muted-foreground hover:text-foreground"
               )}
-              onClick={() => setMode("signup")}
+              onClick={() => switchMode("signup")}
             >
               Create account
             </button>
@@ -200,7 +259,7 @@ export function AuthScreen({
               </Field>
             </FieldGroup>
 
-            <FieldError>{authError}</FieldError>
+            <FieldError>{formError ?? authError}</FieldError>
 
             <div className="flex items-center justify-between gap-3">
               {canClose ? (

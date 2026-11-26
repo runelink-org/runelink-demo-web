@@ -8,7 +8,7 @@ import {
 import * as Effect from "effect/Effect";
 import { getState, setState, stateAtom } from "@/lib/atom-registry";
 import { authAtom, getActiveAccount } from "@/lib/auth-store";
-import { request, SessionError } from "@/lib/runelink-session";
+import { NotConnectedError, request } from "@/lib/runelink-session";
 import {
   bindStoreToActiveAccount,
   type ChannelId,
@@ -107,9 +107,7 @@ export const deleteChannel = Effect.fn("Channels.delete")(function* (
 ) {
   const account = getActiveAccount(getState(authAtom));
   if (!account) {
-    return yield* new SessionError({
-      message: "Select an account before deleting a channel.",
-    });
+    return yield* new NotConnectedError();
   }
 
   yield* request({
@@ -118,7 +116,10 @@ export const deleteChannel = Effect.fn("Channels.delete")(function* (
       channel_id: channelId,
       target_host: targetHost,
     },
-  });
+  }).pipe(
+    // Already deleted, such as by another admin or tab
+    Effect.catchTags({ RunelinkNotFoundError: () => Effect.void })
+  );
 
   if (!sameUserRef(account, getActiveAccount(getState(authAtom)))) return;
   removeChannelFromCaches(serverId, channelId);

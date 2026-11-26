@@ -11,11 +11,15 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import type { RequestEffect } from "@/lib/runelink-session";
+import * as Effect from "effect/Effect";
+import { toastFailure } from "@/lib/toast-failure";
+import { runPromise } from "@/lib/runtime";
 
 type DeleteMessageDialogProps = {
   message: Message | null;
   onOpenChange: (open: boolean) => void;
-  onDeleteMessage: (message: Message) => Promise<void>;
+  onDeleteMessage: (message: Message) => RequestEffect<void>;
   composerRef: RefObject<HTMLTextAreaElement | null>;
 };
 
@@ -38,21 +42,19 @@ export function DeleteMessageDialog({
     setIsDeleting(true);
     setError(null);
 
-    try {
-      await onDeleteMessage(message);
-      deletedRef.current = true;
-      toast.success("Deleted message.");
-      onOpenChange(false);
-    } catch (nextError) {
-      toast.error("Failed to delete message.");
-      setError(
-        nextError instanceof Error
-          ? nextError.message
-          : "Failed to delete message"
-      );
-    } finally {
-      setIsDeleting(false);
-    }
+    await runPromise(
+      onDeleteMessage(message).pipe(
+        Effect.match({
+          onSuccess: () => {
+            deletedRef.current = true;
+            toast.success("Deleted message.");
+            onOpenChange(false);
+          },
+          onFailure: (failure) =>
+            setError(toastFailure("Couldn't delete message", failure)),
+        })
+      )
+    ).finally(() => setIsDeleting(false));
   }
 
   return (

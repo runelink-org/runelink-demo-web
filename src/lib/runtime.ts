@@ -1,4 +1,5 @@
 import * as Effect from "effect/Effect";
+import type * as Fiber from "effect/Fiber";
 import * as Layer from "effect/Layer";
 import * as ManagedRuntime from "effect/ManagedRuntime";
 import * as Socket from "effect/socket/Socket";
@@ -17,10 +18,20 @@ const runtime = ManagedRuntime.make(
   )
 );
 
-// Runs an effect from an event handler. Failures reject with the error.
-export const runPromise = runtime.runPromise;
-export const runPromiseExit = runtime.runPromiseExit;
-export const runFork = runtime.runFork;
+// Run effects from event handlers and React effects. They only take effects
+// whose failures are all handled, so the compiler checks that every failure
+// case has a handler.
+export function runPromise<A>(
+  effect: Effect.Effect<A, never, RunelinkSession.RunelinkSession>
+): Promise<A> {
+  return runtime.runPromise(effect);
+}
+
+export function runFork<A>(
+  effect: Effect.Effect<A, never, RunelinkSession.RunelinkSession>
+): Fiber.Fiber<A> {
+  return runtime.runFork(effect);
+}
 
 let started = false;
 

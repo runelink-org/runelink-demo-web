@@ -21,6 +21,9 @@ import { authAtom, getActiveAccount } from "@/lib/auth-store";
 import { request } from "@/lib/runelink-session";
 import { runPromise } from "@/lib/runtime";
 import { handleRunelinkUpdate } from "@/lib/runelink-updates";
+import type { RequestEffect } from "@/lib/runelink-session";
+import * as Effect from "effect/Effect";
+import { requestFailureMessage } from "@/lib/request-failure";
 
 type ChannelSettingsPageProps = {
   channel: ServerChannel | null;
@@ -28,7 +31,7 @@ type ChannelSettingsPageProps = {
   canManage: boolean;
   isLoading: boolean;
   onDone: () => void;
-  onDeleteChannel: (channel: ServerChannel) => Promise<void>;
+  onDeleteChannel: (channel: ServerChannel) => RequestEffect<void>;
 };
 
 export function ChannelSettingsPage({
@@ -130,7 +133,7 @@ function ChannelSettingsForm({
   host: string;
   canManage: boolean;
   onDone: () => void;
-  onDeleteChannel: (channel: ServerChannel) => Promise<void>;
+  onDeleteChannel: (channel: ServerChannel) => RequestEffect<void>;
 }) {
   const [baseline, setBaseline] = useState(channel);
   const [title, setTitle] = useState(channel.title);
@@ -176,40 +179,42 @@ function ChannelSettingsForm({
     setIsSaving(true);
     setSaved(false);
     setError(null);
-    try {
-      const reply = await runPromise(
-        request({
-          type: "channels_update",
-          data: {
-            channel_id: channel.id,
-            channel_update: {
-              title: submittedTitle,
-              description: submittedDescription || null,
-              expected_updated_at: baseline.updated_at,
-            },
-            target_host: host === account.host ? null : host,
+    await runPromise(
+      request({
+        type: "channels_update",
+        data: {
+          channel_id: channel.id,
+          channel_update: {
+            title: submittedTitle,
+            description: submittedDescription || null,
+            expected_updated_at: baseline.updated_at,
+          },
+          target_host: host === account.host ? null : host,
+        },
+      }).pipe(
+        Effect.match({
+          onSuccess: (reply) => {
+            const active = getActiveAccount(getState(authAtom));
+            if (active?.name !== account.name || active?.host !== account.host)
+              return;
+            handleRunelinkUpdate({
+              type: "channel_upserted",
+              data: reply.data,
+            });
+            if (!mountedRef.current) return;
+            setBaseline(reply.data);
+            setTitle(reply.data.title);
+            setDescription(reply.data.description ?? "");
+            setSaved(true);
+          },
+          onFailure: (failure) => {
+            if (mountedRef.current) setError(requestFailureMessage(failure));
           },
         })
-      );
-      const active = getActiveAccount(getState(authAtom));
-      if (active?.name !== account.name || active?.host !== account.host)
-        return;
-      handleRunelinkUpdate({ type: "channel_upserted", data: reply.data });
-      if (!mountedRef.current) return;
-      setBaseline(reply.data);
-      setTitle(reply.data.title);
-      setDescription(reply.data.description ?? "");
-      setSaved(true);
-    } catch (error) {
-      if (mountedRef.current)
-        setError(
-          error instanceof Error
-            ? error.message
-            : `Could not save ${noun} settings.`
-        );
-    } finally {
+      )
+    ).finally(() => {
       if (mountedRef.current) setIsSaving(false);
-    }
+    });
   }
 
   return (

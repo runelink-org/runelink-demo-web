@@ -13,6 +13,10 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import type { RequestEffect } from "@/lib/runelink-session";
+import * as Effect from "effect/Effect";
+import { requestFailureMessage } from "@/lib/request-failure";
+import { runPromise } from "@/lib/runtime";
 
 type CreateServerDialogProps = {
   activeHost: string | null;
@@ -22,7 +26,7 @@ type CreateServerDialogProps = {
     host: string,
     title: string,
     description: string
-  ) => Promise<void>;
+  ) => RequestEffect<void>;
 };
 
 export function CreateServerDialog(props: CreateServerDialogProps) {
@@ -85,19 +89,20 @@ function CreateServerDialogForm({
     setIsCreating(true);
     setError(null);
 
-    try {
-      await onCreateServer(nextHost, nextTitle, description);
-      if (isMounted()) onOpenChange(false);
-    } catch (nextError) {
-      if (!isMounted()) return;
-      setError(
-        nextError instanceof Error
-          ? nextError.message
-          : "Failed to create server"
-      );
-    } finally {
+    await runPromise(
+      onCreateServer(nextHost, nextTitle, description).pipe(
+        Effect.match({
+          onSuccess: () => {
+            if (isMounted()) onOpenChange(false);
+          },
+          onFailure: (failure) => {
+            if (isMounted()) setError(requestFailureMessage(failure));
+          },
+        })
+      )
+    ).finally(() => {
       if (isMounted()) setIsCreating(false);
-    }
+    });
   }
 
   return (

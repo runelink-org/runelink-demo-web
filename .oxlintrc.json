@@ -61,6 +61,7 @@
         "valid-typeof": "error",
         "no-array-constructor": "error",
         "no-unused-expressions": "error",
+        "typescript/await-thenable": "error",
         "typescript/ban-ts-comment": "error",
         "typescript/no-deprecated": "error",
         "typescript/no-duplicate-enum-values": "error",

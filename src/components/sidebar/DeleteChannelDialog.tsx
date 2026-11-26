@@ -14,11 +14,15 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import type { RequestEffect } from "@/lib/runelink-session";
+import * as Effect from "effect/Effect";
+import { toastFailure } from "@/lib/toast-failure";
+import { runPromise } from "@/lib/runtime";
 
 type DeleteChannelDialogProps = {
   channel: ServerChannel | null;
   onOpenChange: (open: boolean) => void;
-  onDeleteChannel: (channel: ServerChannel) => Promise<void>;
+  onDeleteChannel: (channel: ServerChannel) => RequestEffect<void>;
 };
 
 export function DeleteChannelDialog({
@@ -46,22 +50,21 @@ export function DeleteChannelDialog({
     setIsDeleting(true);
     setError(null);
 
-    try {
-      await onDeleteChannel(channel);
-      if (!isCurrentAccount()) return;
-      toast.success(`Deleted ${noun}: ${channel.title}`);
-      onOpenChange(false);
-    } catch (nextError) {
-      if (!isCurrentAccount()) return;
-      toast.error(`Failed to delete ${noun}.`);
-      setError(
-        nextError instanceof Error
-          ? nextError.message
-          : `Failed to delete ${noun}`
-      );
-    } finally {
-      setIsDeleting(false);
-    }
+    await runPromise(
+      onDeleteChannel(channel).pipe(
+        Effect.match({
+          onSuccess: () => {
+            if (!isCurrentAccount()) return;
+            toast.success(`Deleted ${noun}: ${channel.title}`);
+            onOpenChange(false);
+          },
+          onFailure: (failure) => {
+            if (!isCurrentAccount()) return;
+            setError(toastFailure(`Couldn't delete ${noun}`, failure));
+          },
+        })
+      )
+    ).finally(() => setIsDeleting(false));
   }
 
   return (

@@ -54,6 +54,11 @@ import { messageScrollAtom, setScrollTop } from "@/lib/message-scroll-store";
 import { useContextActionsMenu } from "@/lib/use-context-actions-menu";
 import { DeleteMessageDialog } from "./messages/DeleteMessageDialog";
 import { MessageListItem } from "./messages/MessageListItem";
+import type { RequestEffect } from "@/lib/runelink-session";
+import * as Effect from "effect/Effect";
+import { requestFailureMessage } from "@/lib/request-failure";
+import { runPromise } from "@/lib/runtime";
+import { DeleteChannelDialog } from "@/components/sidebar/DeleteChannelDialog";
 
 type MessagesPaneProps = {
   selectedServer: ServerWithChannels | null;
@@ -72,12 +77,12 @@ type MessagesPaneProps = {
   canModerateMembers: boolean;
   canDeleteChannel: boolean;
   onDeselectChannel: () => void;
-  onSendMessage: (body: string, replyTo: string | null) => Promise<void>;
+  onSendMessage: (body: string, replyTo: string | null) => RequestEffect<void>;
   onDeleteChannel: (
     channel: ServerWithChannels["channels"][number]
-  ) => Promise<void>;
+  ) => RequestEffect<void>;
   onEditChannel: (channel: ServerChannel) => void;
-  onDeleteMessage: (message: Message) => Promise<void>;
+  onDeleteMessage: (message: Message) => RequestEffect<void>;
   // Shown beside the messages when passed, which App does on wide screens
   membersPane: ReactNode;
   // Opens the full-screen members page when there is no members pane
@@ -277,7 +282,7 @@ function MessageList({
   editingMessage: ActiveMessage | null;
   onEditMessage: (message: ActiveMessage | null) => void;
   onCancelEdit: () => void;
-  onDeleteMessage: (message: Message) => Promise<void>;
+  onDeleteMessage: (message: Message) => RequestEffect<void>;
   onReply: (message: ActiveMessage) => void;
 }) {
   const [messagePendingDelete, setMessagePendingDelete] =
@@ -390,6 +395,8 @@ export function MessagesPane({
   onOpenMembers,
 }: MessagesPaneProps) {
   const channelMenu = useContextActionsMenu();
+  const [channelPendingDelete, setChannelPendingDelete] =
+    useState<ServerChannel | null>(null);
   const [isMembersPaneOpen, setIsMembersPaneOpen] = useState(() =>
     loadStoredMembersPaneOpen()
   );
@@ -766,33 +773,40 @@ export function MessagesPane({
       sendError: null,
     }));
 
-    try {
-      await onSendMessage(nextBody, replyTarget?.id ?? null);
-      updateChannel(selectedChannelKey, (state) =>
+    // The draft is kept, so it can be sent again
+    const channelKey = selectedChannelKey;
+    function fail(sendError: string) {
+      updateChannel(channelKey, (state) =>
         state.sending === sending
-          ? {
-              ...state,
-              draft: "",
-              selection: null,
-              replyTo: null,
-              sending: null,
-            }
-          : state
-      );
-    } catch (error) {
-      updateChannel(selectedChannelKey, (state) =>
-        state.sending === sending
-          ? {
-              ...state,
-              sending: null,
-              sendError:
-                error instanceof Error
-                  ? error.message
-                  : "Failed to send message",
-            }
+          ? { ...state, sending: null, sendError }
           : state
       );
     }
+    await runPromise(
+      onSendMessage(nextBody, replyTarget?.id ?? null).pipe(
+        Effect.match({
+          onSuccess: () =>
+            updateChannel(selectedChannelKey, (state) =>
+              state.sending === sending
+                ? {
+                    ...state,
+                    draft: "",
+                    selection: null,
+                    replyTo: null,
+                    sending: null,
+                  }
+                : state
+            ),
+          onFailure: (failure) => fail(requestFailureMessage(failure)),
+        }),
+        Effect.catchDefect((defect) =>
+          Effect.sync(() => {
+            console.error("Unexpected send failure", defect);
+            fail("Failed to send message");
+          })
+        )
+      )
+    );
   }
 
   async function handleKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
@@ -956,9 +970,7 @@ export function MessagesPane({
                     canDeleteChannel={canDeleteChannel}
                     forceVisible
                     onEditChannel={onEditChannel}
-                    onDeleteChannel={(channel) => {
-                      void onDeleteChannel(channel);
-                    }}
+                    onDeleteChannel={setChannelPendingDelete}
                   />
                 </div>
               </div>
@@ -1078,11 +1090,14 @@ export function MessagesPane({
               onCancelEdit={() =>
                 textareaRef.current?.focus({ preventScroll: true })
               }
-              onDeleteMessage={async (message) => {
-                await onDeleteMessage(message);
-                if (editingMessage?.id === message.id) setEditing(null);
-                textareaRef.current?.focus({ preventScroll: true });
-              }}
+              onDeleteMessage={(message) =>
+                onDeleteMessage(message).pipe(
+                  Effect.map(() => {
+                    if (editingMessage?.id === message.id) setEditing(null);
+                    textareaRef.current?.focus({ preventScroll: true });
+                  })
+                )
+              }
               onReply={(message) => {
                 setReplyTo(message.id);
                 textareaRef.current?.focus();
@@ -1213,6 +1228,14 @@ export function MessagesPane({
           </aside>
         </>
       ) : null}
+
+      <DeleteChannelDialog
+        channel={channelPendingDelete}
+        onOpenChange={(open) => {
+          if (!open) setChannelPendingDelete(null);
+        }}
+        onDeleteChannel={onDeleteChannel}
+      />
     </div>
   );
 }
