@@ -16,8 +16,10 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { getActiveAccount, useAuthStore } from "@/lib/auth-store";
-import { requestExpected } from "@/lib/runelink-request";
+import { getState } from "@/lib/atom-registry";
+import { authAtom, getActiveAccount } from "@/lib/auth-store";
+import { request } from "@/lib/runelink-session";
+import { runPromise } from "@/lib/runtime";
 import { handleRunelinkUpdate } from "@/lib/runelink-updates";
 
 type ChannelSettingsPageProps = {
@@ -138,7 +140,7 @@ function ChannelSettingsForm({
   const [saved, setSaved] = useState(false);
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
   const [isDiscardOpen, setIsDiscardOpen] = useState(false);
-  const [account] = useState(() => getActiveAccount(useAuthStore.getState()));
+  const [account] = useState(() => getActiveAccount(getState(authAtom)));
   const mountedRef = useRef(false);
   const noun = channel.kind === "category" ? "category" : "channel";
   const label = channel.kind === "category" ? "Category" : "Channel";
@@ -166,7 +168,7 @@ function ChannelSettingsForm({
   async function save(event: React.SubmitEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!account || !canManage || isSaving || !dirty || !submittedTitle) return;
-    const active = getActiveAccount(useAuthStore.getState());
+    const active = getActiveAccount(getState(authAtom));
     if (active?.name !== account.name || active?.host !== account.host) {
       setError("The active account changed. Reopen settings to try again.");
       return;
@@ -175,19 +177,21 @@ function ChannelSettingsForm({
     setSaved(false);
     setError(null);
     try {
-      const reply = await requestExpected("channels_update", {
-        type: "channels_update",
-        data: {
-          channel_id: channel.id,
-          channel_update: {
-            title: submittedTitle,
-            description: submittedDescription || null,
-            expected_updated_at: baseline.updated_at,
+      const reply = await runPromise(
+        request({
+          type: "channels_update",
+          data: {
+            channel_id: channel.id,
+            channel_update: {
+              title: submittedTitle,
+              description: submittedDescription || null,
+              expected_updated_at: baseline.updated_at,
+            },
+            target_host: host === account.host ? null : host,
           },
-          target_host: host === account.host ? null : host,
-        },
-      });
-      const active = getActiveAccount(useAuthStore.getState());
+        })
+      );
+      const active = getActiveAccount(getState(authAtom));
       if (active?.name !== account.name || active?.host !== account.host)
         return;
       handleRunelinkUpdate({ type: "channel_upserted", data: reply.data });

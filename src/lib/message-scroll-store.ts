@@ -1,35 +1,16 @@
-import { create } from "zustand";
+import { appAtomRegistry, stateAtom } from "@/lib/atom-registry";
 import { bindStoreToActiveAccount } from "@/lib/runelink-store-utils";
 
-type ChannelScrollState = {
-  scrollTop: number;
-};
+// Scroll positions by channel key
+export const messageScrollAtom = stateAtom<Record<string, number>>({});
 
-type MessageScrollState = {
-  scrollByChannelKey: Record<string, ChannelScrollState>;
-  setScrollTop: (channelKey: string, scrollTop: number) => void;
-  reset: () => void;
-};
-
-const initialState = {
-  scrollByChannelKey: {},
-};
-
-export const useMessageScrollStore = create<MessageScrollState>((set) => ({
-  ...initialState,
-  setScrollTop(channelKey, scrollTop) {
-    set((state) => ({
-      scrollByChannelKey: {
-        ...state.scrollByChannelKey,
-        [channelKey]: { scrollTop },
-      },
-    }));
-  },
-  reset() {
-    set(initialState);
-  },
-}));
+export function setScrollTop(channelKey: string, scrollTop: number): void {
+  appAtomRegistry.update(messageScrollAtom, (scrollTopByChannelKey) => ({
+    ...scrollTopByChannelKey,
+    [channelKey]: scrollTop,
+  }));
+}
 
 bindStoreToActiveAccount(() => {
-  useMessageScrollStore.getState().reset();
+  appAtomRegistry.set(messageScrollAtom, {});
 });

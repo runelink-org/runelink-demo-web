@@ -1,19 +1,25 @@
-import { z } from "zod";
-import { create } from "zustand";
+import * as Option from "effect/Option";
+import * as Schema from "effect/Schema";
+import { getState, setState, stateAtom } from "@/lib/atom-registry";
 
 const THEME_STORAGE_KEY = "runelink.demo.theme";
-const ThemePreferenceSchema = z.enum(["light", "dark", "system"]);
+const ThemePreferenceSchema = Schema.Literals(["light", "dark", "system"]);
+const decodeThemePreference = Schema.decodeUnknownOption(ThemePreferenceSchema);
 // Matches --background in index.css.
 const THEME_COLORS = { light: "#ffffff", dark: "#171717" };
 
-export type ThemePreference = z.infer<typeof ThemePreferenceSchema>;
-export type ResolvedTheme = "light" | "dark";
+type ThemePreference = typeof ThemePreferenceSchema.Type;
+type ResolvedTheme = "light" | "dark";
 
 type ThemeState = {
   selectedTheme: ThemePreference;
   systemTheme: ResolvedTheme;
-  setSelectedTheme: (theme: ThemePreference) => void;
 };
+
+export const themeAtom = stateAtom<ThemeState>({
+  selectedTheme: "system",
+  systemTheme: "light",
+});
 
 let isThemeStoreInitialized = false;
 
@@ -26,10 +32,10 @@ function loadStoredTheme(): ThemePreference {
     return "system";
   }
 
-  const storedTheme = window.localStorage.getItem(THEME_STORAGE_KEY);
-  const parsedTheme = ThemePreferenceSchema.safeParse(storedTheme);
-
-  return parsedTheme.success ? parsedTheme.data : "system";
+  return Option.getOrElse(
+    decodeThemePreference(window.localStorage.getItem(THEME_STORAGE_KEY)),
+    () => "system" as const
+  );
 }
 
 function saveStoredTheme(theme: ThemePreference): void {
@@ -65,15 +71,11 @@ function applyTheme(
     );
 }
 
-export const useThemeStore = create<ThemeState>((set, get) => ({
-  selectedTheme: "system",
-  systemTheme: "light",
-  setSelectedTheme(theme) {
-    saveStoredTheme(theme);
-    set({ selectedTheme: theme });
-    applyTheme(theme, get().systemTheme);
-  },
-}));
+export function setSelectedTheme(theme: ThemePreference): void {
+  saveStoredTheme(theme);
+  setState(themeAtom, { selectedTheme: theme });
+  applyTheme(theme, getState(themeAtom).systemTheme);
+}
 
 export function initializeThemeStore(): void {
   if (!canUseThemeDom() || isThemeStoreInitialized) {
@@ -88,7 +90,7 @@ export function initializeThemeStore(): void {
     const selectedTheme = loadStoredTheme();
     const systemTheme = mediaQuery.matches ? "dark" : "light";
 
-    useThemeStore.setState({ selectedTheme, systemTheme });
+    setState(themeAtom, { selectedTheme, systemTheme });
     applyTheme(selectedTheme, systemTheme);
   }
 
@@ -96,9 +98,9 @@ export function initializeThemeStore(): void {
 
   mediaQuery.addEventListener("change", () => {
     const systemTheme = mediaQuery.matches ? "dark" : "light";
-    const selectedTheme = useThemeStore.getState().selectedTheme;
+    const selectedTheme = getState(themeAtom).selectedTheme;
 
-    useThemeStore.setState({ systemTheme });
+    setState(themeAtom, { systemTheme });
     applyTheme(selectedTheme, systemTheme);
   });
 }

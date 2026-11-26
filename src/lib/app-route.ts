@@ -1,6 +1,9 @@
-import { z } from "zod";
+import * as Option from "effect/Option";
+import * as Schema from "effect/Schema";
 
-const IdSchema = z.uuid();
+const decodeId = Schema.decodeUnknownOption(
+  Schema.String.check(Schema.isUUID())
+);
 
 export type AppRoute =
   | { screen: "home" }
@@ -29,14 +32,13 @@ export function getContentRoute(
   return { screen: "channel", serverId, channelId };
 }
 
-const AppHistoryStateSchema = z.object({
-  runelinkNavigation: z.literal(true),
-});
+const isAppHistoryState = Schema.is(
+  Schema.Struct({ runelinkNavigation: Schema.Literal(true) })
+);
 
 function parseId(value: string): string | null {
   try {
-    const result = IdSchema.safeParse(decodeURIComponent(value));
-    return result.success ? result.data : null;
+    return Option.getOrNull(decodeId(decodeURIComponent(value)));
   } catch {
     return null;
   }
@@ -64,11 +66,9 @@ export function parseAppRoute(pathname: string, search = ""): AppRoute | null {
           ? "channel-members"
           : "channel";
     if (!serverId || !channelId) return null;
-    const messageId = IdSchema.safeParse(
-      new URLSearchParams(search).get("message")
-    );
-    return screen === "channel" && messageId.success
-      ? { screen, serverId, channelId, messageId: messageId.data }
+    const messageId = decodeId(new URLSearchParams(search).get("message"));
+    return screen === "channel" && Option.isSome(messageId)
+      ? { screen, serverId, channelId, messageId: messageId.value }
       : { screen, serverId, channelId };
   }
 
@@ -113,7 +113,7 @@ export function getAppRoutePath(route: AppRoute, messageId?: string): string {
 }
 
 export function isAppHistoryEntry(value: unknown): boolean {
-  return AppHistoryStateSchema.safeParse(value).success;
+  return isAppHistoryState(value);
 }
 
 export function writeAppRoute(route: AppRoute, mode: "push" | "replace"): void {

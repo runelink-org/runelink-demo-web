@@ -1,4 +1,5 @@
-import { getAuthSessionSnapshot } from "@/lib/auth-session-bridge";
+import { getState } from "@/lib/atom-registry";
+import { authAtom, getActiveAccount } from "@/lib/auth-store";
 import { sameUserRef } from "@/lib/account-storage";
 import type { ServerChannel } from "@runelink/sdk";
 import { useState } from "react";
@@ -35,13 +36,13 @@ export function DeleteChannelDialog({
       return;
     }
 
-    const account = getAuthSessionSnapshot().activeAccount;
+    const account = getActiveAccount(getState(authAtom));
     if (!account) {
       setError("Select an account before deleting a channel.");
       return;
     }
     const isCurrentAccount = () =>
-      sameUserRef(account, getAuthSessionSnapshot().activeAccount);
+      sameUserRef(account, getActiveAccount(getState(authAtom)));
     setIsDeleting(true);
     setError(null);
 

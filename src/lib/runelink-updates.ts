@@ -5,41 +5,33 @@ import type {
   FullServerMembership,
   Message,
   Server,
-  ServerMembership,
   ServerChannel,
-  ServerMember,
   User,
   UserRef,
   WsUpdate,
 } from "@runelink/sdk";
-import { handleUserDeletedUpdate } from "@/lib/account-deletion";
-import { getActiveAccount, useAuthStore } from "@/lib/auth-store";
-import { applyChannelUpserts, useChannelsStore } from "@/lib/channels-store";
-import { upsertMembership } from "@/lib/membership-utils";
-import { useMembershipsStore } from "@/lib/memberships-store";
-import { useMessagesStore } from "@/lib/messages-store";
-import { useNavigationStore } from "@/lib/navigation-store";
-import { serverUserKey, userRefKey } from "@/lib/runelink-store-utils";
+import { getState, setState } from "@/lib/atom-registry";
+import { authAtom, getActiveAccount } from "@/lib/auth-store";
+import {
+  applyChannelUpserts,
+  channelsAtom,
+  removeChannelFromCaches,
+} from "@/lib/channels-store";
+import {
+  removeMember,
+  removeMembership,
+  toServerMember,
+  toServerMembership,
+  upsertMember,
+  upsertMembership,
+} from "@/lib/membership-utils";
+import { membershipsAtom } from "@/lib/memberships-store";
+import { messagesAtom } from "@/lib/messages-store";
+import { navigationAtom } from "@/lib/navigation-store";
+import { userRefKey } from "@/lib/runelink-store-utils";
 import { debugRunelink } from "@/lib/runelink-debug";
-import { useServersStore } from "@/lib/servers-store";
-import { useUsersStore } from "@/lib/users-store";
-
-function upsertById<T extends { id: string }>(items: T[], nextItem: T): T[] {
-  return [...items.filter((item) => item.id !== nextItem.id), nextItem];
-}
-
-function removeById<T extends { id: string }>(items: T[], id: string): T[] {
-  return items.filter((item) => item.id !== id);
-}
-
-function omitRecordKey<T>(
-  record: Record<string, T>,
-  key: string
-): Record<string, T> {
-  return Object.fromEntries(
-    Object.entries(record).filter(([entryKey]) => entryKey !== key)
-  );
-}
+import { serversAtom } from "@/lib/servers-store";
+import { usersAtom } from "@/lib/users-store";
 
 function omitRecordKeys<T>(
   record: Record<string, T>,
@@ -52,97 +44,27 @@ function omitRecordKeys<T>(
   );
 }
 
-function filterRecord<T>(
+function omitRecordKey<T>(
   record: Record<string, T>,
-  predicate: (entryKey: string, value: T) => boolean
+  key: string
 ): Record<string, T> {
-  return Object.fromEntries(
-    Object.entries(record).filter(([entryKey, value]) =>
-      predicate(entryKey, value)
-    )
-  );
-}
-
-function upsertUser(users: User[], nextUser: User): User[] {
-  const key = userRefKey(nextUser);
-  return [...users.filter((user) => userRefKey(user) !== key), nextUser];
-}
-
-function upsertMember(
-  members: ServerMember[],
-  nextMember: ServerMember
-): ServerMember[] {
-  const key = userRefKey(nextMember.user);
-  return [
-    ...members.filter((member) => userRefKey(member.user) !== key),
-    nextMember,
-  ];
-}
-
-function removeMember(
-  members: ServerMember[],
-  userRef: UserRef
-): ServerMember[] {
-  const key = userRefKey(userRef);
-  return members.filter((member) => userRefKey(member.user) !== key);
-}
-
-function removeMembership(
-  memberships: ServerMembership[],
-  serverId: string
-): ServerMembership[] {
-  return memberships.filter((membership) => membership.server.id !== serverId);
-}
-
-function toServerMember(membership: FullServerMembership): ServerMember {
-  return {
-    user: membership.user,
-    role: membership.role,
-    joined_at: membership.joined_at,
-    updated_at: membership.updated_at,
-  };
-}
-
-function toServerMembership(
-  membership: FullServerMembership,
-  userRef: UserRef
-): ServerMembership {
-  return {
-    server: membership.server,
-    user_ref: userRef,
-    role: membership.role,
-    joined_at: membership.joined_at,
-    updated_at: membership.updated_at,
-    synced_at: membership.synced_at,
-  };
-}
-
-function isLoadedUser(user: User): boolean {
-  const state = useUsersStore.getState();
-  return userRefKey(user) in state.userByRefKey;
+  return omitRecordKeys(record, [key]);
 }
 
 function isLoadedServer(serverId: string): boolean {
-  const state = useServersStore.getState();
+  const state = getState(serversAtom);
   return (
     serverId in state.serverById || serverId in state.serverWithChannelsById
   );
 }
 
-function isLoadedTextChannel(textChannelId: string): boolean {
-  const state = useMessagesStore.getState();
-  return textChannelId in state.messagesByTextChannelId;
-}
-
 function getKnownTextChannelIdsForServer(serverId: string): string[] {
-  const channelState = useChannelsStore.getState();
-  const serverState = useServersStore.getState();
-
   return Array.from(
     new Set(
       [
-        ...(channelState.channelsByServerId[serverId] ?? []),
-        ...(serverState.serverWithChannelsById[serverId]?.channels ?? []),
+        ...(getState(channelsAtom).channelsByServerId[serverId] ?? []),
+        ...(getState(serversAtom).serverWithChannelsById[serverId]?.channels ??
+          []),
       ].flatMap((channel) =>
         channel.kind === "text" ? [channel.text_channel_id] : []
       )
@@ -150,47 +72,8 @@ function getKnownTextChannelIdsForServer(serverId: string): string[] {
   );
 }
 
-function removeServerMembershipState(serverId: string): void {
-  useMembershipsStore.setState((state) => ({
-    membershipsByUserRefKey: Object.fromEntries(
-      Object.entries(state.membershipsByUserRefKey).map(
-        ([userKey, memberships]) => [
-          userKey,
-          removeMembership(memberships, serverId),
-        ]
-      )
-    ),
-    membersByServerId: omitRecordKey(state.membersByServerId, serverId),
-    hasFetchedMembersByServerId: omitRecordKey(
-      state.hasFetchedMembersByServerId,
-      serverId
-    ),
-    memberByServerAndUserKey: filterRecord(
-      state.memberByServerAndUserKey,
-      (key) => !key.startsWith(`${serverId}:`)
-    ),
-  }));
-}
-
-function removeServerChannelState(serverId: string): void {
-  useChannelsStore.setState((state) => {
-    const nextChannelById = { ...state.channelById };
-
-    for (const channel of state.channelsByServerId[serverId] ?? []) {
-      delete nextChannelById[channel.id];
-    }
-
-    return {
-      channelsByServerId: omitRecordKey(state.channelsByServerId, serverId),
-      channelById: nextChannelById,
-      isLoadingByServerId: omitRecordKey(state.isLoadingByServerId, serverId),
-      errorByServerId: omitRecordKey(state.errorByServerId, serverId),
-    };
-  });
-}
-
 function removeMessageState(deletedTextChannelIds: string[]): void {
-  useMessagesStore.setState((state) => ({
+  setState(messagesAtom, (state) => ({
     hasFetchedByTextChannelId: omitRecordKeys(
       state.hasFetchedByTextChannelId,
       deletedTextChannelIds
@@ -210,8 +93,33 @@ function removeMessageState(deletedTextChannelIds: string[]): void {
   }));
 }
 
-function removeServerNavigationState(serverId: string): void {
-  useNavigationStore.setState((state) => ({
+function removeLoadedServerState(serverId: string): void {
+  const deletedTextChannelIds = getKnownTextChannelIdsForServer(serverId);
+
+  setState(membershipsAtom, (state) => ({
+    membershipsByUserRefKey: Object.fromEntries(
+      Object.entries(state.membershipsByUserRefKey).map(
+        ([userKey, memberships]) => [
+          userKey,
+          removeMembership(memberships, serverId),
+        ]
+      )
+    ),
+    membersByServerId: omitRecordKey(state.membersByServerId, serverId),
+    hasFetchedMembersByServerId: omitRecordKey(
+      state.hasFetchedMembersByServerId,
+      serverId
+    ),
+  }));
+  removeMessageState(deletedTextChannelIds);
+  setState(channelsAtom, (state) => ({
+    channelsByServerId: omitRecordKey(state.channelsByServerId, serverId),
+    channelById: omitRecordKeys(
+      state.channelById,
+      (state.channelsByServerId[serverId] ?? []).map((channel) => channel.id)
+    ),
+  }));
+  setState(navigationAtom, (state) => ({
     selectedServerId:
       state.selectedServerId === serverId ? null : state.selectedServerId,
     selectedChannelIdByServerId: omitRecordKey(
@@ -219,11 +127,7 @@ function removeServerNavigationState(serverId: string): void {
       serverId
     ),
   }));
-}
-
-function removeServerStoreState(serverId: string): void {
-  useServersStore.setState((state) => ({
-    servers: removeById(state.servers, serverId),
+  setState(serversAtom, (state) => ({
     serverById: omitRecordKey(state.serverById, serverId),
     serverWithChannelsById: omitRecordKey(
       state.serverWithChannelsById,
@@ -232,193 +136,85 @@ function removeServerStoreState(serverId: string): void {
   }));
 }
 
-function removeLoadedServerState(serverId: string): void {
-  const deletedTextChannelIds = getKnownTextChannelIdsForServer(serverId);
-
-  removeServerMembershipState(serverId);
-  removeMessageState(deletedTextChannelIds);
-  removeServerChannelState(serverId);
-  removeServerNavigationState(serverId);
-  removeServerStoreState(serverId);
-}
-
-function removeChannelStoreState(serverId: string, channelId: string): void {
-  useChannelsStore.setState((state) => {
-    const nextChannels = removeById(
-      state.channelsByServerId[serverId] ?? [],
-      channelId
-    );
-
-    return {
-      channelsByServerId: {
-        ...state.channelsByServerId,
-        [serverId]: nextChannels,
-      },
-      channelById: omitRecordKey(state.channelById, channelId),
-    };
-  });
-
-  useServersStore.setState((state) => {
-    if (!(serverId in state.serverWithChannelsById)) {
-      return {};
-    }
-
-    return {
-      serverWithChannelsById: {
-        ...state.serverWithChannelsById,
-        [serverId]: {
-          ...state.serverWithChannelsById[serverId],
-          channels: removeById(
-            state.serverWithChannelsById[serverId].channels,
-            channelId
-          ),
-        },
-      },
-    };
-  });
-}
-
-function removeChannelNavigationState(
-  serverId: string,
-  channelId: string
-): void {
-  useNavigationStore.setState((state) => ({
-    selectedChannelIdByServerId: {
-      ...state.selectedChannelIdByServerId,
-      [serverId]:
-        state.selectedChannelIdByServerId[serverId] === channelId
-          ? null
-          : (state.selectedChannelIdByServerId[serverId] ?? null),
-    },
-  }));
-}
-
-function shouldApplyMembershipUpdate(
-  membership: FullServerMembership
-): boolean {
-  const state = useMembershipsStore.getState();
-  const userKey = userRefKey(membership.user);
-
-  return (
-    userKey in state.membershipsByUserRefKey ||
-    membership.server.id in state.membersByServerId ||
-    serverUserKey(membership.server.id, membership.user) in
-      state.memberByServerAndUserKey
-  );
-}
-
 function handleUserUpsert(user: User): void {
-  if (!isLoadedUser(user)) {
+  const key = userRefKey(user);
+  if (!(key in getState(usersAtom).userByRefKey)) {
     return;
   }
 
-  useUsersStore.setState((state) => ({
-    users: upsertUser(state.users, user),
-    userByRefKey: {
-      ...state.userByRefKey,
-      [userRefKey(user)]: user,
-    },
+  setState(usersAtom, (state) => ({
+    userByRefKey: { ...state.userByRefKey, [key]: user },
   }));
 }
 
 function handleUserDeleted(userRef: UserRef): void {
-  handleUserDeletedUpdate(userRef);
-
   const userKey = userRefKey(userRef);
-  if (!(userKey in useUsersStore.getState().userByRefKey)) {
+  if (!(userKey in getState(usersAtom).userByRefKey)) {
     return;
   }
 
-  useUsersStore.setState((state) => {
-    return {
-      users: state.users.filter((user) => userRefKey(user) !== userKey),
-      userByRefKey: omitRecordKey(state.userByRefKey, userKey),
-      associatedHostsByUserRefKey: omitRecordKey(
-        state.associatedHostsByUserRefKey,
-        userKey
-      ),
-    };
-  });
+  setState(usersAtom, (state) => ({
+    userByRefKey: omitRecordKey(state.userByRefKey, userKey),
+  }));
 }
 
 function handleMembershipUpsert(membership: FullServerMembership): void {
-  if (!shouldApplyMembershipUpdate(membership)) {
+  const state = getState(membershipsAtom);
+  const userKey = userRefKey(membership.user);
+  const serverId = membership.server.id;
+  if (
+    !(userKey in state.membershipsByUserRefKey) &&
+    !(serverId in state.membersByServerId)
+  ) {
     debugRunelink("skip membership_upserted", {
-      serverId: membership.server.id,
+      serverId,
       user: membership.user,
     });
     return;
   }
 
   debugRunelink("apply membership_upserted", {
-    serverId: membership.server.id,
+    serverId,
     user: membership.user,
   });
 
-  const member = toServerMember(membership);
-  const membershipEntry = toServerMembership(membership, membership.user);
-  const userKey = userRefKey(membership.user);
-  const memberKey = serverUserKey(membership.server.id, membership.user);
-
-  useMembershipsStore.setState((state) => {
-    const nextState: Partial<typeof state> = {};
-
-    if (userKey in state.membershipsByUserRefKey) {
-      nextState.membershipsByUserRefKey = {
+  setState(membershipsAtom, (state) => ({
+    ...(userKey in state.membershipsByUserRefKey && {
+      membershipsByUserRefKey: {
         ...state.membershipsByUserRefKey,
         [userKey]: upsertMembership(
           state.membershipsByUserRefKey[userKey] ?? [],
-          membershipEntry
+          toServerMembership(membership)
         ),
-      };
-    }
-
-    if (membership.server.id in state.membersByServerId) {
-      nextState.membersByServerId = {
+      },
+    }),
+    ...(serverId in state.membersByServerId && {
+      membersByServerId: {
         ...state.membersByServerId,
-        [membership.server.id]: upsertMember(
-          state.membersByServerId[membership.server.id] ?? [],
-          member
+        [serverId]: upsertMember(
+          state.membersByServerId[serverId] ?? [],
+          toServerMember(membership)
         ),
-      };
-    }
-
-    if (
-      membership.server.id in state.membersByServerId ||
-      memberKey in state.memberByServerAndUserKey
-    ) {
-      nextState.memberByServerAndUserKey = {
-        ...state.memberByServerAndUserKey,
-        [memberKey]: member,
-      };
-    }
-
-    return nextState;
-  });
+      },
+    }),
+  }));
 }
 
 function handleMembershipDeleted(serverId: string, userRef: UserRef): void {
-  const state = useMembershipsStore.getState();
-  const activeAccount = getActiveAccount(useAuthStore.getState());
+  const state = getState(membershipsAtom);
+  const activeAccount = getActiveAccount(getState(authAtom));
   const userKey = userRefKey(userRef);
-  const memberKey = serverUserKey(serverId, userRef);
   const hasMembership = (state.membershipsByUserRefKey[userKey] ?? []).some(
     (membership) => membership.server.id === serverId
   );
   const hasMembers = serverId in state.membersByServerId;
-  const hasMember = memberKey in state.memberByServerAndUserKey;
-  const isActiveAccountMembership =
-    activeAccount !== null && userRefKey(activeAccount) === userKey;
 
-  if (!hasMembership && !hasMembers && !hasMember) {
-    debugRunelink("skip membership_deleted", {
-      serverId,
-      userRef,
-    });
+  if (!hasMembership && !hasMembers) {
+    debugRunelink("skip membership_deleted", { serverId, userRef });
     return;
   }
 
-  if (isActiveAccountMembership) {
+  if (activeAccount !== null && userRefKey(activeAccount) === userKey) {
     debugRunelink("remove server state for active account membership_deleted", {
       serverId,
       userRef,
@@ -427,84 +223,51 @@ function handleMembershipDeleted(serverId: string, userRef: UserRef): void {
     return;
   }
 
-  debugRunelink("apply membership_deleted", {
-    serverId,
-    userRef,
-  });
+  debugRunelink("apply membership_deleted", { serverId, userRef });
 
-  useMembershipsStore.setState((currentState) => {
-    const nextState: Partial<typeof currentState> = {};
-
-    if (hasMembership) {
-      nextState.membershipsByUserRefKey = {
-        ...currentState.membershipsByUserRefKey,
+  setState(membershipsAtom, (state) => ({
+    ...(hasMembership && {
+      membershipsByUserRefKey: {
+        ...state.membershipsByUserRefKey,
         [userKey]: removeMembership(
-          currentState.membershipsByUserRefKey[userKey] ?? [],
+          state.membershipsByUserRefKey[userKey] ?? [],
           serverId
         ),
-      };
-    }
-
-    if (hasMembers) {
-      nextState.membersByServerId = {
-        ...currentState.membersByServerId,
+      },
+    }),
+    ...(hasMembers && {
+      membersByServerId: {
+        ...state.membersByServerId,
         [serverId]: removeMember(
-          currentState.membersByServerId[serverId] ?? [],
+          state.membersByServerId[serverId] ?? [],
           userRef
         ),
-      };
-    }
-
-    if (hasMember) {
-      const nextMemberByServerAndUserKey = {
-        ...currentState.memberByServerAndUserKey,
-      };
-      delete nextMemberByServerAndUserKey[memberKey];
-      nextState.memberByServerAndUserKey = nextMemberByServerAndUserKey;
-    }
-
-    return nextState;
-  });
+      },
+    }),
+  }));
 }
 
 function handleServerUpsert(server: Server): void {
+  const { serverById, serverWithChannelsById } = getState(serversAtom);
   const previous =
-    useServersStore.getState().serverById[server.id] ??
-    useServersStore.getState().serverWithChannelsById[server.id]?.server;
+    serverById[server.id] ?? serverWithChannelsById[server.id]?.server;
   if (previous && compareResourceVersions(previous, server) > 0) return;
   if (!isLoadedServer(server.id)) {
     return;
   }
 
-  useServersStore.setState((state) => {
-    const nextState: Partial<typeof state> = {
-      servers: upsertById(state.servers, server),
-      serverById: {
-        ...state.serverById,
-        [server.id]: server,
-      },
-    };
-
-    if (server.id in state.serverWithChannelsById) {
-      nextState.serverWithChannelsById = {
-        ...state.serverWithChannelsById,
-        [server.id]: {
-          ...state.serverWithChannelsById[server.id],
-          server,
+  setState(serversAtom, (state) => {
+    const withChannels = state.serverWithChannelsById[server.id];
+    return {
+      serverById: { ...state.serverById, [server.id]: server },
+      ...(withChannels && {
+        serverWithChannelsById: {
+          ...state.serverWithChannelsById,
+          [server.id]: { ...withChannels, server },
         },
-      };
-    }
-
-    return nextState;
+      }),
+    };
   });
-}
-
-function handleServerDeleted(serverId: string): void {
-  if (!isLoadedServer(serverId)) {
-    return;
-  }
-
-  removeLoadedServerState(serverId);
 }
 
 function handleChannelUpsert(channel: ServerChannel): void {
@@ -521,27 +284,33 @@ function handleChannelDeleted(serverId: string, channelId: string): void {
   }
 
   const channel =
-    useChannelsStore.getState().channelById[channelId] ??
-    useServersStore
-      .getState()
-      .serverWithChannelsById[serverId]?.channels.find(
-        (channel) => channel.id === channelId
-      );
+    getState(channelsAtom).channelById[channelId] ??
+    getState(serversAtom).serverWithChannelsById[serverId]?.channels.find(
+      (channel) => channel.id === channelId
+    );
   if (channel?.kind === "text") {
     removeMessageState([channel.text_channel_id]);
   }
-  removeChannelStoreState(serverId, channelId);
-  removeChannelNavigationState(serverId, channelId);
+  removeChannelFromCaches(serverId, channelId);
+  setState(navigationAtom, (state) => ({
+    selectedChannelIdByServerId: {
+      ...state.selectedChannelIdByServerId,
+      [serverId]:
+        state.selectedChannelIdByServerId[serverId] === channelId
+          ? null
+          : (state.selectedChannelIdByServerId[serverId] ?? null),
+    },
+  }));
 }
 
 function handleMessageUpsert(message: Message): void {
   captureChannelNavigationUpdate(message);
   const textChannelId = message.text_channel_id;
-  if (!isLoadedTextChannel(textChannelId)) {
+  if (!(textChannelId in getState(messagesAtom).messagesByTextChannelId)) {
     return;
   }
 
-  useMessagesStore.setState((state) => ({
+  setState(messagesAtom, (state) => ({
     messagesByTextChannelId: {
       ...state.messagesByTextChannelId,
       [textChannelId]: mergeMessages(
@@ -552,6 +321,8 @@ function handleMessageUpsert(message: Message): void {
   }));
 }
 
+// Applies an update to the data this client has loaded. Replies to this
+// client's own edits are applied the same way.
 export function handleRunelinkUpdate(update: WsUpdate): void {
   debugRunelink("ws update", update);
   switch (update.type) {
@@ -571,7 +342,9 @@ export function handleRunelinkUpdate(update: WsUpdate): void {
       handleServerUpsert(update.data);
       break;
     case "server_deleted":
-      handleServerDeleted(update.data.server_id);
+      if (isLoadedServer(update.data.server_id)) {
+        removeLoadedServerState(update.data.server_id);
+      }
       break;
     case "channel_upserted":
       handleChannelUpsert(update.data);

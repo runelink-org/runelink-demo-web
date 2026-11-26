@@ -7,10 +7,12 @@ import { buttonVariants } from "@/components/ui/button";
 import { getAppRoutePath } from "@/lib/app-route";
 import { useContextActionsMenu } from "@/lib/use-context-actions-menu";
 import { cn } from "@/lib/utils";
-import { getActiveAccount, useAuthStore } from "@/lib/auth-store";
+import { getState } from "@/lib/atom-registry";
+import { authAtom, getActiveAccount } from "@/lib/auth-store";
 import { sameUserRef } from "@/lib/account-storage";
-import { useMessagesStore } from "@/lib/messages-store";
-import { useRunelinkConnectionStore } from "@/lib/runelink-connection-store";
+import { fetchMessagesByTextChannel } from "@/lib/messages-store";
+import { connectionAtom } from "@/lib/runelink-session";
+import { runPromise } from "@/lib/runtime";
 
 const PREFETCH_DELAY_MS = 150;
 
@@ -46,8 +48,8 @@ export function ChannelListItem({
 
   function prefetch() {
     cancelPrefetch();
-    const account = getActiveAccount(useAuthStore.getState());
-    const connection = useRunelinkConnectionStore.getState();
+    const account = getActiveAccount(getState(authAtom));
+    const connection = getState(connectionAtom);
     if (
       channel.kind !== "text" ||
       !account ||
@@ -56,15 +58,14 @@ export function ChannelListItem({
     )
       return;
 
-    void useMessagesStore
-      .getState()
-      .fetchMessagesByTextChannel(
+    runPromise(
+      fetchMessagesByTextChannel(
         channel.text_channel_id,
         host === account.host ? null : host
       )
-      .catch(() => {
-        // Opening the channel retries a failed background fetch.
-      });
+    ).catch(() => {
+      // Opening the channel retries a failed background fetch.
+    });
   }
   return (
     <div

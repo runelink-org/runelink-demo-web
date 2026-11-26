@@ -1,12 +1,16 @@
 import assert from "node:assert/strict";
 import { after, before, beforeEach, test } from "node:test";
+import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
 import { createServer } from "vite";
 
 let server;
-let store;
-let requests;
+let messages;
+let registry;
 let hints;
 let updates;
+let run;
+const requests = [];
 const storage = new Map();
 const originalWindow = globalThis.window;
 const message = {
@@ -33,29 +37,47 @@ before(async () => {
     appType: "custom",
     // Keep a running dev server's optimized dependencies intact.
     cacheDir: "node_modules/.vite-test",
-    plugins: [
-      {
-        name: "controlled-message-requests",
-        enforce: "pre",
-        load(id) {
-          if (!id.endsWith("/src/lib/runelink-request.ts")) return;
-          return `export const requests = [];
-          export function requestExpected(type, request) {
-            return new Promise((resolve, reject) => {
-              requests.push({ type, request, resolve, reject });
-            });
-          }`;
-        },
-      },
-    ],
   });
+  const { RunelinkSession } = await server.ssrLoadModule(
+    "/src/lib/runelink-session.ts"
+  );
+  // Requests wait until a test settles them.
+  const session = Layer.succeed(
+    RunelinkSession,
+    RunelinkSession.of({
+      request: (request) =>
+        Effect.callback((resume) => {
+          requests.push({
+            type: request.type,
+            request,
+            resolve: (reply) => resume(Effect.succeed(reply)),
+            reject: (error) => resume(Effect.fail(error)),
+          });
+        }),
+    })
+  );
+  run = (effect) => Effect.runPromise(Effect.provide(effect, session));
+  ({ appAtomRegistry: registry } = await server.ssrLoadModule(
+    "/src/lib/atom-registry.ts"
+  ));
   hints = await server.ssrLoadModule("/src/lib/channel-navigation-hints.ts");
   updates = await server.ssrLoadModule("/src/lib/runelink-updates.ts");
-  ({ requests } = await server.ssrLoadModule("/src/lib/runelink-request.ts"));
-  ({ useMessagesStore: store } = await server.ssrLoadModule(
-    "/src/lib/messages-store.ts"
-  ));
+  messages = await server.ssrLoadModule("/src/lib/messages-store.ts");
 });
+
+function state() {
+  return registry.get(messages.messagesAtom);
+}
+
+function fetchMessages(textChannelId, targetHost) {
+  return run(messages.fetchMessagesByTextChannel(textChannelId, targetHost));
+}
+
+function startPrefetch(account, route, cachedMessages) {
+  return run(
+    hints.startChannelNavigationPrefetch(account, route, cachedMessages)
+  );
+}
 
 after(async () => {
   globalThis.window = originalWindow;
@@ -63,7 +85,7 @@ after(async () => {
 });
 
 beforeEach(() => {
-  store.getState().reset();
+  messages.resetMessages();
   requests.length = 0;
   storage.clear();
 });
@@ -73,57 +95,53 @@ function reply(request, messages = [message]) {
 }
 
 test("prefetch and selection share an in-flight request and retain cached history", async () => {
-  const prefetch = store
-    .getState()
-    .fetchMessagesByTextChannel("channel", "peer.example");
-  const selection = store
-    .getState()
-    .fetchMessagesByTextChannel("channel", "peer.example");
-  assert.equal(prefetch, selection);
+  const prefetch = fetchMessages("channel", "peer.example");
+  const selection = fetchMessages("channel", "peer.example");
   assert.equal(requests.length, 1);
   assert.equal(requests[0].request.data.target_host, "peer.example");
   reply(requests[0]);
-  await prefetch;
-  assert.deepEqual(
-    await store.getState().fetchMessagesByTextChannel("channel"),
-    [message]
-  );
+  assert.deepEqual(await prefetch, [message]);
+  assert.deepEqual(await selection, [message]);
+  assert.deepEqual(await fetchMessages("channel"), [message]);
   assert.equal(requests.length, 1);
-  assert.equal(store.getState().isLoadingByTextChannelId.channel, false);
+  assert.equal(state().isLoadingByTextChannelId.channel, false);
 });
 
 test("history preserves live edits received during a prefetch", async () => {
-  const pending = store.getState().fetchMessagesByTextChannel("channel");
-  assert.deepEqual(store.getState().messagesByTextChannelId.channel, []);
+  const pending = fetchMessages("channel");
+  assert.deepEqual(state().messagesByTextChannelId.channel, []);
   const edited = {
     ...message,
     body: "edited",
     updated_at: "2026-11-10T12:01:00Z",
   };
-  store.setState({ messagesByTextChannelId: { channel: [edited] } });
+  registry.update(messages.messagesAtom, (state) => ({
+    ...state,
+    messagesByTextChannelId: { channel: [edited] },
+  }));
   reply(requests[0]);
   await pending;
-  assert.deepEqual(store.getState().messagesByTextChannelId.channel, [edited]);
+  assert.deepEqual(state().messagesByTextChannelId.channel, [edited]);
 });
 
 test("a failed prefetch can retry when the channel opens", async () => {
-  const pending = store.getState().fetchMessagesByTextChannel("channel");
+  const pending = fetchMessages("channel");
   requests[0].reject(new Error("offline"));
   await assert.rejects(pending, /offline/);
-  assert.equal(store.getState().isLoadingByTextChannelId.channel, false);
-  const retry = store.getState().fetchMessagesByTextChannel("channel");
-  assert.equal(store.getState().errorByTextChannelId.channel, null);
+  assert.equal(state().isLoadingByTextChannelId.channel, false);
+  const retry = fetchMessages("channel");
+  assert.equal(state().errorByTextChannelId.channel, null);
   assert.equal(requests.length, 2);
   reply(requests[1]);
   await retry;
-  assert.equal(store.getState().hasFetchedByTextChannelId.channel, true);
+  assert.equal(state().hasFetchedByTextChannelId.channel, true);
 });
 
 for (const fails of [false, true]) {
   test(`reset ignores an old account's late ${fails ? "failure" : "history"} without disturbing a new fetch`, async () => {
-    const old = store.getState().fetchMessagesByTextChannel("channel");
-    store.getState().reset();
-    const current = store.getState().fetchMessagesByTextChannel("channel");
+    const old = fetchMessages("channel");
+    messages.resetMessages();
+    const current = fetchMessages("channel");
     if (fails) {
       requests[0].reject(new Error("old failure"));
       await assert.rejects(old, /old failure/);
@@ -131,17 +149,16 @@ for (const fails of [false, true]) {
       reply(requests[0]);
       await old;
     }
-    assert.deepEqual(store.getState().messagesByTextChannelId.channel, []);
-    assert.equal(store.getState().errorByTextChannelId.channel, null);
-    assert.equal(store.getState().isLoadingByTextChannelId.channel, true);
-    assert.equal(
-      store.getState().fetchMessagesByTextChannel("channel"),
-      current
-    );
+    assert.deepEqual(state().messagesByTextChannelId.channel, []);
+    assert.equal(state().errorByTextChannelId.channel, null);
+    assert.equal(state().isLoadingByTextChannelId.channel, true);
+    const again = fetchMessages("channel");
+    assert.equal(requests.length, 2);
     reply(requests[1], []);
     await current;
-    assert.deepEqual(store.getState().messagesByTextChannelId.channel, []);
-    assert.equal(store.getState().hasFetchedByTextChannelId.channel, true);
+    await again;
+    assert.deepEqual(state().messagesByTextChannelId.channel, []);
+    assert.equal(state().hasFetchedByTextChannelId.channel, true);
   });
 }
 
@@ -167,22 +184,22 @@ function remember(
 
 test("all known channel mappings can start a request in a new tab, scoped by account", () => {
   remember();
-  hints.startChannelNavigationPrefetch({ ...account, name: "bob" }, route);
+  startPrefetch({ ...account, name: "bob" }, route);
   assert.equal(requests.length, 0);
-  hints.startChannelNavigationPrefetch(account, {
+  startPrefetch(account, {
     ...route,
     channelId: otherChannelId,
   });
   assert.equal(requests.length, 1);
   assert.equal(requests[0].request.data.text_channel_id, otherTextId);
   assert.equal(requests[0].request.data.target_host, "peer.example");
-  assert.deepEqual(store.getState().messagesByTextChannelId, {});
+  assert.deepEqual(state().messagesByTextChannelId, {});
   reply(requests[0], []);
 });
 
 test("speculative history stays hidden until metadata confirms it, retaining live edits", async () => {
   remember();
-  hints.startChannelNavigationPrefetch(account, route);
+  startPrefetch(account, route);
   reply(requests[0], [hintedMessage]);
   await Promise.resolve();
   await Promise.resolve();
@@ -192,70 +209,62 @@ test("speculative history stays hidden until metadata confirms it, retaining liv
     updated_at: "2026-11-10T12:01:00Z",
   };
   updates.handleRunelinkUpdate({ type: "message_upserted", data: edited });
-  assert.deepEqual(store.getState().messagesByTextChannelId, {});
-  await store.getState().fetchMessagesByTextChannel(textId, "peer.example");
+  assert.deepEqual(state().messagesByTextChannelId, {});
+  await fetchMessages(textId, "peer.example");
   assert.equal(requests.length, 1);
-  assert.deepEqual(store.getState().messagesByTextChannelId[textId], [edited]);
+  assert.deepEqual(state().messagesByTextChannelId[textId], [edited]);
 });
 
 test("confirming metadata while speculation is pending shares the request", async () => {
   remember();
-  hints.startChannelNavigationPrefetch(account, route);
-  const selected = store
-    .getState()
-    .fetchMessagesByTextChannel(textId, "peer.example");
+  startPrefetch(account, route);
+  const selected = fetchMessages(textId, "peer.example");
   assert.equal(requests.length, 1);
   reply(requests[0], [hintedMessage]);
   await selected;
-  assert.equal(store.getState().hasFetchedByTextChannelId[textId], true);
+  assert.equal(state().hasFetchedByTextChannelId[textId], true);
 });
 
 for (const changedHost of [false, true]) {
   test(`a stale ${changedHost ? "host" : "text-channel ID"} is discarded and fresh metadata wins`, async () => {
     remember();
-    hints.startChannelNavigationPrefetch(account, route);
+    startPrefetch(account, route);
     const correctId = changedHost ? textId : otherTextId;
     const correctHost = changedHost ? "new-peer.example" : "peer.example";
-    const selected = store
-      .getState()
-      .fetchMessagesByTextChannel(correctId, correctHost);
+    const selected = fetchMessages(correctId, correctHost);
     assert.equal(requests.length, 2);
     reply(requests[0], [hintedMessage]);
     reply(requests[1], []);
     await selected;
-    assert.deepEqual(store.getState().messagesByTextChannelId, {
+    assert.deepEqual(state().messagesByTextChannelId, {
       [correctId]: [],
     });
-    assert.equal(store.getState().hasFetchedByTextChannelId[correctId], true);
+    assert.equal(state().hasFetchedByTextChannelId[correctId], true);
   });
 }
 
 test("failed speculation falls back to an ordinary request", async () => {
   remember();
-  hints.startChannelNavigationPrefetch(account, route);
+  startPrefetch(account, route);
   requests[0].reject(new Error("stale hint"));
-  const selected = store
-    .getState()
-    .fetchMessagesByTextChannel(textId, "peer.example");
+  const selected = fetchMessages(textId, "peer.example");
   // Allow the failed speculative request to reach the fallback.
   await new Promise((resolve) => setImmediate(resolve));
   assert.equal(requests.length, 2);
   reply(requests[1], []);
   await selected;
-  assert.equal(store.getState().errorByTextChannelId[textId], null);
+  assert.equal(state().errorByTextChannelId[textId], null);
 });
 
 test("reset during speculation prevents a fallback request under the next account", async () => {
   remember();
-  hints.startChannelNavigationPrefetch(account, route);
-  const selected = store
-    .getState()
-    .fetchMessagesByTextChannel(textId, "peer.example");
-  store.getState().reset();
+  startPrefetch(account, route);
+  const selected = fetchMessages(textId, "peer.example");
+  messages.resetMessages();
   requests[0].reject(new Error("old account"));
   await selected;
   assert.equal(requests.length, 1);
-  assert.deepEqual(store.getState().messagesByTextChannelId, {});
+  assert.deepEqual(state().messagesByTextChannelId, {});
 });
 
 test("fresh snapshots remove deleted channel hints and categories, preserving other accounts", () => {
@@ -270,20 +279,20 @@ test("fresh snapshots remove deleted channel hints and categories, preserving ot
     }
   );
   remember("peer.example", [{ id: channelId, kind: "category" }]);
-  hints.startChannelNavigationPrefetch(account, route);
-  hints.startChannelNavigationPrefetch(account, {
+  startPrefetch(account, route);
+  startPrefetch(account, {
     ...route,
     channelId: otherChannelId,
   });
   assert.equal(requests.length, 0);
-  hints.startChannelNavigationPrefetch({ ...account, name: "bob" }, route);
+  startPrefetch({ ...account, name: "bob" }, route);
   assert.equal(requests.length, 1);
   reply(requests[0], []);
 });
 
 test("blocked or malformed storage falls back without disrupting normal loading", async () => {
   storage.set("runelink.demo.channel-navigation-hints", "{bad json");
-  hints.startChannelNavigationPrefetch(account, route);
+  startPrefetch(account, route);
   assert.equal(requests.length, 0);
   const setItem = window.localStorage.setItem;
   window.localStorage.setItem = () => {
@@ -294,13 +303,13 @@ test("blocked or malformed storage falls back without disrupting normal loading"
   } finally {
     window.localStorage.setItem = setItem;
   }
-  const selected = store.getState().fetchMessagesByTextChannel(textId);
+  const selected = fetchMessages(textId);
   reply(requests[0], []);
   await selected;
 });
 
 test("startup does not refetch a channel already cached or loading on reconnect", () => {
   remember();
-  hints.startChannelNavigationPrefetch(account, route, { [textId]: [] });
+  startPrefetch(account, route, { [textId]: [] });
   assert.equal(requests.length, 0);
 });

@@ -28,12 +28,16 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { accountStorageKey, sameUserRef } from "@/lib/account-storage";
+import { useAtomValue } from "@effect/atom-react";
 import {
+  authAtom,
   getActiveAccount,
   getActiveAccountAuth,
-  useAuthStore,
+  logoutActive,
+  removeAccount,
+  selectAccount as openAccount,
 } from "@/lib/auth-store";
-import { useRunelinkConnectionStore } from "@/lib/runelink-connection-store";
+import { connectionAtom } from "@/lib/runelink-session";
 
 type ProfileSelectorProps = {
   isAuthScreenOpen: boolean;
@@ -58,18 +62,23 @@ export function ProfileSelector({
   const contextMenu = useContextActionsMenu();
   const [accountPendingDelete, setAccountPendingDelete] =
     useState<UserRef | null>(null);
-  const accounts = useAuthStore((state) => state.config.accounts);
-  const accountAuthByKey = useAuthStore((state) => state.authCache.accounts);
-  const activeAccount = useAuthStore(getActiveAccount);
-  const activeAuth = useAuthStore(getActiveAccountAuth);
-  const openAccount = useAuthStore((state) => state.openAccount);
-  const logoutActive = useAuthStore((state) => state.logoutActive);
-  const removeAccount = useAuthStore((state) => state.removeAccount);
-  const connectionStatus = useRunelinkConnectionStore((state) => state.status);
-  const capabilityIssues = useRunelinkConnectionStore(
+  const accounts = useAtomValue(authAtom, (state) => state.config.accounts);
+  const accountAuthByKey = useAtomValue(
+    authAtom,
+    (state) => state.authCache.accounts
+  );
+  const activeAccount = useAtomValue(authAtom, getActiveAccount);
+  const activeAuth = useAtomValue(authAtom, getActiveAccountAuth);
+  const connectionStatus = useAtomValue(
+    connectionAtom,
+    (state) => state.status
+  );
+  const capabilityIssues = useAtomValue(
+    connectionAtom,
     (state) => state.capabilityIssues
   );
-  const incompatibleHost = useRunelinkConnectionStore(
+  const incompatibleHost = useAtomValue(
+    connectionAtom,
     (state) => state.incompatibleHost
   );
   const isLimited =

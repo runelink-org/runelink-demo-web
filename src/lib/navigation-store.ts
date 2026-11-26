@@ -1,4 +1,4 @@
-import { create } from "zustand";
+import { appAtomRegistry, stateAtom } from "@/lib/atom-registry";
 import {
   bindStoreToActiveAccount,
   type ChannelId,
@@ -8,50 +8,44 @@ import {
 type NavigationState = {
   selectedServerId: ServerId | null;
   selectedChannelIdByServerId: Record<string, ChannelId | null>;
-  selectServer: (serverId: ServerId | null) => void;
-  selectChannel: (serverId: ServerId, channelId: ChannelId | null) => void;
-  reset: () => void;
 };
 
-const initialState = {
+const initialState: NavigationState = {
   selectedServerId: null,
   selectedChannelIdByServerId: {},
 };
 
-export const useNavigationStore = create<NavigationState>((set) => ({
-  ...initialState,
-  selectServer(serverId) {
-    set((state) =>
-      state.selectedServerId === serverId
-        ? state
-        : { selectedServerId: serverId }
-    );
-  },
-  selectChannel(serverId, channelId) {
-    set((state) => {
-      const currentChannelId =
-        state.selectedChannelIdByServerId[serverId] ?? null;
-      if (
-        state.selectedServerId === serverId &&
-        currentChannelId === channelId
-      ) {
-        return state;
-      }
+export const navigationAtom = stateAtom(initialState);
 
-      return {
-        selectedServerId: serverId,
-        selectedChannelIdByServerId: {
-          ...state.selectedChannelIdByServerId,
-          [serverId]: channelId,
-        },
-      };
-    });
-  },
-  reset() {
-    set(initialState);
-  },
-}));
+export function selectServer(serverId: ServerId | null): void {
+  appAtomRegistry.update(navigationAtom, (state) =>
+    state.selectedServerId === serverId
+      ? state
+      : { ...state, selectedServerId: serverId }
+  );
+}
+
+export function selectChannel(
+  serverId: ServerId,
+  channelId: ChannelId | null
+): void {
+  appAtomRegistry.update(navigationAtom, (state) => {
+    const currentChannelId =
+      state.selectedChannelIdByServerId[serverId] ?? null;
+    if (state.selectedServerId === serverId && currentChannelId === channelId) {
+      return state;
+    }
+
+    return {
+      selectedServerId: serverId,
+      selectedChannelIdByServerId: {
+        ...state.selectedChannelIdByServerId,
+        [serverId]: channelId,
+      },
+    };
+  });
+}
 
 bindStoreToActiveAccount(() => {
-  useNavigationStore.getState().reset();
+  appAtomRegistry.set(navigationAtom, initialState);
 });

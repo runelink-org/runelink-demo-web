@@ -63,7 +63,7 @@ type PressState = {
 
 // Where a pointer would drop
 function dropTargetAt(
-  channels: ServerChannel[],
+  channels: ReadonlyArray<ServerChannel>,
   rows: ChannelRow[],
   draggedId: string,
   clientX: number,

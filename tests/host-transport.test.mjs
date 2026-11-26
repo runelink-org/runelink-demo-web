@@ -1,10 +1,17 @@
 import assert from "node:assert/strict";
 import { after, before, test } from "node:test";
+import * as Clock from "effect/Clock";
+import * as Duration from "effect/Duration";
+import * as Effect from "effect/Effect";
+import * as Exit from "effect/Exit";
+import * as Layer from "effect/Layer";
+import * as Scope from "effect/Scope";
+import * as Socket from "effect/socket/Socket";
 import { createServer } from "vite";
 
 let server;
-let resolveHostTransport;
-let useHostTransportPrompt;
+let hostTransport;
+let registry;
 let storage;
 let calls;
 const originalFetch = globalThis.fetch;
@@ -17,8 +24,10 @@ before(async () => {
     // Keep a running dev server's optimized dependencies intact.
     cacheDir: "node_modules/.vite-test",
   });
-  ({ resolveHostTransport, useHostTransportPrompt } =
-    await server.ssrLoadModule("/src/lib/host-transport.ts"));
+  hostTransport = await server.ssrLoadModule("/src/lib/host-transport.ts");
+  ({ appAtomRegistry: registry } = await server.ssrLoadModule(
+    "/src/lib/atom-registry.ts"
+  ));
 });
 
 after(async () => {
@@ -26,6 +35,16 @@ after(async () => {
   globalThis.window = originalWindow;
   await server?.close();
 });
+
+function resolveHostTransport(host, signal) {
+  return Effect.runPromise(hostTransport.resolveHostTransport(host), {
+    signal,
+  });
+}
+
+function getPrompt() {
+  return registry.get(hostTransport.hostTransportPromptAtom);
+}
 
 function setup({ stored = {}, protocol = "http:", secureResponse } = {}) {
   storage = new Map([
@@ -51,7 +70,7 @@ function setup({ stored = {}, protocol = "http:", secureResponse } = {}) {
 
 async function waitForPrompt() {
   for (let attempt = 0; attempt < 20; attempt++) {
-    const prompt = useHostTransportPrompt.getState().prompt;
+    const prompt = getPrompt();
     if (prompt) return prompt;
     await new Promise((resolve) => setTimeout(resolve, 0));
   }
@@ -82,7 +101,7 @@ test("HTTP requires approval, remembers it across default-port aliases, and sepa
     await resolveHostTransport("localhost:07000", controller.signal),
     false
   );
-  assert.equal(useHostTransportPrompt.getState().prompt, null);
+  assert.equal(getPrompt(), null);
   const otherPort = resolveHostTransport("localhost:7001", controller.signal);
   (await waitForPrompt()).respond(false);
   await assert.rejects(otherPort, /not approved/);
@@ -98,8 +117,8 @@ test("legacy HTTP preference requires approval and cancellation saves nothing", 
   const pending = resolveHostTransport("localhost", controller.signal);
   await waitForPrompt();
   controller.abort();
-  await assert.rejects(pending, { name: "AbortError" });
-  assert.equal(useHostTransportPrompt.getState().prompt, null);
+  await assert.rejects(pending);
+  assert.equal(getPrompt(), null);
   assert.equal(
     JSON.parse(storage.get("runelink.demo.host-transports"))["localhost:7000"]
       .allow_insecure,
@@ -114,7 +133,7 @@ test("secure connections need no prompt and HTTPS pages never probe HTTP", async
     true
   );
   assert.equal(calls.length, 1);
-  assert.equal(useHostTransportPrompt.getState().prompt, null);
+  assert.equal(getPrompt(), null);
   setup({
     protocol: "https:",
     stored: { "localhost:7000": { secure: false, allow_insecure: true } },
@@ -137,98 +156,114 @@ test("redirects and HTTP errors never trigger an HTTP fallback", async () => {
       /redirects are not allowed|HTTP 503/
     );
     assert.equal(calls.length, 1);
-    assert.equal(useHostTransportPrompt.getState().prompt, null);
+    assert.equal(getPrompt(), null);
   }
 });
 
 test("a stored session retries after transient transport probe failures", async () => {
   setup();
   const originalDocument = globalThis.document;
-  const originalSetTimeout = globalThis.setTimeout;
-  const originalClearTimeout = globalThis.clearTimeout;
+  // Records sleeps, such as the retry delay, so the test decides when they end
   const timers = new Map();
+  const clock = Object.assign(Object.create(Clock.Clock.defaultValue()), {
+    sleep: (duration) =>
+      Effect.callback((resume) => {
+        const id = {};
+        timers.set(id, {
+          delay: Duration.toMillis(duration),
+          callback: () => resume(Effect.void),
+        });
+        return Effect.sync(() => timers.delete(id));
+      }),
+  });
+  const scope = Scope.makeUnsafe();
   try {
     window.addEventListener = () => {};
-    globalThis.document = { addEventListener() {} };
+    window.removeEventListener = () => {};
+    globalThis.document = {
+      addEventListener() {},
+      removeEventListener() {},
+    };
     globalThis.fetch = async () => {
       throw new TypeError("Host offline");
     };
-    const bridge = await server.ssrLoadModule(
-      "/src/lib/auth-session-bridge.ts"
-    );
-    const connection = await server.ssrLoadModule(
-      "/src/lib/runelink-connection-store.ts"
-    );
-    bridge.registerAuthSessionStateBridge({
-      getSnapshot: () => ({
-        activeAccount: { name: "test", host: "localhost" },
-        activeAuth: { refresh_token: "test" },
-        authError: null,
-      }),
-      subscribe: () => () => {},
-    });
-    globalThis.setTimeout = (callback, delay) => {
-      const id = {};
-      timers.set(id, { callback, delay });
-      return id;
+    const { authAtom } = await server.ssrLoadModule("/src/lib/auth-store.ts");
+    const session = await server.ssrLoadModule("/src/lib/runelink-session.ts");
+    const account = { name: "test", host: "localhost" };
+    const authCache = {
+      accounts: { "test@localhost": { refresh_token: "test" } },
     };
-    globalThis.clearTimeout = (id) => timers.delete(id);
-    connection.initializeRunelinkConnectionStore();
-    for (let attempt = 0; attempt < 20 && timers.size === 0; attempt++) {
-      await new Promise((resolve) => originalSetTimeout(resolve, 0));
+    // The session reloads the stored tokens when it starts.
+    storage.set("runelink.demo.auth-cache", JSON.stringify(authCache));
+    registry.set(authAtom, {
+      config: { active_account: account, accounts: [account] },
+      authCache,
+      authError: null,
+    });
+    const getStatus = () => registry.get(session.connectionAtom).status;
+    // Waits for the retry delay, ignoring shorter-lived sleeps such as probe
+    // timeouts
+    async function waitForRetry(delay) {
+      const isRetry = (timer) => timer.delay === delay;
+      for (
+        let attempt = 0;
+        attempt < 100 && ![...timers.values()].some(isRetry);
+        attempt++
+      ) {
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      }
     }
-    assert.equal(
-      connection.useRunelinkConnectionStore.getState().status,
-      "reconnecting"
+    function takeTimer() {
+      const [id, timer] = [...timers.entries()][0];
+      timers.delete(id);
+      return timer;
+    }
+
+    await Effect.runPromise(
+      Layer.buildWithScope(session.layer, scope).pipe(
+        Effect.provideService(Clock.Clock, clock),
+        Effect.provide(
+          Layer.succeed(Socket.WebSocketConstructor, () => {
+            throw new Error("No sockets in this test");
+          })
+        )
+      )
     );
+    await waitForRetry(1000);
+    assert.equal(getStatus(), "reconnecting");
     assert.equal(timers.size, 1);
     assert.equal([...timers.values()][0].delay, 1000);
 
     // A temporary HTTP response also retries, without probing plain HTTP.
-    const [retryId, retry] = [...timers.entries()][0];
-    timers.delete(retryId);
+    const retry = takeTimer();
     calls = [];
     globalThis.fetch = async (url) => {
       calls.push(url);
       return new Response("", { status: 503 });
     };
     retry.callback();
-    for (let attempt = 0; attempt < 20 && timers.size === 0; attempt++) {
-      await new Promise((resolve) => originalSetTimeout(resolve, 0));
-    }
-    assert.equal(
-      connection.useRunelinkConnectionStore.getState().status,
-      "reconnecting"
-    );
+    await waitForRetry(2000);
+    assert.equal(getStatus(), "reconnecting");
     assert.equal(timers.size, 1);
     assert.equal([...timers.values()][0].delay, 2000);
     assert.deepEqual(calls, ["https://localhost:7000/ping"]);
 
     // Denied approval is final and must not create an automatic prompt loop.
-    const [nextId, next] = [...timers.entries()][0];
-    timers.delete(nextId);
+    const next = takeTimer();
     setup();
     window.addEventListener = () => {};
+    window.removeEventListener = () => {};
     next.callback();
-    for (
-      let attempt = 0;
-      attempt < 20 && !useHostTransportPrompt.getState().prompt;
-      attempt++
-    ) {
-      await new Promise((resolve) => originalSetTimeout(resolve, 0));
+    for (let attempt = 0; attempt < 20 && !getPrompt(); attempt++) {
+      await new Promise((resolve) => setTimeout(resolve, 0));
     }
-    assert.ok(useHostTransportPrompt.getState().prompt);
-    useHostTransportPrompt.getState().prompt.respond(false);
-    await new Promise((resolve) => originalSetTimeout(resolve, 0));
-    assert.equal(
-      connection.useRunelinkConnectionStore.getState().status,
-      "disconnected"
-    );
+    assert.ok(getPrompt());
+    getPrompt().respond(false);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    assert.equal(getStatus(), "disconnected");
     assert.equal(timers.size, 0);
-    connection.useRunelinkConnectionStore.getState().disconnect();
   } finally {
+    await Effect.runPromise(Scope.close(scope, Exit.void));
     globalThis.document = originalDocument;
-    globalThis.setTimeout = originalSetTimeout;
-    globalThis.clearTimeout = originalClearTimeout;
   }
 });

@@ -1,4 +1,5 @@
-import { getActiveAccount, useAuthStore } from "@/lib/auth-store";
+import { useAtomValue } from "@effect/atom-react";
+import { authAtom, getActiveAccount } from "@/lib/auth-store";
 import type { ActiveMessage } from "@runelink/sdk";
 import { useRef, type ComponentProps } from "react";
 import { Copy, Ellipsis, Pencil, Reply, Trash2 } from "lucide-react";
@@ -34,7 +35,7 @@ export function MessageActionsMenu({
   onEdit,
   onDeleteMessage,
 }: MessageActionsMenuProps) {
-  const activeAccount = useAuthStore(getActiveAccount);
+  const activeAccount = useAtomValue(authAtom, getActiveAccount);
   const canEdit =
     !!message.author &&
     message.author.name === activeAccount?.name &&

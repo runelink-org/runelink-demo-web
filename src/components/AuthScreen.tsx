@@ -1,3 +1,5 @@
+import { useAtomValue } from "@effect/atom-react";
+import * as Exit from "effect/Exit";
 import { useEffect, useState } from "react";
 import { LockKeyhole, Sparkles } from "lucide-react";
 import { MAX_USERNAME_LENGTH } from "@runelink/sdk";
@@ -19,7 +21,9 @@ import {
 import { Input } from "@/components/ui/input";
 import { normalizeHostDraft } from "@/lib/account-storage";
 import { cn } from "@/lib/utils";
-import { getActiveAccount, useAuthStore } from "@/lib/auth-store";
+import { authAtom, getActiveAccount, setAuthError } from "@/lib/auth-store";
+import { login, signup } from "@/lib/runelink-session";
+import { runPromiseExit } from "@/lib/runtime";
 
 type AuthMode = "login" | "signup";
 
@@ -46,11 +50,8 @@ export function AuthScreen({
   onDone,
   onBack,
 }: AuthScreenProps) {
-  const activeAccount = useAuthStore(getActiveAccount);
-  const authError = useAuthStore((state) => state.authError);
-  const clearAuthError = useAuthStore((state) => state.clearAuthError);
-  const login = useAuthStore((state) => state.login);
-  const signup = useAuthStore((state) => state.signup);
+  const activeAccount = useAtomValue(authAtom, getActiveAccount);
+  const authError = useAtomValue(authAtom, (state) => state.authError);
 
   const [mode, setMode] = useState<AuthMode>("login");
   const [host, setHost] = useState(() =>
@@ -64,19 +65,22 @@ export function AuthScreen({
   const shouldFocusPassword = !!activeAccount && prefillAccount;
 
   useEffect(() => {
-    clearAuthError();
-  }, [mode, clearAuthError]);
+    setAuthError(null);
+  }, [mode]);
 
   async function handleSubmit(event: React.SubmitEvent<HTMLFormElement>) {
     event.preventDefault();
     setIsSubmitting(true);
 
-    const action = mode === "signup" ? signup : login;
-    const result = await action({ host, name, password });
+    const credentials = { host, name, password };
+    // A failure is shown as the auth error.
+    const exit = await runPromiseExit(
+      mode === "signup" ? signup(credentials) : login(credentials)
+    );
 
     setIsSubmitting(false);
 
-    if (!result.success) {
+    if (Exit.isFailure(exit)) {
       return;
     }
 

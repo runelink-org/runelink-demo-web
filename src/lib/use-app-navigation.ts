@@ -15,7 +15,12 @@ import {
   writeAppRoute,
 } from "@/lib/app-route";
 import { firstTextChannel } from "@/lib/channel-tree";
-import { useNavigationStore } from "@/lib/navigation-store";
+import { getState } from "@/lib/atom-registry";
+import {
+  navigationAtom,
+  selectChannel,
+  selectServer,
+} from "@/lib/navigation-store";
 
 type NavigationSelection = {
   serverId: string | null;
@@ -23,7 +28,7 @@ type NavigationSelection = {
 };
 
 function getFallbackSelection(
-  servers: ServerWithChannels[],
+  servers: ReadonlyArray<ServerWithChannels>,
   currentSelection: NavigationSelection
 ): NavigationSelection {
   if (servers.length === 0) {
@@ -99,8 +104,8 @@ export function useAppNavigation() {
   );
 
   const reconcileServers = useCallback(
-    (servers: ServerWithChannels[]) => {
-      const navigationState = useNavigationStore.getState();
+    (servers: ReadonlyArray<ServerWithChannels>) => {
+      const navigationState = getState(navigationAtom);
       const nextSelection = getFallbackSelection(servers, {
         serverId: navigationState.selectedServerId,
         channelId: navigationState.selectedServerId
@@ -111,17 +116,14 @@ export function useAppNavigation() {
       });
 
       if (nextSelection.serverId !== navigationState.selectedServerId) {
-        navigationState.selectServer(nextSelection.serverId);
+        selectServer(nextSelection.serverId);
       }
       if (
         nextSelection.serverId &&
         (navigationState.selectedChannelIdByServerId[nextSelection.serverId] ??
           null) !== nextSelection.channelId
       ) {
-        navigationState.selectChannel(
-          nextSelection.serverId,
-          nextSelection.channelId
-        );
+        selectChannel(nextSelection.serverId, nextSelection.channelId);
       }
 
       const currentRoute = routeRef.current;
@@ -184,21 +186,20 @@ export function useAppNavigation() {
   }, [initialLocation.pathWasValid]);
 
   useLayoutEffect(() => {
-    const navigationState = useNavigationStore.getState();
     switch (route.screen) {
       case "home":
-        navigationState.selectServer(null);
+        selectServer(null);
         break;
       case "server":
-        navigationState.selectChannel(route.serverId, null);
+        selectChannel(route.serverId, null);
         break;
       case "channel":
       case "channel-members":
-        navigationState.selectChannel(route.serverId, route.channelId);
+        selectChannel(route.serverId, route.channelId);
         break;
       case "channel-settings":
       case "server-settings":
-        navigationState.selectServer(route.serverId);
+        selectServer(route.serverId);
         break;
       case "auth":
         break;

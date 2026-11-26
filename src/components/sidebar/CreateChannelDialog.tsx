@@ -36,7 +36,7 @@ export type CreateChannelRequest = {
 type CreateChannelDialogProps = {
   request: CreateChannelRequest | null;
   serverTitle: string | null;
-  channels: ServerChannel[];
+  channels: ReadonlyArray<ServerChannel>;
   onOpenChange: (open: boolean) => void;
   onCreateChannel: (
     kind: ServerChannelKind,

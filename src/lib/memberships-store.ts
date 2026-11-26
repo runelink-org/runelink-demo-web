@@ -5,379 +5,177 @@ import {
   type ServerMembership,
   type UserRef,
 } from "@runelink/sdk";
-import { create } from "zustand";
+import * as Effect from "effect/Effect";
+import { setState, stateAtom } from "@/lib/atom-registry";
 import { debugRunelink } from "@/lib/runelink-debug";
-import { sortMemberships, upsertMembership } from "@/lib/membership-utils";
-import { requestExpected } from "@/lib/runelink-request";
+import {
+  removeMember,
+  removeMembership,
+  sortMemberships,
+  toServerMember,
+  toServerMembership,
+  upsertMember,
+  upsertMembership as upsertMembershipEntry,
+} from "@/lib/membership-utils";
+import { request } from "@/lib/runelink-session";
 import {
   bindStoreToActiveAccount,
-  serverUserKey,
   type ServerId,
   type TargetHost,
   userRefKey,
 } from "@/lib/runelink-store-utils";
 
 type MembershipsState = {
-  membershipsByUserRefKey: Record<string, ServerMembership[]>;
-  membersByServerId: Record<string, ServerMember[]>;
+  membershipsByUserRefKey: Record<string, ReadonlyArray<ServerMembership>>;
+  membersByServerId: Record<string, ReadonlyArray<ServerMember>>;
   hasFetchedMembersByServerId: Record<string, boolean>;
-  memberByServerAndUserKey: Record<string, ServerMember>;
-  isLoadingByUserRefKey: Record<string, boolean>;
   isLoadingByServerId: Record<string, boolean>;
-  error: string | null;
-  fetchMembershipsByUser: (userRef: UserRef) => Promise<ServerMembership[]>;
-  fetchMembersByServer: (
-    serverId: ServerId,
-    targetHost?: TargetHost
-  ) => Promise<ServerMember[]>;
-  fetchMembershipByUserAndServer: (
-    serverId: ServerId,
-    userRef: UserRef,
-    targetHost?: TargetHost
-  ) => Promise<ServerMember>;
-  upsertMembership: (
-    serverId: ServerId,
-    newMembership: NewServerMembership
-  ) => Promise<FullServerMembership>;
-  deleteMembership: (
-    serverId: ServerId,
-    userRef: UserRef,
-    targetHost?: TargetHost
-  ) => Promise<void>;
-  reset: () => void;
 };
 
-const initialState = {
+const initialState: MembershipsState = {
   membershipsByUserRefKey: {},
   membersByServerId: {},
   hasFetchedMembersByServerId: {},
-  memberByServerAndUserKey: {},
-  isLoadingByUserRefKey: {},
   isLoadingByServerId: {},
-  error: null,
 };
 
-function upsertMember(
-  members: ServerMember[],
-  nextMember: ServerMember
-): ServerMember[] {
-  const key = userRefKey(nextMember.user);
-  const nextMembers = members.filter(
-    (member) => userRefKey(member.user) !== key
-  );
-  nextMembers.push(nextMember);
-  return nextMembers;
+export const membershipsAtom = stateAtom(initialState);
+
+function setServerLoading(serverId: ServerId, isLoading: boolean): void {
+  setState(membershipsAtom, (state) => ({
+    isLoadingByServerId: {
+      ...state.isLoadingByServerId,
+      [serverId]: isLoading,
+    },
+  }));
 }
 
-function removeMember(
-  members: ServerMember[],
-  userRef: UserRef
-): ServerMember[] {
-  const key = userRefKey(userRef);
-  return members.filter((member) => userRefKey(member.user) !== key);
-}
+export const fetchMembershipsByUser = Effect.fn("Memberships.fetchByUser")(
+  function* (userRef: UserRef) {
+    const reply = yield* request({
+      type: "memberships_get_by_user",
+      data: { user_ref: userRef },
+    });
 
-function removeMembership(
-  memberships: ServerMembership[],
-  serverId: ServerId
-): ServerMembership[] {
-  return memberships.filter((membership) => membership.server.id !== serverId);
-}
-
-function toServerMember(membership: FullServerMembership): ServerMember {
-  return {
-    user: membership.user,
-    role: membership.role,
-    joined_at: membership.joined_at,
-    updated_at: membership.updated_at,
-  };
-}
-
-function toServerMembership(
-  membership: FullServerMembership,
-  userRef: UserRef
-): ServerMembership {
-  return {
-    server: membership.server,
-    user_ref: userRef,
-    role: membership.role,
-    joined_at: membership.joined_at,
-    updated_at: membership.updated_at,
-    synced_at: membership.synced_at,
-  };
-}
-
-export const useMembershipsStore = create<MembershipsState>((set) => ({
-  ...initialState,
-
-  async fetchMembershipsByUser(userRef) {
-    const userKey = userRefKey(userRef);
-    set((state) => ({
-      isLoadingByUserRefKey: {
-        ...state.isLoadingByUserRefKey,
-        [userKey]: true,
+    setState(membershipsAtom, (state) => ({
+      membershipsByUserRefKey: {
+        ...state.membershipsByUserRefKey,
+        [userRefKey(userRef)]: sortMemberships(reply.data),
       },
-      error: null,
     }));
 
-    try {
-      const reply = await requestExpected("memberships_get_by_user", {
-        type: "memberships_get_by_user",
-        data: { user_ref: userRef },
-      });
+    debugRunelink("fetched memberships by user", {
+      userRef,
+      serverIds: reply.data.map((membership) => membership.server.id),
+    });
 
-      set((state) => ({
-        membershipsByUserRefKey: {
-          ...state.membershipsByUserRefKey,
-          [userKey]: sortMemberships(reply.data),
-        },
-        isLoadingByUserRefKey: {
-          ...state.isLoadingByUserRefKey,
-          [userKey]: false,
-        },
-        error: null,
-      }));
+    return reply.data;
+  }
+);
 
-      debugRunelink("fetched memberships by user", {
-        userRef,
-        serverIds: reply.data.map((membership) => membership.server.id),
-      });
+export const fetchMembersByServer = Effect.fn("Memberships.fetchMembers")(
+  function* (serverId: ServerId, targetHost: TargetHost = null) {
+    setServerLoading(serverId, true);
+    const reply = yield* request({
+      type: "memberships_get_members_by_server",
+      data: {
+        server_id: serverId,
+        target_host: targetHost,
+      },
+    }).pipe(
+      Effect.onError(() => Effect.sync(() => setServerLoading(serverId, false)))
+    );
 
-      return reply.data;
-    } catch (error) {
-      const message =
-        error instanceof Error ? error.message : "Failed to load memberships";
-      set((state) => ({
-        isLoadingByUserRefKey: {
-          ...state.isLoadingByUserRefKey,
-          [userKey]: false,
-        },
-        error: message,
-      }));
-      throw error;
-    }
-  },
-
-  async fetchMembersByServer(serverId, targetHost = null) {
-    set((state) => ({
-      isLoadingByServerId: {
-        ...state.isLoadingByServerId,
+    setState(membershipsAtom, (state) => ({
+      membersByServerId: {
+        ...state.membersByServerId,
+        [serverId]: reply.data,
+      },
+      hasFetchedMembersByServerId: {
+        ...state.hasFetchedMembersByServerId,
         [serverId]: true,
       },
-      error: null,
-    }));
-
-    try {
-      const reply = await requestExpected("memberships_get_members_by_server", {
-        type: "memberships_get_members_by_server",
-        data: {
-          server_id: serverId,
-          target_host: targetHost,
-        },
-      });
-
-      const nextMemberByKey = Object.fromEntries(
-        reply.data.map((member) => [
-          serverUserKey(serverId, member.user),
-          member,
-        ])
-      );
-
-      set((state) => ({
-        membersByServerId: {
-          ...state.membersByServerId,
-          [serverId]: reply.data,
-        },
-        hasFetchedMembersByServerId: {
-          ...state.hasFetchedMembersByServerId,
-          [serverId]: true,
-        },
-        memberByServerAndUserKey: {
-          ...state.memberByServerAndUserKey,
-          ...nextMemberByKey,
-        },
-        isLoadingByServerId: {
-          ...state.isLoadingByServerId,
-          [serverId]: false,
-        },
-        error: null,
-      }));
-
-      return reply.data;
-    } catch (error) {
-      const message =
-        error instanceof Error
-          ? error.message
-          : "Failed to load server members";
-      set((state) => ({
-        isLoadingByServerId: {
-          ...state.isLoadingByServerId,
-          [serverId]: false,
-        },
-        error: message,
-      }));
-      throw error;
-    }
-  },
-
-  async fetchMembershipByUserAndServer(serverId, userRef, targetHost = null) {
-    set((state) => ({
       isLoadingByServerId: {
         ...state.isLoadingByServerId,
-        [serverId]: true,
+        [serverId]: false,
       },
-      error: null,
     }));
 
-    try {
-      const reply = await requestExpected(
-        "memberships_get_by_user_and_server",
-        {
-          type: "memberships_get_by_user_and_server",
-          data: {
-            server_id: serverId,
-            user_ref: userRef,
-            target_host: targetHost,
-          },
-        }
-      );
+    return reply.data;
+  }
+);
 
-      set((state) => ({
-        memberByServerAndUserKey: {
-          ...state.memberByServerAndUserKey,
-          [serverUserKey(serverId, userRef)]: reply.data,
-        },
-        membersByServerId: {
-          ...state.membersByServerId,
-          [serverId]: upsertMember(
-            state.membersByServerId[serverId] ?? [],
-            reply.data
-          ),
-        },
-        isLoadingByServerId: {
-          ...state.isLoadingByServerId,
-          [serverId]: false,
-        },
-        error: null,
-      }));
+export const upsertMembership = Effect.fn("Memberships.upsert")(function* (
+  serverId: ServerId,
+  newMembership: NewServerMembership
+) {
+  const reply = yield* request({
+    type: "memberships_upsert",
+    data: {
+      server_id: serverId,
+      new_membership: newMembership,
+    },
+  });
 
-      return reply.data;
-    } catch (error) {
-      const message =
-        error instanceof Error ? error.message : "Failed to load membership";
-      set((state) => ({
-        isLoadingByServerId: {
-          ...state.isLoadingByServerId,
-          [serverId]: false,
-        },
-        error: message,
-      }));
-      throw error;
-    }
-  },
+  const userKey = userRefKey(reply.data.user);
+  setState(membershipsAtom, (state) => ({
+    membershipsByUserRefKey: {
+      ...state.membershipsByUserRefKey,
+      [userKey]: upsertMembershipEntry(
+        state.membershipsByUserRefKey[userKey] ?? [],
+        toServerMembership(reply.data)
+      ),
+    },
+    membersByServerId: {
+      ...state.membersByServerId,
+      [serverId]: upsertMember(
+        state.membersByServerId[serverId] ?? [],
+        toServerMember(reply.data)
+      ),
+    },
+  }));
 
-  async upsertMembership(serverId, newMembership) {
-    set({ error: null });
+  debugRunelink("created membership", {
+    serverId,
+    user: reply.data.user,
+  });
 
-    try {
-      const reply = await requestExpected("memberships_upsert", {
-        type: "memberships_upsert",
-        data: {
-          server_id: serverId,
-          new_membership: newMembership,
-        },
-      });
+  return reply.data satisfies FullServerMembership;
+});
 
-      const member = toServerMember(reply.data);
-      const membership = toServerMembership(reply.data, reply.data.user);
-      const userKey = userRefKey(reply.data.user);
+export const deleteMembership = Effect.fn("Memberships.delete")(function* (
+  serverId: ServerId,
+  userRef: UserRef,
+  targetHost: TargetHost = null
+) {
+  yield* request({
+    type: "memberships_delete",
+    data: {
+      server_id: serverId,
+      user_ref: userRef,
+      target_host: targetHost,
+    },
+  });
 
-      set((state) => ({
-        membershipsByUserRefKey: {
-          ...state.membershipsByUserRefKey,
-          [userKey]: upsertMembership(
-            state.membershipsByUserRefKey[userKey] ?? [],
-            membership
-          ),
-        },
-        membersByServerId: {
-          ...state.membersByServerId,
-          [serverId]: upsertMember(
-            state.membersByServerId[serverId] ?? [],
-            member
-          ),
-        },
-        memberByServerAndUserKey: {
-          ...state.memberByServerAndUserKey,
-          [serverUserKey(serverId, reply.data.user)]: member,
-        },
-        error: null,
-      }));
-
-      debugRunelink("created membership", {
-        serverId,
-        user: reply.data.user,
-      });
-
-      return reply.data;
-    } catch (error) {
-      const message =
-        error instanceof Error ? error.message : "Failed to create membership";
-      set({ error: message });
-      throw error;
-    }
-  },
-
-  async deleteMembership(serverId, userRef, targetHost = null) {
-    set({ error: null });
-
-    try {
-      await requestExpected("memberships_delete", {
-        type: "memberships_delete",
-        data: {
-          server_id: serverId,
-          user_ref: userRef,
-          target_host: targetHost,
-        },
-      });
-
-      set((state) => {
-        const key = serverUserKey(serverId, userRef);
-        const nextMemberByKey = { ...state.memberByServerAndUserKey };
-        delete nextMemberByKey[key];
-
-        return {
-          membershipsByUserRefKey: {
-            ...state.membershipsByUserRefKey,
-            [userRefKey(userRef)]: removeMembership(
-              state.membershipsByUserRefKey[userRefKey(userRef)] ?? [],
-              serverId
-            ),
-          },
-          membersByServerId: {
-            ...state.membersByServerId,
-            [serverId]: removeMember(
-              state.membersByServerId[serverId] ?? [],
-              userRef
-            ),
-          },
-          memberByServerAndUserKey: nextMemberByKey,
-          error: null,
-        };
-      });
-    } catch (error) {
-      const message =
-        error instanceof Error ? error.message : "Failed to delete membership";
-      set({ error: message });
-      throw error;
-    }
-  },
-
-  reset() {
-    set(initialState);
-  },
-}));
+  const userKey = userRefKey(userRef);
+  setState(membershipsAtom, (state) => ({
+    membershipsByUserRefKey: {
+      ...state.membershipsByUserRefKey,
+      [userKey]: removeMembership(
+        state.membershipsByUserRefKey[userKey] ?? [],
+        serverId
+      ),
+    },
+    membersByServerId: {
+      ...state.membersByServerId,
+      [serverId]: removeMember(
+        state.membersByServerId[serverId] ?? [],
+        userRef
+      ),
+    },
+  }));
+});
 
 bindStoreToActiveAccount(() => {
-  useMembershipsStore.getState().reset();
+  setState(membershipsAtom, initialState);
 });

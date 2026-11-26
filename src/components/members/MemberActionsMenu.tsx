@@ -19,8 +19,10 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { getActiveAccount, useAuthStore } from "@/lib/auth-store";
-import { useMembershipsStore } from "@/lib/memberships-store";
+import { useAtomValue } from "@effect/atom-react";
+import { authAtom, getActiveAccount } from "@/lib/auth-store";
+import { deleteMembership, upsertMembership } from "@/lib/memberships-store";
+import { runPromise } from "@/lib/runtime";
 import type { useContextActionsMenu } from "@/lib/use-context-actions-menu";
 
 type MemberActionsMenuProps = {
@@ -50,16 +52,10 @@ export function MemberActionsMenu({
   role,
   canModerateMembers,
 }: MemberActionsMenuProps) {
-  const activeAccount = useAuthStore(getActiveAccount);
+  const activeAccount = useAtomValue(authAtom, getActiveAccount);
   const [isConfirmingSelfDemotion, setIsConfirmingSelfDemotion] =
     useState(false);
   const [isUpdatingRole, setIsUpdatingRole] = useState(false);
-  const upsertMembership = useMembershipsStore(
-    (state) => state.upsertMembership
-  );
-  const deleteMembership = useMembershipsStore(
-    (state) => state.deleteMembership
-  );
 
   async function handleCopyUserId() {
     if (typeof navigator === "undefined" || !navigator.clipboard) {
@@ -82,12 +78,14 @@ export function MemberActionsMenu({
     setIsUpdatingRole(true);
 
     try {
-      await upsertMembership(serverId, {
-        user_ref: user,
-        server_id: serverId,
-        server_host: serverHost,
-        role: nextRole,
-      });
+      await runPromise(
+        upsertMembership(serverId, {
+          user_ref: user,
+          server_id: serverId,
+          server_host: serverHost,
+          role: nextRole,
+        })
+      );
       toast.success(
         nextRole === "admin"
           ? `Promoted ${user.name} to admin.`
@@ -112,10 +110,12 @@ export function MemberActionsMenu({
     }
 
     try {
-      await deleteMembership(
-        serverId,
-        user,
-        getTargetHost(serverHost, activeAccount.host)
+      await runPromise(
+        deleteMembership(
+          serverId,
+          user,
+          getTargetHost(serverHost, activeAccount.host)
+        )
       );
       toast.success(`Kicked ${user.name} from the server.`);
     } catch (error) {

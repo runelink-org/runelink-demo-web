@@ -18,7 +18,7 @@ import { useContextActionsMenu } from "@/lib/use-context-actions-menu";
 type ServerMemberListProps = {
   serverId: string;
   serverHost: string;
-  members: ServerMember[];
+  members: ReadonlyArray<ServerMember>;
   isLoading: boolean;
   error: string | null;
   canModerateMembers: boolean;

@@ -21,7 +21,7 @@ type JoinServerDialogProps = {
   activeHost: string | null;
   joinedServerIds: Set<string>;
   onOpenChange: (open: boolean) => void;
-  onSearchServers: (host: string) => Promise<Server[]>;
+  onSearchServers: (host: string) => Promise<ReadonlyArray<Server>>;
   onJoinServer: (serverId: string, serverHost: string) => Promise<void>;
 };
 
@@ -49,7 +49,7 @@ function JoinServerDialogForm({
   const isMounted = useIsMounted();
   const [host, setHost] = useState(activeHost ?? "");
   const [error, setError] = useState<string | null>(null);
-  const [results, setResults] = useState<Server[]>([]);
+  const [results, setResults] = useState<ReadonlyArray<Server>>([]);
   const [hasSearched, setHasSearched] = useState(open && !!activeHost?.trim());
   const [isSearching, setIsSearching] = useState(open && !!activeHost?.trim());
   const [joiningServerId, setJoiningServerId] = useState<string | null>(null);
