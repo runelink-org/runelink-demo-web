@@ -45,11 +45,14 @@ export function LeaveServerDialog({
             toast.success(`Left server: ${server.title}`);
             onOpenChange(false);
           },
-          onFailure: (failure) =>
-            setError(toastFailure("Couldn't leave server", failure)),
+          onFailure: (failure) => {
+            setError(toastFailure("Couldn't leave server", failure));
+          },
         })
       )
-    ).finally(() => setIsLeaving(false));
+    ).finally(() => {
+      setIsLeaving(false);
+    });
   }
 
   return (

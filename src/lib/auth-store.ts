@@ -1,6 +1,6 @@
-import { type TokenResponse, type UserRef } from "@runelink/sdk";
+import type { TokenResponse, UserRef } from "@runelink/sdk";
 import * as Effect from "effect/Effect";
-import * as Scope from "effect/Scope";
+import type * as Scope from "effect/Scope";
 import { getState, setState, stateAtom } from "@/lib/atom-registry";
 import {
   AUTH_CACHE_STORAGE_KEY,
@@ -13,9 +13,11 @@ import {
   saveBrowserAppConfig,
   saveBrowserAuthCache,
   upsertAccount,
-  type BrowserAppConfig,
-  type BrowserAuthCache,
-  type StoredAccountAuth,
+} from "@/lib/account-storage";
+import type {
+  BrowserAppConfig,
+  BrowserAuthCache,
+  StoredAccountAuth,
 } from "@/lib/account-storage";
 
 type AuthState = {
@@ -239,5 +241,7 @@ export const followStoredAuth: Effect.Effect<void, never, Scope.Scope> =
       return handleStorage;
     }),
     (handleStorage) =>
-      Effect.sync(() => window.removeEventListener("storage", handleStorage))
+      Effect.sync(() => {
+        window.removeEventListener("storage", handleStorage);
+      })
   ).pipe(Effect.asVoid);

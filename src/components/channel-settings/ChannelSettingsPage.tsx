@@ -10,7 +10,8 @@ import {
 } from "@/components/ui/alert-dialog";
 import type { ServerChannel } from "@runelink/sdk";
 import { ArrowLeft, Trash2 } from "lucide-react";
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState } from "react";
+import type { ReactNode } from "react";
 import { DeleteChannelDialog } from "@/components/sidebar/DeleteChannelDialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -62,11 +63,11 @@ export function ChannelSettingsPage({
           <h2 className="text-lg font-semibold">
             {isLoading ? "Loading Channel Settings..." : "Channel Unavailable"}
           </h2>
-          {!isLoading ? (
+          {isLoading ? null : (
             <p className="mt-2 text-sm text-muted-foreground">
               {error ?? "The selected channel or category could not be found."}
             </p>
-          ) : null}
+          )}
         </div>
       </div>
     </ChannelSettingsLayout>
@@ -121,7 +122,7 @@ function ChannelSettingsLayout({
 }
 
 function normalizeDescription(value: string | null): string {
-  return (value ?? "").replace(/[^\S\r\n]+$/gm, "").trim();
+  return (value ?? "").replaceAll(/[^\S\r\n]+$/gm, "").trim();
 }
 
 function ChannelSettingsForm({
@@ -197,8 +198,12 @@ function ChannelSettingsForm({
         Effect.match({
           onSuccess: (reply) => {
             const active = getActiveAccount(getState(authAtom));
-            if (active?.name !== account.name || active?.host !== account.host)
+            if (
+              active?.name !== account.name ||
+              active?.host !== account.host
+            ) {
               return;
+            }
             handleRunelinkUpdate({
               type: "channel_upserted",
               data: reply.data,
@@ -259,11 +264,11 @@ function ChannelSettingsForm({
                 disabled={!canManage || isSaving}
               />
             </div>
-            {!canManage ? (
+            {canManage ? null : (
               <p className="text-sm text-muted-foreground">
                 Only server admins can edit {noun} settings.
               </p>
-            ) : null}
+            )}
             {error ? (
               <p role="alert" className="text-sm text-destructive">
                 {error} Your changes have been kept. Reset to load the latest
@@ -309,7 +314,9 @@ function ChannelSettingsForm({
                 variant="destructive"
                 className="shrink-0"
                 disabled={!canManage || isSaving}
-                onClick={() => setIsDeleteOpen(true)}
+                onClick={() => {
+                  setIsDeleteOpen(true);
+                }}
               >
                 <Trash2 className="size-4" />
                 Delete {label}

@@ -4,8 +4,8 @@ import {
   stripDefaultPort,
   validateHost,
   validateUsername,
-  type UserRef,
 } from "@runelink/sdk";
+import type { UserRef } from "@runelink/sdk";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
@@ -57,9 +57,7 @@ const decodeBrowserAuthCache = Schema.decodeUnknownOption(
 );
 
 function canUseStorage(): boolean {
-  return (
-    typeof window !== "undefined" && typeof window.localStorage !== "undefined"
-  );
+  return typeof window !== "undefined" && window.localStorage !== undefined;
 }
 
 function loadStoredJson<T>(
@@ -127,16 +125,16 @@ export function sameUserRef(
 }
 
 export function hasAccount(
-  accounts: ReadonlyArray<UserRef>,
+  accounts: readonly UserRef[],
   userRef: UserRef
 ): boolean {
   return accounts.some((account) => sameUserRef(account, userRef));
 }
 
 export function upsertAccount(
-  accounts: ReadonlyArray<UserRef>,
+  accounts: readonly UserRef[],
   userRef: UserRef
-): ReadonlyArray<UserRef> {
+): readonly UserRef[] {
   return hasAccount(accounts, userRef) ? accounts : [...accounts, userRef];
 }
 
@@ -152,7 +150,7 @@ export function loadBrowserAppConfig(): BrowserAppConfig {
     // port, so merge accounts that only differed by it.
     accounts: config.accounts
       .map(canonicalUserRef)
-      .reduce<ReadonlyArray<UserRef>>(upsertAccount, []),
+      .reduce<readonly UserRef[]>(upsertAccount, []),
   };
   if (config.default_account !== undefined) {
     try {

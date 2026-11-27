@@ -103,7 +103,9 @@ export function ServerRailButton({
             ? "border-primary/30 bg-primary text-primary-foreground"
             : "border-sidebar-border bg-sidebar-accent text-sidebar-foreground hover:border-sidebar-foreground/35 hover:bg-sidebar-accent/80"
         )}
-        onNavigate={() => onSelect(server.id)}
+        onNavigate={() => {
+          onSelect(server.id);
+        }}
         onMouseEnter={showTooltip}
         onMouseLeave={hideTooltip}
         onFocus={showTooltip}

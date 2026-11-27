@@ -1,6 +1,7 @@
 import { RegistryContext } from "@effect/atom-react";
 import { Atom, AtomRegistry } from "effect/reactivity";
-import { createElement, type PropsWithChildren } from "react";
+import { createElement } from "react";
+import type { PropsWithChildren } from "react";
 
 // App state lives in atoms in this registry, so code outside React reads and
 // updates the same values that components render.

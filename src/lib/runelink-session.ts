@@ -3,12 +3,14 @@ import {
   RunelinkIncompatibleHostError,
   RunelinkProtocolError,
   getWsUrl,
-  type CapabilityIssue,
-  type ReplyFor,
-  type RunelinkConnectionIssue,
-  type RunelinkRequestFailure,
-  type UserRef,
-  type WsRequest,
+} from "@runelink/sdk";
+import type {
+  CapabilityIssue,
+  ReplyFor,
+  RunelinkConnectionIssue,
+  RunelinkRequestFailure,
+  UserRef,
+  WsRequest,
 } from "@runelink/sdk";
 import * as Cause from "effect/Cause";
 import * as Context from "effect/Context";
@@ -31,11 +33,8 @@ import {
   stateAtom,
 } from "@/lib/atom-registry";
 import { checkAccountDeleted } from "@/lib/account-deletion";
-import {
-  normalizeAccountInput,
-  sameUserRef,
-  type StoredAccountAuth,
-} from "@/lib/account-storage";
+import { normalizeAccountInput, sameUserRef } from "@/lib/account-storage";
+import type { StoredAccountAuth } from "@/lib/account-storage";
 import {
   authAtom,
   clearAccountAuth,
@@ -47,11 +46,11 @@ import {
   storeAccountToken,
 } from "@/lib/auth-store";
 import { handleRunelinkUpdate } from "@/lib/runelink-updates";
-import {
+import type {
   HostTransportError,
   HostUnreachableError,
-  resolveHostTransport,
 } from "@/lib/host-transport";
+import { resolveHostTransport } from "@/lib/host-transport";
 
 type AccountConnectionStatus =
   | "disconnected"
@@ -65,7 +64,7 @@ type ConnectionState = {
   status: AccountConnectionStatus;
   lastError: string | null;
   connectedAccount: UserRef | null;
-  capabilityIssues: ReadonlyArray<CapabilityIssue>;
+  capabilityIssues: readonly CapabilityIssue[];
   incompatibleHost: string | null;
 };
 
@@ -187,7 +186,7 @@ const AUTH_REQUEST_TIMEOUT_MS = 10_000;
 // After this long in the background (e.g. sleep), the socket may look open
 // while no longer delivering messages, so it is replaced on return.
 const RESUME_RECONNECT_AFTER_MS = 60_000;
-const AUTH_RETRY_INITIAL_DELAY_MS = 1_000;
+const AUTH_RETRY_INITIAL_DELAY_MS = 1000;
 const AUTH_RETRY_MAX_DELAY_MS = 30_000;
 const REQUEST_RECONNECT_TIMEOUT_MS = 30_000;
 
@@ -206,7 +205,10 @@ function waitForAtom<S, A, E>(
 ): Effect.Effect<A, E> {
   return Effect.callback<A, E>((resume) => {
     const initial = select(getState(atom));
-    if (initial) return resume(initial);
+    if (initial) {
+      resume(initial);
+      return;
+    }
     const unsubscribe = appAtomRegistry.subscribe(atom, (state) => {
       const result = select(state);
       if (!result) return;
@@ -316,7 +318,9 @@ const authenticateWithRefreshToken = Effect.fn(
   if (!isActiveSession(userRef, auth)) {
     return yield* new SessionChangedError();
   }
-  yield* saveSession(() => storeAccountToken(userRef, reply.data, clientId));
+  yield* saveSession(() => {
+    storeAccountToken(userRef, reply.data, clientId);
+  });
   // The host replaces the refresh token, so the session continues with the
   // new one.
   return { ...auth, refresh_token: reply.data.refresh_token };
@@ -530,8 +534,9 @@ const make = Effect.gen(function* () {
       const cancel = Deferred.makeUnsafe<never, ConnectionCancelledError>();
       cancelTransport = cancel;
       closeConnection();
-      if (cancelTransport !== cancel)
+      if (cancelTransport !== cancel) {
         return yield* new ConnectionCancelledError();
+      }
       replaceInProgress = true;
 
       const secure = yield* Effect.raceFirst(
@@ -546,8 +551,9 @@ const make = Effect.gen(function* () {
           })
         )
       );
-      if (cancelTransport !== cancel)
+      if (cancelTransport !== cancel) {
         return yield* new ConnectionCancelledError();
+      }
       cancelTransport = undefined;
 
       const scope = yield* Scope.fork(layerScope);
@@ -572,9 +578,9 @@ const make = Effect.gen(function* () {
       );
       yield* connection.errors.pipe(
         Stream.runForEach((error) =>
-          Effect.sync(() => handleConnectionIssue(connection, error)).pipe(
-            logDefect
-          )
+          Effect.sync(() => {
+            handleConnectionIssue(connection, error);
+          }).pipe(logDefect)
         ),
         listen
       );
@@ -911,9 +917,9 @@ const make = Effect.gen(function* () {
       );
       // Outside the attempt, so the connection stays signed in if saving
       // fails, as before.
-      yield* saveSession(() =>
-        persistAuthenticatedAccount(userRef, tokenResponse, clientId)
-      );
+      yield* saveSession(() => {
+        persistAuthenticatedAccount(userRef, tokenResponse, clientId);
+      });
     });
   }
 

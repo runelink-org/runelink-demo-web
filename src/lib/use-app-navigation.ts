@@ -7,13 +7,13 @@ import {
   useState,
 } from "react";
 import {
-  type AppRoute,
   getAppRoutePath,
   getContentRoute,
   isAppHistoryEntry,
   parseAppRoute,
   writeAppRoute,
 } from "@/lib/app-route";
+import type { AppRoute } from "@/lib/app-route";
 import { firstTextChannel } from "@/lib/channel-tree";
 import { getState } from "@/lib/atom-registry";
 import {
@@ -28,7 +28,7 @@ type NavigationSelection = {
 };
 
 function getFallbackSelection(
-  servers: ReadonlyArray<ServerWithChannels>,
+  servers: readonly ServerWithChannels[],
   currentSelection: NavigationSelection
 ): NavigationSelection {
   if (servers.length === 0) {
@@ -109,7 +109,7 @@ export function useAppNavigation() {
   );
 
   const reconcileServers = useCallback(
-    (servers: ReadonlyArray<ServerWithChannels>) => {
+    (servers: readonly ServerWithChannels[]) => {
       const navigationState = getState(navigationAtom);
       const nextSelection = getFallbackSelection(servers, {
         serverId: navigationState.selectedServerId,
@@ -187,27 +187,34 @@ export function useAppNavigation() {
     }
 
     window.addEventListener("popstate", handlePopState);
-    return () => window.removeEventListener("popstate", handlePopState);
+    return () => {
+      window.removeEventListener("popstate", handlePopState);
+    };
   }, [initialLocation.pathWasValid]);
 
   useLayoutEffect(() => {
     switch (route.screen) {
-      case "home":
+      case "home": {
         selectServer(null);
         break;
-      case "server":
+      }
+      case "server": {
         selectChannel(route.serverId, null);
         break;
+      }
       case "channel":
-      case "channel-members":
+      case "channel-members": {
         selectChannel(route.serverId, route.channelId);
         break;
+      }
       case "channel-settings":
-      case "server-settings":
+      case "server-settings": {
         selectServer(route.serverId);
         break;
-      case "auth":
+      }
+      case "auth": {
         break;
+      }
     }
   }, [route]);
 

@@ -1,8 +1,5 @@
-import {
-  CLIENT_WS_SUPPORTED_CAPABILITIES,
-  getApiUrl,
-  type UserRef,
-} from "@runelink/sdk";
+import { CLIENT_WS_SUPPORTED_CAPABILITIES, getApiUrl } from "@runelink/sdk";
+import type { UserRef } from "@runelink/sdk";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";

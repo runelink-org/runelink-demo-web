@@ -56,8 +56,9 @@ export function ChannelListItem({
       !account ||
       connection.status !== "connected" ||
       !sameUserRef(account, connection.connectedAccount)
-    )
+    ) {
       return;
+    }
 
     void runPromise(
       fetchMessagesByTextChannel(

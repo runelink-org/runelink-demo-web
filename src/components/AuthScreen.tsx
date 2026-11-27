@@ -23,7 +23,8 @@ import { normalizeHostDraft } from "@/lib/account-storage";
 import { cn } from "@/lib/utils";
 import { authAtom, getActiveAccount, setAuthError } from "@/lib/auth-store";
 import { requestFailureMessage } from "@/lib/request-failure";
-import { type AuthFailure, login, signup } from "@/lib/runelink-session";
+import { login, signup } from "@/lib/runelink-session";
+import type { AuthFailure } from "@/lib/runelink-session";
 import { runPromise } from "@/lib/runtime";
 
 type AuthMode = "login" | "signup";
@@ -38,27 +39,30 @@ type AuthScreenProps = {
 function normalizeUsernameDraft(input: string): string {
   return input
     .toLowerCase()
-    .replace(/[\s_.-]+/g, "-")
-    .replace(/[^a-z0-9-]/g, "")
-    .replace(/^-+/g, "")
-    .replace(/-+/g, "-")
+    .replaceAll(/[\s_.-]+/g, "-")
+    .replaceAll(/[^a-z0-9-]/g, "")
+    .replaceAll(/^-+/g, "")
+    .replaceAll(/-+/g, "-")
     .slice(0, MAX_USERNAME_LENGTH);
 }
 
 // Why a login or signup failed, for the auth screen
 function authFailureMessage(error: AuthFailure, mode: AuthMode): string {
   switch (error._tag) {
-    case "RunelinkAuthError":
+    case "RunelinkAuthError": {
       return mode === "login"
         ? "The username or password is incorrect."
         : requestFailureMessage(error);
-    case "RunelinkNotFoundError":
+    }
+    case "RunelinkNotFoundError": {
       return "No account with this username exists on this host.";
-    case "RunelinkConflictError":
+    }
+    case "RunelinkConflictError": {
       // Taken, or recently deleted and not yet reusable
       return mode === "signup"
         ? "This username isn't available."
         : requestFailureMessage(error);
+    }
     // These explain themselves, and an incompatible host says which side
     // needs updating
     case "HostUnreachableError":
@@ -66,18 +70,21 @@ function authFailureMessage(error: AuthFailure, mode: AuthMode): string {
     case "InvalidAccountError":
     case "ConnectionCancelledError":
     case "SessionStorageError":
-    case "RunelinkIncompatibleHostError":
+    case "RunelinkIncompatibleHostError": {
       return error.message;
+    }
     // Signing in does not reconnect by itself
-    case "RunelinkConnectionError":
+    case "RunelinkConnectionError": {
       return "The connection to the host was lost. Try again.";
+    }
     case "RunelinkBadRequestError":
     case "RunelinkInternalError":
     case "RunelinkDisconnectedError":
     case "RunelinkUnsupportedCapabilityError":
     case "RunelinkProtocolError":
-    case "RunelinkInvalidRequestError":
+    case "RunelinkInvalidRequestError": {
       return requestFailureMessage(error);
+    }
   }
 }
 
@@ -137,7 +144,9 @@ export function AuthScreen({
           })
         )
       )
-    ).finally(() => setIsSubmitting(false));
+    ).finally(() => {
+      setIsSubmitting(false);
+    });
 
     if (!succeeded) {
       return;
@@ -180,7 +189,9 @@ export function AuthScreen({
                   ? "bg-background text-foreground shadow-sm"
                   : "text-muted-foreground hover:text-foreground"
               )}
-              onClick={() => switchMode("login")}
+              onClick={() => {
+                switchMode("login");
+              }}
             >
               Log in
             </button>
@@ -192,7 +203,9 @@ export function AuthScreen({
                   ? "bg-background text-foreground shadow-sm"
                   : "text-muted-foreground hover:text-foreground"
               )}
-              onClick={() => switchMode("signup")}
+              onClick={() => {
+                switchMode("signup");
+              }}
             >
               Create account
             </button>
@@ -211,9 +224,9 @@ export function AuthScreen({
                     autoComplete="url"
                     placeholder="runelink.chat"
                     value={host}
-                    onChange={(event) =>
-                      setHost(normalizeHostDraft(event.target.value))
-                    }
+                    onChange={(event) => {
+                      setHost(normalizeHostDraft(event.target.value));
+                    }}
                     required
                   />
                 </FieldContent>
@@ -228,9 +241,9 @@ export function AuthScreen({
                     placeholder="enter your username"
                     maxLength={MAX_USERNAME_LENGTH}
                     value={name}
-                    onChange={(event) =>
-                      setName(normalizeUsernameDraft(event.target.value))
-                    }
+                    onChange={(event) => {
+                      setName(normalizeUsernameDraft(event.target.value));
+                    }}
                     required
                   />
                 </FieldContent>
@@ -252,7 +265,9 @@ export function AuthScreen({
                         : "enter your password"
                     }
                     value={password}
-                    onChange={(event) => setPassword(event.target.value)}
+                    onChange={(event) => {
+                      setPassword(event.target.value);
+                    }}
                     required
                   />
                 </FieldContent>

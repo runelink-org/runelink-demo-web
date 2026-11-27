@@ -25,7 +25,7 @@ type JoinServerDialogProps = {
   activeHost: string | null;
   joinedServerIds: Set<string>;
   onOpenChange: (open: boolean) => void;
-  onSearchServers: (host: string) => RequestEffect<ReadonlyArray<Server>>;
+  onSearchServers: (host: string) => RequestEffect<readonly Server[]>;
   onJoinServer: (serverId: string, serverHost: string) => RequestEffect<void>;
 };
 
@@ -53,7 +53,7 @@ function JoinServerDialogForm({
   const isMounted = useIsMounted();
   const [host, setHost] = useState(activeHost ?? "");
   const [error, setError] = useState<string | null>(null);
-  const [results, setResults] = useState<ReadonlyArray<Server>>([]);
+  const [results, setResults] = useState<readonly Server[]>([]);
   const [hasSearched, setHasSearched] = useState(open && !!activeHost?.trim());
   const [isSearching, setIsSearching] = useState(open && !!activeHost?.trim());
   const [joiningServerId, setJoiningServerId] = useState<string | null>(null);
@@ -151,7 +151,9 @@ function JoinServerDialogForm({
               <Input
                 id="join-server-host"
                 value={host}
-                onChange={(event) => setHost(event.target.value)}
+                onChange={(event) => {
+                  setHost(event.target.value);
+                }}
                 placeholder="example.com"
                 className="pl-9"
                 disabled={isSearching || joiningServerId !== null}
@@ -214,11 +216,11 @@ function JoinServerDialogForm({
             );
           })}
 
-          {!hasSearched ? (
+          {hasSearched ? null : (
             <div className="rounded-2xl border border-dashed border-border bg-muted/20 px-4 py-3 text-sm text-muted-foreground">
               Search a host to see which servers are available to join.
             </div>
-          ) : null}
+          )}
 
           {hasSearched && !isSearching && results.length === 0 ? (
             <div className="rounded-2xl border border-dashed border-border bg-muted/20 px-4 py-3 text-sm text-muted-foreground">

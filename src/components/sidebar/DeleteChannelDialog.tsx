@@ -64,7 +64,9 @@ export function DeleteChannelDialog({
           },
         })
       )
-    ).finally(() => setIsDeleting(false));
+    ).finally(() => {
+      setIsDeleting(false);
+    });
   }
 
   return (

@@ -1,24 +1,24 @@
 import { sameUserRef } from "./account-storage";
 import { newestResource } from "./resource-version";
-import {
-  type NewServerChannel,
-  type ServerChannel,
-  type ServerChannelMove,
+import type {
+  NewServerChannel,
+  ServerChannel,
+  ServerChannelMove,
 } from "@runelink/sdk";
 import * as Effect from "effect/Effect";
 import { getState, setState, stateAtom } from "@/lib/atom-registry";
 import { authAtom, getActiveAccount } from "@/lib/auth-store";
 import { NotConnectedError, request } from "@/lib/runelink-session";
-import {
-  bindStoreToActiveAccount,
-  type ChannelId,
-  type ServerId,
-  type TargetHost,
+import { bindStoreToActiveAccount } from "@/lib/runelink-store-utils";
+import type {
+  ChannelId,
+  ServerId,
+  TargetHost,
 } from "@/lib/runelink-store-utils";
 import { serversAtom } from "@/lib/servers-store";
 
 type ChannelsState = {
-  channelsByServerId: Record<string, ReadonlyArray<ServerChannel>>;
+  channelsByServerId: Record<string, readonly ServerChannel[]>;
   channelById: Record<string, ServerChannel>;
 };
 
@@ -30,9 +30,9 @@ const initialState: ChannelsState = {
 export const channelsAtom = stateAtom(initialState);
 
 function upsertChannel(
-  channels: ReadonlyArray<ServerChannel>,
+  channels: readonly ServerChannel[],
   nextChannel: ServerChannel
-): ReadonlyArray<ServerChannel> {
+): readonly ServerChannel[] {
   return [
     ...channels.filter((channel) => channel.id !== nextChannel.id),
     nextChannel,
@@ -40,22 +40,22 @@ function upsertChannel(
 }
 
 function upsertChannels(
-  channels: ReadonlyArray<ServerChannel>,
-  nextChannels: ReadonlyArray<ServerChannel>
-): ReadonlyArray<ServerChannel> {
+  channels: readonly ServerChannel[],
+  nextChannels: readonly ServerChannel[]
+): readonly ServerChannel[] {
   return nextChannels.reduce(upsertChannel, channels);
 }
 
 function removeChannel(
-  channels: ReadonlyArray<ServerChannel>,
+  channels: readonly ServerChannel[],
   channelId: ChannelId
-): ReadonlyArray<ServerChannel> {
+): readonly ServerChannel[] {
   return channels.filter((channel) => channel.id !== channelId);
 }
 
 export function newestChannels(
-  channels: ReadonlyArray<ServerChannel>
-): ReadonlyArray<ServerChannel> {
+  channels: readonly ServerChannel[]
+): readonly ServerChannel[] {
   const byId = getState(channelsAtom).channelById;
   const servers = getState(serversAtom).serverWithChannelsById;
   return channels.map((channel) =>
@@ -185,7 +185,7 @@ export const moveChannel = Effect.fn("Channels.move")(function* (
 // Apply upserted channels of a server to the channel and server stores
 export function applyChannelUpserts(
   serverId: ServerId,
-  upserted: ReadonlyArray<ServerChannel>
+  upserted: readonly ServerChannel[]
 ): void {
   const channels = newestChannels(upserted);
   setState(channelsAtom, (state) => ({

@@ -22,7 +22,7 @@ function compareChannels(left: ServerChannel, right: ServerChannel): number {
 
 // Sorted children by parent ID, with null for the server root
 function childrenByParent(
-  channels: ReadonlyArray<ServerChannel>
+  channels: readonly ServerChannel[]
 ): Map<string | null, ServerChannel[]> {
   const children = new Map<string | null, ServerChannel[]>();
   for (const channel of channels) {
@@ -43,7 +43,7 @@ function childrenByParent(
 // categories. The pinned channel and its ancestors stay visible inside
 // collapsed categories, so the selected channel can't be hidden.
 export function visibleRows(
-  channels: ReadonlyArray<ServerChannel>,
+  channels: readonly ServerChannel[],
   collapsedIds: ReadonlySet<string>,
   pinnedId: string | null = null
 ): ChannelRow[] {
@@ -71,9 +71,7 @@ export function visibleRows(
 }
 
 // Categories in tree order with their depth, for choosing a parent
-export function categoryRows(
-  channels: ReadonlyArray<ServerChannel>
-): ChannelRow[] {
+export function categoryRows(channels: readonly ServerChannel[]): ChannelRow[] {
   return visibleRows(channels, new Set()).filter(
     (row) => row.channel.kind === "category"
   );
@@ -81,7 +79,7 @@ export function categoryRows(
 
 // The first text channel in tree order
 export function firstTextChannel(
-  channels: ReadonlyArray<ServerChannel>
+  channels: readonly ServerChannel[]
 ): ServerChannel | null {
   return (
     visibleRows(channels, new Set()).find((row) => row.channel.kind === "text")
@@ -91,7 +89,7 @@ export function firstTextChannel(
 
 // IDs of a channel's ancestors, nearest first
 export function ancestorIds(
-  channels: ReadonlyArray<ServerChannel>,
+  channels: readonly ServerChannel[],
   channelId: string
 ): string[] {
   const byId = new Map(channels.map((channel) => [channel.id, channel]));
@@ -107,7 +105,7 @@ export function ancestorIds(
 // The move that drops `draggedId` at `target`, or null if the drop is
 // invalid, such as a category into its own subtree
 export function planDrop(
-  channels: ReadonlyArray<ServerChannel>,
+  channels: readonly ServerChannel[],
   draggedId: string,
   target: DropTarget
 ): ServerChannelMove | null {

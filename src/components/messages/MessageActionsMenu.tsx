@@ -1,7 +1,8 @@
 import { useAtomValue } from "@effect/atom-react";
 import { authAtom, getActiveAccount } from "@/lib/auth-store";
 import type { ActiveMessage } from "@runelink/sdk";
-import { useRef, type ComponentProps } from "react";
+import { useRef } from "react";
+import type { ComponentProps } from "react";
 import { Copy, Ellipsis, Pencil, Reply, Trash2 } from "lucide-react";
 import { CopyOtherSubmenu } from "@/components/CopyOtherSubmenu";
 import {
@@ -12,7 +13,8 @@ import {
 import { copyToClipboard } from "@/lib/clipboard";
 import { formatMessageCliPath } from "@/lib/cli-path";
 import { cn } from "@/lib/utils";
-import { getAppRoutePath, type AppRoute } from "@/lib/app-route";
+import { getAppRoutePath } from "@/lib/app-route";
+import type { AppRoute } from "@/lib/app-route";
 
 type MessageActionsMenuProps = {
   anchor?: ComponentProps<typeof DropdownMenuContent>["anchor"];

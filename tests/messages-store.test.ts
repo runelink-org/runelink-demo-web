@@ -15,6 +15,7 @@ let hints: typeof import("../src/lib/channel-navigation-hints.ts");
 let updates: typeof import("../src/lib/runelink-updates.ts");
 let session: Layer.Layer<RunelinkSession>;
 import type { RunelinkSession } from "../src/lib/runelink-session.ts";
+
 let NotConnectedError: typeof import("../src/lib/runelink-session.ts").NotConnectedError;
 const requests: PendingRequest[] = [];
 const storage = new Map<string, string>();
@@ -255,10 +256,10 @@ function serverSnapshot(
 }
 function remember(
   host = "peer.example",
-  channels: Array<
+  channels: (
     | { id: string; kind: "text"; text_channel_id: string }
     | { id: string; kind: "category" }
-  > = [
+  )[] = [
     { id: channelId, kind: "text", text_channel_id: textId },
     { id: otherChannelId, kind: "text", text_channel_id: otherTextId },
   ]
@@ -280,7 +281,7 @@ it.effect(
         channelId: otherChannelId,
       });
       assert.equal(requests.length, 1);
-      const request = requests[0].request;
+      const { request } = requests[0];
       assert.equal(request.type, "messages_get_by_text_channel");
       assert.equal(request.data.text_channel_id, otherTextId);
       const sent = requests[0].request;
@@ -424,7 +425,7 @@ it.effect(
       storage.set("runelink.demo.channel-navigation-hints", "{bad json");
       yield* startPrefetch(account, route);
       assert.equal(requests.length, 0);
-      const setItem = window.localStorage.setItem;
+      const { setItem } = window.localStorage;
       window.localStorage.setItem = () => {
         throw new Error("quota");
       };
@@ -469,7 +470,7 @@ it.effect(
         ...state,
         messagesByTextChannelId: { channel: [message, other] },
       }));
-      const edit = (message: ActiveMessage) =>
+      const edit = (message: ActiveMessage) => {
         composer.updateComposer("channel-key", (state) => ({
           ...state,
           focusedInput: "edit",
@@ -482,6 +483,7 @@ it.effect(
             error: null,
           },
         }));
+      };
       const tombstone = (message: ActiveMessage) => ({
         ...message,
         body: null,

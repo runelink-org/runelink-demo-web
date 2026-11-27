@@ -1,9 +1,9 @@
-import {
-  type FullServerMembership,
-  type NewServerMembership,
-  type ServerMember,
-  type ServerMembership,
-  type UserRef,
+import type {
+  FullServerMembership,
+  NewServerMembership,
+  ServerMember,
+  ServerMembership,
+  UserRef,
 } from "@runelink/sdk";
 import * as Effect from "effect/Effect";
 import { setState, stateAtom } from "@/lib/atom-registry";
@@ -20,14 +20,13 @@ import {
 import { request } from "@/lib/runelink-session";
 import {
   bindStoreToActiveAccount,
-  type ServerId,
-  type TargetHost,
   userRefKey,
 } from "@/lib/runelink-store-utils";
+import type { ServerId, TargetHost } from "@/lib/runelink-store-utils";
 
 type MembershipsState = {
-  membershipsByUserRefKey: Record<string, ReadonlyArray<ServerMembership>>;
-  membersByServerId: Record<string, ReadonlyArray<ServerMember>>;
+  membershipsByUserRefKey: Record<string, readonly ServerMembership[]>;
+  membersByServerId: Record<string, readonly ServerMember[]>;
   hasFetchedMembersByServerId: Record<string, boolean>;
   isLoadingByServerId: Record<string, boolean>;
 };
@@ -83,7 +82,11 @@ export const fetchMembersByServer = Effect.fn("Memberships.fetchMembers")(
         target_host: targetHost,
       },
     }).pipe(
-      Effect.onError(() => Effect.sync(() => setServerLoading(serverId, false)))
+      Effect.onError(() =>
+        Effect.sync(() => {
+          setServerLoading(serverId, false);
+        })
+      )
     );
 
     setState(membershipsAtom, (state) => ({

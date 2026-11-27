@@ -66,7 +66,7 @@ export function rememberChannelNavigationHints(
 type NavigationPrefetch = {
   textChannelId: string;
   targetHost: string | null;
-  history: Fiber.Fiber<ReadonlyArray<Message> | null>;
+  history: Fiber.Fiber<readonly Message[] | null>;
   updates: Message[];
 };
 let pending: NavigationPrefetch | null = null;
@@ -84,7 +84,7 @@ export const startChannelNavigationPrefetch = Effect.fn(
 )(function* (
   account: UserRef,
   route: AppRoute,
-  cachedMessages: Record<string, ReadonlyArray<Message>> = {}
+  cachedMessages: Record<string, readonly Message[]> = {}
 ) {
   cancelChannelNavigationPrefetch();
   if (route.screen !== "channel" && route.screen !== "channel-members") return;
@@ -111,7 +111,7 @@ export const startChannelNavigationPrefetch = Effect.fn(
 export function takeChannelNavigationPrefetch(
   textChannelId: string,
   targetHost: string | null
-): Effect.Effect<ReadonlyArray<Message> | null> | null {
+): Effect.Effect<readonly Message[] | null> | null {
   const prefetch = pending;
   if (!prefetch) return null;
   pending = null;
@@ -130,6 +130,7 @@ export function takeChannelNavigationPrefetch(
 }
 
 export function captureChannelNavigationUpdate(message: Message): void {
-  if (pending?.textChannelId === message.text_channel_id)
+  if (pending?.textChannelId === message.text_channel_id) {
     pending.updates.push(message);
+  }
 }

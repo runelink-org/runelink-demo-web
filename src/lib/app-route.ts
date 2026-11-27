@@ -53,9 +53,10 @@ export function parseAppRoute(pathname: string, search = ""): AppRoute | null {
     return { screen: "auth" };
   }
 
-  const channelMatch = pathname.match(
-    /^\/servers\/([^/]+)\/channels\/([^/]+)(\/(?:members|settings))?\/?$/
-  );
+  const channelMatch =
+    /^\/servers\/([^/]+)\/channels\/([^/]+)(\/(?:members|settings))?\/?$/.exec(
+      pathname
+    );
   if (channelMatch) {
     const serverId = parseId(channelMatch[1] ?? "");
     const channelId = parseId(channelMatch[2] ?? "");
@@ -72,13 +73,13 @@ export function parseAppRoute(pathname: string, search = ""): AppRoute | null {
       : { screen, serverId, channelId };
   }
 
-  const settingsMatch = pathname.match(/^\/servers\/([^/]+)\/settings\/?$/);
+  const settingsMatch = /^\/servers\/([^/]+)\/settings\/?$/.exec(pathname);
   if (settingsMatch) {
     const serverId = parseId(settingsMatch[1] ?? "");
     return serverId ? { screen: "server-settings", serverId } : null;
   }
 
-  const serverMatch = pathname.match(/^\/servers\/([^/]+)\/?$/);
+  const serverMatch = /^\/servers\/([^/]+)\/?$/.exec(pathname);
   if (serverMatch) {
     const serverId = parseId(serverMatch[1] ?? "");
     return serverId ? { screen: "server", serverId } : null;
@@ -89,12 +90,15 @@ export function parseAppRoute(pathname: string, search = ""): AppRoute | null {
 
 export function getAppRoutePath(route: AppRoute, messageId?: string): string {
   switch (route.screen) {
-    case "home":
+    case "home": {
       return "/";
-    case "auth":
+    }
+    case "auth": {
       return "/auth";
-    case "server":
+    }
+    case "server": {
       return `/servers/${route.serverId}`;
+    }
     case "channel": {
       const targetMessageId = messageId ?? route.messageId;
       return `/servers/${route.serverId}/channels/${route.channelId}${
@@ -103,12 +107,15 @@ export function getAppRoutePath(route: AppRoute, messageId?: string): string {
           : ""
       }`;
     }
-    case "channel-settings":
+    case "channel-settings": {
       return `/servers/${route.serverId}/channels/${route.channelId}/settings`;
-    case "channel-members":
+    }
+    case "channel-members": {
       return `/servers/${route.serverId}/channels/${route.channelId}/members`;
-    case "server-settings":
+    }
+    case "server-settings": {
       return `/servers/${route.serverId}/settings`;
+    }
   }
 }
 
