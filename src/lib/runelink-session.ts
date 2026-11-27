@@ -23,6 +23,7 @@ import * as Schema from "effect/Schema";
 import * as Scope from "effect/Scope";
 import * as Stream from "effect/Stream";
 import type * as Socket from "effect/socket/Socket";
+import type { Atom } from "effect/reactivity";
 import {
   appAtomRegistry,
   getState,
@@ -86,8 +87,8 @@ export class NotConnectedError extends Schema.TaggedError<NotConnectedError>()(
   }
 }
 
-// The session changed, such as by reconnecting or switching accounts, before
-// the request finished
+// The session changed, such as by switching accounts, before the request
+// finished
 export class SessionChangedError extends Schema.TaggedError<SessionChangedError>()(
   "SessionChangedError",
   {}
@@ -195,6 +196,24 @@ function setConnectionState(patch: Partial<ConnectionState>): void {
 
 function getConnectedAccount(): UserRef | null {
   return getState(connectionAtom).connectedAccount;
+}
+
+// Waits until `select` returns an effect for the atom's state, then runs it
+function waitForAtom<S, A, E>(
+  atom: Atom.Atom<S>,
+  select: (state: S) => Effect.Effect<A, E> | undefined
+): Effect.Effect<A, E> {
+  return Effect.callback<A, E>((resume) => {
+    const initial = select(getState(atom));
+    if (initial) return resume(initial);
+    const unsubscribe = appAtomRegistry.subscribe(atom, (state) => {
+      const result = select(state);
+      if (!result) return;
+      unsubscribe();
+      resume(result);
+    });
+    return Effect.sync(unsubscribe);
+  });
 }
 
 function getAuthSnapshot() {
@@ -343,7 +362,6 @@ const make = Effect.gen(function* () {
     Deferred.Deferred<never, ConnectionCancelledError> | undefined;
   let replaceInProgress = false;
   let explicitAuthenticationInProgress = false;
-  let syncGeneration = 0;
   let syncing: Deferred.Deferred<void> | undefined;
   let syncQueued = false;
   let authRetryAttempt = 0;
@@ -442,8 +460,10 @@ const make = Effect.gen(function* () {
     }
   ).pipe(Effect.uninterruptible);
   const triggerSync = Effect.asVoid(startSync);
-  // Waits for the running sync only, not a follow-up it queues
-  const syncAndWait = Effect.flatMap(startSync, Deferred.await);
+  // Waits for the running sync, or starts one, without queueing another
+  const joinSync = Effect.suspend(() =>
+    syncing ? Effect.succeed(syncing) : startSync
+  ).pipe(Effect.flatMap(Deferred.await));
 
   const handleStatus = Effect.fn("RunelinkSession.handleStatus")(function* (
     connection: Connection,
@@ -716,8 +736,6 @@ const make = Effect.gen(function* () {
 
   const syncConnectionToActiveAccount: Effect.Effect<void> = Effect.gen(
     function* () {
-      // Requests compare this to tell whether a sync ran while they waited.
-      syncGeneration += 1;
       const { activeAccount, activeAuth, authError } = getAuthSnapshot();
 
       if (!activeAccount || !activeAuth) {
@@ -765,58 +783,56 @@ const make = Effect.gen(function* () {
     }
   ).pipe(Effect.withSpan("RunelinkSession.sync"));
 
-  // Waits until the account is connected, or fails once disconnected
-  const waitForConnectedAccount = (account: UserRef | null) =>
-    Effect.callback<Connection, NotConnectedError>((resume) => {
-      function check(state: ConnectionState): boolean {
-        if (
-          current &&
-          account &&
-          state.status === "connected" &&
-          sameUserRef(state.connectedAccount, account)
-        ) {
-          resume(Effect.succeed(current.connection));
-          return true;
-        }
-        if (state.status === "disconnected") {
-          resume(Effect.fail(new NotConnectedError()));
-          return true;
-        }
-        return false;
+  // Waits until the account is connected, or fails once disconnected. A
+  // connection that reports another account, such as during a switch, is
+  // waited out.
+  const waitForConnectedAccount = (account: UserRef) =>
+    waitForAtom(connectionAtom, (state) => {
+      if (
+        current &&
+        state.status === "connected" &&
+        sameUserRef(state.connectedAccount, account)
+      ) {
+        return Effect.succeed(current.connection);
       }
-
-      if (check(getState(connectionAtom))) return;
-      const unsubscribe = appAtomRegistry.subscribe(connectionAtom, (state) => {
-        if (check(state)) unsubscribe();
-      });
-      return Effect.sync(unsubscribe);
+      if (state.status === "disconnected") {
+        return Effect.fail(new NotConnectedError());
+      }
     });
 
-  const waitForAuthenticatedConnection = Effect.gen(function* () {
-    const activeAccount = getAuthSnapshot().activeAccount;
-    if (activeAccount && connectionMatches(activeAccount) && current) {
-      return current.connection;
-    }
-
-    yield* syncAndWait;
-
-    const nextActiveAccount = getAuthSnapshot().activeAccount;
-    if (nextActiveAccount && connectionMatches(nextActiveAccount) && current) {
-      return current.connection;
-    }
-    return yield* waitForConnectedAccount(nextActiveAccount);
-  });
+  // Fails once the active account changes or loses its stored session, such
+  // as by logging out. Token refreshes keep the session.
+  const sessionEnd = (account: UserRef) =>
+    waitForAtom(
+      authAtom,
+      (state): Effect.Effect<never, RequestFailure> | undefined => {
+        if (!sameUserRef(getActiveAccount(state), account)) {
+          return Effect.fail(new SessionChangedError());
+        }
+        if (!getActiveAccountAuth(state)) {
+          return Effect.fail(new NotConnectedError());
+        }
+      }
+    );
 
   const sendRequest = Effect.fn("RunelinkSession.request")(function* <
     Request extends WsRequest,
   >(
     message: Request
   ): Effect.fn.Return<ReplyFor<Request["type"]>, RequestFailure> {
-    const generation = syncGeneration;
-    const connection = yield* waitForAuthenticatedConnection;
-    if (generation !== syncGeneration || !isCurrent(connection)) {
-      return yield* new SessionChangedError();
-    }
+    const { activeAccount: account, activeAuth } = getAuthSnapshot();
+    if (!account || !activeAuth) return yield* new NotConnectedError();
+
+    const connection =
+      connectionMatches(account) && current
+        ? current.connection
+        : yield* Effect.raceFirst(
+            Effect.andThen(joinSync, waitForConnectedAccount(account)),
+            sessionEnd(account)
+          );
+    // The connection was replaced since it connected, and sending on it would
+    // reopen it.
+    if (!isCurrent(connection)) return yield* new SessionChangedError();
     return yield* connection.request(message);
   });
 
