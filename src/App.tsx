@@ -162,6 +162,10 @@ export function App() {
     connectionAtom,
     (state) => state.connectedAccount
   );
+  const connectionError = useAtomValue(
+    connectionAtom,
+    (state) => state.lastError
+  );
   const membershipsByUserRefKey = useAtomValue(
     membershipsAtom,
     (state) => state.membershipsByUserRefKey
@@ -480,6 +484,16 @@ export function App() {
     ? canManageServer(selectedServer.server)
     : false;
   const canModerateSelectedMessages = canDeleteSelectedServer;
+  // The servers stay loading until their first load for the account finishes,
+  // which can't start while the host is unreachable
+  const hasLoadedServers = resolvedSidebarAccountKey === activeAccountKey;
+  const serversError =
+    sidebarError ??
+    (!hasLoadedServers && connectionStatus !== "connected"
+      ? connectionError
+      : null);
+  const isServersLoading =
+    !serversError && (isSidebarLoading || !hasLoadedServers);
   const selectedServerError =
     selectedServer && !(selectedServer.server.id in serverWithChannelsById)
       ? (serverErrorById[selectedServer.server.id] ?? null)
@@ -1006,8 +1020,8 @@ export function App() {
           selectedServerId={selectedServerId}
           selectedChannelId={selectedChannelId}
           selectedChannelIdByServerId={selectedChannelIdByServerId}
-          isLoading={isSidebarLoading}
-          error={sidebarError ?? selectedServerError}
+          isLoading={isServersLoading}
+          error={serversError ?? selectedServerError}
           isSelectedServerHydrating={isSelectedServerHydrating}
           activeHost={activeAccount?.host ?? null}
           accountRailOnly={shouldShowAuthScreen}
@@ -1116,8 +1130,8 @@ export function App() {
                 : null
             }
             hasLoadedMessages={hasFetchedSelectedMessages}
-            isSidebarLoading={isSidebarLoading}
-            sidebarError={sidebarError}
+            isSidebarLoading={isServersLoading}
+            sidebarError={serversError}
             hydratedServerCount={hydratedServers.length}
             isMessagesLoading={isMessagesLoading}
             messagesError={messagesError}
