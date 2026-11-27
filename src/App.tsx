@@ -920,7 +920,14 @@ export function App() {
         targetHost
       );
 
-      yield* fetchServerWithChannels(server.id, targetHost);
+      // The server exists now, so a failed channel load shows in its channel
+      // list rather than failing the create
+      yield* loadServerDetails(
+        server.id,
+        server.host,
+        activeAccount.host,
+        setServerErrorById
+      ).pipe(Effect.ignore);
       navigate({ screen: "server", serverId: server.id }, "push");
     });
   }
@@ -951,10 +958,14 @@ export function App() {
         server_host: serverHost,
         role: "member",
       });
-      yield* fetchServerWithChannels(
+      // The membership exists now, so a failed channel load shows in the
+      // server's channel list rather than failing the join
+      yield* loadServerDetails(
         serverId,
-        getTargetHost(serverHost, activeAccount.host)
-      );
+        serverHost,
+        activeAccount.host,
+        setServerErrorById
+      ).pipe(Effect.ignore);
       debugRunelink("join server finished", {
         serverId,
         serverHost,
