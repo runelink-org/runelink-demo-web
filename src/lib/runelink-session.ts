@@ -916,10 +916,11 @@ const make = Effect.gen(function* () {
     });
   }
 
-  const cancelPendingAuthentication = Effect.gen(function* () {
+  const cancelPendingAuthentication = Effect.sync(() => {
     if (!explicitAuthenticationInProgress) return;
-    cancelHostTransport();
-    if (current) yield* current.connection.disconnect;
+    // Tear down rather than disconnect, since the SDK reconnects on the next
+    // request and could finish a cancelled signup's login.
+    teardownConnection();
   });
 
   const reconnectActiveSession = Effect.gen(function* () {
