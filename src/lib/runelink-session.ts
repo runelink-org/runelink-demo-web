@@ -839,10 +839,11 @@ const make = Effect.gen(function* () {
               orElse: () => Effect.fail(new NotConnectedError()),
             })
           );
-    // The connection was replaced since it connected, and sending on it would
-    // reopen it.
+    // The connection was replaced since it connected
     if (!isCurrent(connection)) return yield* new SessionChangedError();
-    return yield* connection.request(message);
+    // A dropped socket fails the request rather than reconnecting, since the
+    // session reconnects and authenticates.
+    return yield* connection.request(message, { connect: false });
   });
 
   // Signs in to an account the user entered, replacing the active connection

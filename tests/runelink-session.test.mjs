@@ -335,3 +335,33 @@ test(
     });
   }
 );
+
+test(
+  "a request fails if the socket drops before the session sees it",
+  options,
+  async () => {
+    await withSession(async (request) => {
+      await authenticate();
+      // The SDK reports the close before its status changes, so the session
+      // still looks connected.
+      let ping;
+      const unsubscribe = registry.subscribe(
+        session$.connectionAtom,
+        (state) => {
+          if (!state.lastError) return;
+          unsubscribe();
+          ping = request({ type: "ping" });
+        }
+      );
+      sockets[0].close(4000);
+
+      await waitFor(() => ping);
+      await assert.rejects(resultOf(ping), {
+        _tag: "RunelinkDisconnectedError",
+      });
+      // The session reconnects, not the request.
+      assert.equal(sockets.length, 1);
+      assert.equal(sentIndex("ping"), -1);
+    });
+  }
+);
