@@ -12,7 +12,10 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { forgetDeletedAccount } from "@/lib/account-deletion";
+import {
+  forgetDeletedAccount,
+  trackAccountDeletion,
+} from "@/lib/account-deletion";
 import { accountStorageKey, sameUserRef } from "@/lib/account-storage";
 import { isSavedAccount } from "@/lib/auth-store";
 import { connectionAtom, request } from "@/lib/runelink-session";
@@ -63,7 +66,10 @@ export function DeleteAccountDialog({
     setIsDeleting(true);
     setError(null);
     await runPromise(
-      request({ type: "users_delete", data: { user_ref: account } }).pipe(
+      trackAccountDeletion(
+        account,
+        request({ type: "users_delete", data: { user_ref: account } })
+      ).pipe(
         Effect.match({
           onSuccess: () => {
             forgetDeletedAccount(account);

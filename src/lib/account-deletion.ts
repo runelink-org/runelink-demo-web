@@ -33,6 +33,25 @@ export function setAccountDeletedNotifier(
   notifyAccountDeleted = notify;
 }
 
+// Accounts this client is deleting. The host removes their memberships first,
+// which must not read as being removed from each server.
+const deletingAccounts = new Set<string>();
+
+export function isDeletingAccount(userRef: UserRef): boolean {
+  return deletingAccounts.has(accountStorageKey(userRef));
+}
+
+export function trackAccountDeletion<A, E, R>(
+  userRef: UserRef,
+  deletion: Effect.Effect<A, E, R>
+): Effect.Effect<A, E, R> {
+  const key = accountStorageKey(userRef);
+  return Effect.suspend(() => {
+    deletingAccounts.add(key);
+    return deletion;
+  }).pipe(Effect.ensuring(Effect.sync(() => deletingAccounts.delete(key))));
+}
+
 export function forgetDeletedAccount(userRef: UserRef): void {
   if (removeAccount(userRef, { selectNext: false })) {
     notifyAccountDeleted(accountStorageKey(userRef));
