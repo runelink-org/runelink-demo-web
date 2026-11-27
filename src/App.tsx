@@ -280,6 +280,8 @@ export function App() {
 
     const loadSidebar = Effect.gen(function* () {
       const memberships = yield* fetchMembershipsByUser(account);
+      // The account may have changed while the memberships loaded.
+      if (isCancelled) return;
       debugRunelink("sidebar memberships loaded", {
         user: account,
         serverIds: memberships.map((membership) => membership.server.id),
