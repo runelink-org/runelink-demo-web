@@ -16,7 +16,7 @@
 - App state lives in keep-alive atoms (`stateAtom`) in `appAtomRegistry`. Components read them with `useAtomValue(atom, selector)` from `@effect/atom-react`, and other code uses `getState` and `setState`. State that belongs to one account resets with `bindStoreToActiveAccount`.
 - Write reusable effects with `Effect.fn("Module.operation")`, and expected failures as `Schema.TaggedError` classes whose `message` is fixed or built from their fields. Catch specific failures with `Effect.catchTags`.
 - Event handlers and React effects run effects with `runPromise` or `runFork` from `src/lib/runtime.ts`, which only accept effects that cannot fail, so the compiler checks that every failure is handled. Components receive actions as effects (`RequestEffect`) and handle their failures: user actions show `toastFailure` (or an inline `requestFailureMessage`), and background loads log a warning or show the failure where their data appears.
-- Tests run on `node:test` and load modules through Vite. Provide a test `RunelinkSession` layer rather than mocking modules.
+- Tests use Vitest with `@effect/vitest`. Provide a test `RunelinkSession` layer rather than mocking modules.
 
 ## UI Components
 
