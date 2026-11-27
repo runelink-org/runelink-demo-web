@@ -11,7 +11,7 @@ import * as RunelinkSession from "@/lib/runelink-session";
 import { setUpdateNotifier } from "@/lib/runelink-updates";
 
 // Saved accounts are checked after startup so the check never delays loading.
-const SAVED_ACCOUNT_CHECK_DELAY_MS = 3_000;
+const SAVED_ACCOUNT_CHECK_DELAY_MS = 3000;
 
 const runtime = ManagedRuntime.make(
   RunelinkSession.layer.pipe(
@@ -39,7 +39,9 @@ let started = false;
 // Connects the active account, and shows notices such as for saved accounts
 // that were deleted.
 export function startApp(notify: (message: string) => void) {
-  setAccountDeletedNotifier((account) => notify(`${account} was deleted.`));
+  setAccountDeletedNotifier((account) => {
+    notify(`${account} was deleted.`);
+  });
   setUpdateNotifier(notify);
   if (started) return;
   started = true;

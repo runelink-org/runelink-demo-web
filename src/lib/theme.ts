@@ -64,11 +64,9 @@ function applyTheme(
   const resolvedTheme = resolveTheme(selectedTheme, systemTheme);
 
   document.documentElement.classList.toggle("dark", resolvedTheme === "dark");
-  document
-    .querySelectorAll('meta[name="theme-color"]')
-    .forEach((meta) =>
-      meta.setAttribute("content", THEME_COLORS[resolvedTheme])
-    );
+  document.querySelectorAll('meta[name="theme-color"]').forEach((meta) => {
+    meta.setAttribute("content", THEME_COLORS[resolvedTheme]);
+  });
 }
 
 export function setSelectedTheme(theme: ThemePreference): void {
@@ -98,7 +96,7 @@ export function initializeThemeStore(): void {
 
   mediaQuery.addEventListener("change", () => {
     const systemTheme = mediaQuery.matches ? "dark" : "light";
-    const selectedTheme = getState(themeAtom).selectedTheme;
+    const { selectedTheme } = getState(themeAtom);
 
     setState(themeAtom, { systemTheme });
     applyTheme(selectedTheme, systemTheme);

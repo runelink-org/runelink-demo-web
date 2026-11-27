@@ -1,9 +1,6 @@
 import { appAtomRegistry, stateAtom } from "@/lib/atom-registry";
-import {
-  bindStoreToActiveAccount,
-  type ChannelId,
-  type ServerId,
-} from "@/lib/runelink-store-utils";
+import { bindStoreToActiveAccount } from "@/lib/runelink-store-utils";
+import type { ChannelId, ServerId } from "@/lib/runelink-store-utils";
 
 type NavigationState = {
   selectedServerId: ServerId | null;

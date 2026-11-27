@@ -40,7 +40,7 @@ export type CreateChannelRequest = {
 type CreateChannelDialogProps = {
   request: CreateChannelRequest | null;
   serverTitle: string | null;
-  channels: ReadonlyArray<ServerChannel>;
+  channels: readonly ServerChannel[];
   onOpenChange: (open: boolean) => void;
   onCreateChannel: (
     kind: ServerChannelKind,
@@ -178,7 +178,9 @@ function CreateChannelDialogForm({
         <Input
           id="channel-title"
           value={title}
-          onChange={(event) => setTitle(event.target.value)}
+          onChange={(event) => {
+            setTitle(event.target.value);
+          }}
           placeholder={kind === "category" ? "Projects" : "general"}
           disabled={isCreating}
           autoFocus

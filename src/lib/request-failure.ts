@@ -4,32 +4,43 @@ import type { RequestFailure } from "@/lib/runelink-session";
 // kind of failure does not compile until it has a message.
 export function requestFailureMessage(error: RequestFailure): string {
   switch (error._tag) {
-    case "RunelinkAuthError":
+    case "RunelinkAuthError": {
       return "You don't have permission to do this.";
-    case "RunelinkNotFoundError":
+    }
+    case "RunelinkNotFoundError": {
       return "It no longer exists.";
+    }
     // The host's message explains these
     case "RunelinkBadRequestError":
-    case "RunelinkConflictError":
+    case "RunelinkConflictError": {
       return error.hostMessage;
-    case "RunelinkInternalError":
+    }
+    case "RunelinkInternalError": {
       return "The host couldn't complete the request. Try again later.";
-    case "RunelinkUnsupportedCapabilityError":
+    }
+    case "RunelinkUnsupportedCapabilityError": {
       // The issue explains why the host can't use it, such as which side
       // needs updating. Without one, this client lacks the capability.
       return error.issue ?? "This client doesn't support this.";
-    case "RunelinkIncompatibleHostError":
+    }
+    case "RunelinkIncompatibleHostError": {
       return "The host isn't compatible with this client.";
-    case "RunelinkConnectionError":
+    }
+    case "RunelinkConnectionError": {
       return "The connection to the host was lost. Try again once it reconnects.";
+    }
     case "RunelinkDisconnectedError":
-    case "SessionChangedError":
+    case "SessionChangedError": {
       return "The connection changed before this finished. Try again.";
-    case "NotConnectedError":
+    }
+    case "NotConnectedError": {
       return "You're not connected. Try again once you're connected.";
-    case "RunelinkProtocolError":
+    }
+    case "RunelinkProtocolError": {
       return "The host sent a reply this client can't read.";
-    case "RunelinkInvalidRequestError":
+    }
+    case "RunelinkInvalidRequestError": {
       return "This client made an invalid request.";
+    }
   }
 }

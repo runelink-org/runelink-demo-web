@@ -18,7 +18,7 @@ import { useContextActionsMenu } from "@/lib/use-context-actions-menu";
 type ServerMemberListProps = {
   serverId: string;
   serverHost: string;
-  members: ReadonlyArray<ServerMember>;
+  members: readonly ServerMember[];
   isLoading: boolean;
   error: string | null;
   canModerateMembers: boolean;
@@ -91,14 +91,16 @@ export function ServerMemberList({
 }: ServerMemberListProps) {
   // TODO: Only list members who can access the selected channel, and move
   // offline members into an "Offline" section that role counts exclude (#14)
-  const sections = useMemo(() => {
-    return ROLE_ORDER.map((role) => ({
-      role,
-      members: members
-        .filter((member) => member.role === role)
-        .sort(compareMemberNames),
-    })).filter((section) => section.members.length > 0);
-  }, [members]);
+  const sections = useMemo(
+    () =>
+      ROLE_ORDER.map((role) => ({
+        role,
+        members: members
+          .filter((member) => member.role === role)
+          .sort(compareMemberNames),
+      })).filter((section) => section.members.length > 0),
+    [members]
+  );
 
   if (error || isLoading || members.length === 0) {
     return (

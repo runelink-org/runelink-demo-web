@@ -11,7 +11,8 @@ import {
   X,
 } from "lucide-react";
 import type { UserRef } from "@runelink/sdk";
-import { useState, type ReactNode } from "react";
+import { useState } from "react";
+import type { ReactNode } from "react";
 import { toast } from "sonner";
 import { DeleteAccountDialog } from "@/components/DeleteAccountDialog";
 import { useContextActionsMenu } from "@/lib/use-context-actions-menu";
@@ -201,16 +202,16 @@ export function ProfileSelector({
                 disabled
                 className={warning ? "data-disabled:opacity-100" : undefined}
               >
-                {!activeAuth ? (
-                  <CircleDashed />
-                ) : (
+                {activeAuth ? (
                   (warningIcon ?? <CheckCircle2 />)
+                ) : (
+                  <CircleDashed />
                 )}
                 <div className="flex min-w-0 flex-col">
                   <span>
-                    {!activeAuth
-                      ? "Login Required"
-                      : (warning?.label ?? statusLabels[connectionStatus])}
+                    {activeAuth
+                      ? (warning?.label ?? statusLabels[connectionStatus])
+                      : "Login Required"}
                   </span>
                   {activeAuth && warning ? (
                     <span className="text-muted-foreground text-xs wrap-anywhere">
@@ -256,9 +257,13 @@ export function ProfileSelector({
                         <CircleDashed />
                       )
                     }
-                    onSelect={() => selectAccount(account)}
+                    onSelect={() => {
+                      selectAccount(account);
+                    }}
                     onRemove={() => removeAccount(account)}
-                    onDelete={() => handleDeleteAccount(account)}
+                    onDelete={() => {
+                      handleDeleteAccount(account);
+                    }}
                   />
                 );
               })}
@@ -346,8 +351,12 @@ function AccountMenuItem({
                   : "hidden group-hover/account:flex group-focus-within/account:flex",
               ].join(" ")}
               aria-label={`Account actions for ${label}`}
-              onPointerDown={(event) => event.stopPropagation()}
-              onClick={(event) => event.stopPropagation()}
+              onPointerDown={(event) => {
+                event.stopPropagation();
+              }}
+              onClick={(event) => {
+                event.stopPropagation();
+              }}
             />
           }
         >

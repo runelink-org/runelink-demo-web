@@ -10,10 +10,8 @@ import { useEffect, useRef, useState } from "react";
 import { flushSync } from "react-dom";
 import { ProfileSelector } from "@/components/ProfileSelector";
 import { AddServerMenu } from "@/components/sidebar/AddServerMenu";
-import {
-  CreateChannelDialog,
-  type CreateChannelRequest,
-} from "@/components/sidebar/CreateChannelDialog";
+import { CreateChannelDialog } from "@/components/sidebar/CreateChannelDialog";
+import type { CreateChannelRequest } from "@/components/sidebar/CreateChannelDialog";
 import { ChannelSection } from "@/components/sidebar/ChannelSection";
 import { DeleteChannelDialog } from "@/components/sidebar/DeleteChannelDialog";
 import { DeleteServerDialog } from "@/components/sidebar/DeleteServerDialog";
@@ -28,7 +26,7 @@ import type { RequestEffect } from "@/lib/runelink-session";
 import * as Effect from "effect/Effect";
 
 type SidebarProps = {
-  servers: ReadonlyArray<ServerWithChannels>;
+  servers: readonly ServerWithChannels[];
   selectedServerId: string | null;
   selectedChannelId: string | null;
   selectedChannelIdByServerId: Record<string, string | null>;
@@ -46,7 +44,7 @@ type SidebarProps = {
     title: string,
     description: string
   ) => RequestEffect<void>;
-  onSearchServers: (host: string) => RequestEffect<ReadonlyArray<Server>>;
+  onSearchServers: (host: string) => RequestEffect<readonly Server[]>;
   onJoinServer: (serverId: string, serverHost: string) => RequestEffect<void>;
   onOpenServerSettings: (server: Server) => void;
   onLeaveServer: (serverId: string, serverHost: string) => RequestEffect<void>;
@@ -176,13 +174,14 @@ export function Sidebar({
     );
   }, [channelPanelWidth]);
 
-  useEffect(() => {
-    return () => {
+  useEffect(
+    () => () => {
       if (pendingNavigationTimeoutRef.current !== null) {
         window.clearTimeout(pendingNavigationTimeoutRef.current);
       }
-    };
-  }, []);
+    },
+    []
+  );
 
   useEffect(() => {
     if (!pendingSelection) {
@@ -381,7 +380,9 @@ export function Sidebar({
                   <button
                     type="button"
                     className="block w-full cursor-pointer truncate rounded-sm text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
-                    onClick={() => onOpenServerSettings(selectedServer.server)}
+                    onClick={() => {
+                      onOpenServerSettings(selectedServer.server);
+                    }}
                   >
                     {selectedServer.server.title}
                   </button>
@@ -419,8 +420,9 @@ export function Sidebar({
             isSelectedServerHydrating={isSelectedServerHydrating}
             canManageChannels={canDeleteSelectedServer}
             onOpenCreateChannel={(kind, parentChannelId) => {
-              if (selectedServer)
+              if (selectedServer) {
                 openCreateChannel(selectedServer.server, kind, parentChannelId);
+              }
             }}
             onSelectChannel={(serverId, channel) => {
               scheduleSelectionCommit(

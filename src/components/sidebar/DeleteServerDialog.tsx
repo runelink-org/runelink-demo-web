@@ -24,7 +24,7 @@ type DeleteServerDialogProps = {
 };
 
 function normalizeWhitespace(value: string): string {
-  return value.trim().replace(/\s+/g, " ");
+  return value.trim().replaceAll(/\s+/g, " ");
 }
 
 export function DeleteServerDialog({
@@ -61,11 +61,14 @@ export function DeleteServerDialog({
             toast.success(`Deleted server: ${server.title}`);
             onOpenChange(false);
           },
-          onFailure: (failure) =>
-            setError(toastFailure("Couldn't delete server", failure)),
+          onFailure: (failure) => {
+            setError(toastFailure("Couldn't delete server", failure));
+          },
         })
       )
-    ).finally(() => setIsDeleting(false));
+    ).finally(() => {
+      setIsDeleting(false);
+    });
   }
 
   return (

@@ -68,8 +68,8 @@ function isLoadedServer(serverId: string): boolean {
 }
 
 function getKnownTextChannelIdsForServer(serverId: string): string[] {
-  return Array.from(
-    new Set(
+  return [
+    ...new Set(
       [
         ...(getState(channelsAtom).channelsByServerId[serverId] ?? []),
         ...(getState(serversAtom).serverWithChannelsById[serverId]?.channels ??
@@ -77,8 +77,8 @@ function getKnownTextChannelIdsForServer(serverId: string): string[] {
       ].flatMap((channel) =>
         channel.kind === "text" ? [channel.text_channel_id] : []
       )
-    )
-  );
+    ),
+  ];
 }
 
 function removeMessageState(deletedTextChannelIds: string[]): void {
@@ -353,34 +353,43 @@ function handleMessageUpsert(message: Message): void {
 export function handleRunelinkUpdate(update: WsUpdate): void {
   debugRunelink("ws update", update);
   switch (update.type) {
-    case "user_upserted":
+    case "user_upserted": {
       handleUserUpsert(update.data);
       break;
-    case "user_deleted":
+    }
+    case "user_deleted": {
       handleUserDeleted(update.data.user_ref);
       break;
-    case "membership_upserted":
+    }
+    case "membership_upserted": {
       handleMembershipUpsert(update.data);
       break;
-    case "membership_deleted":
+    }
+    case "membership_deleted": {
       handleMembershipDeleted(update.data.server_id, update.data.user_ref);
       break;
-    case "server_upserted":
+    }
+    case "server_upserted": {
       handleServerUpsert(update.data);
       break;
-    case "server_deleted":
+    }
+    case "server_deleted": {
       if (isLoadedServer(update.data.server_id)) {
         removeLoadedServerState(update.data.server_id);
       }
       break;
-    case "channel_upserted":
+    }
+    case "channel_upserted": {
       handleChannelUpsert(update.data);
       break;
-    case "channel_deleted":
+    }
+    case "channel_deleted": {
       handleChannelDeleted(update.data.server_id, update.data.channel_id);
       break;
-    case "message_upserted":
+    }
+    case "message_upserted": {
       handleMessageUpsert(update.data);
       break;
+    }
   }
 }

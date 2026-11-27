@@ -201,8 +201,8 @@ const authenticate = Effect.fn("SessionTest.authenticate")(function* () {
 
 it.effect(
   "a request made during a reconnect is sent once reauthenticated",
-  () => {
-    return withSession((session) =>
+  () =>
+    withSession((session) =>
       Effect.gen(function* () {
         yield* authenticate();
         // Coming back online replaces the socket.
@@ -225,15 +225,14 @@ it.effect(
         );
         assert.equal((yield* Fiber.join(ping)).type, "pong");
       })
-    );
-  },
+    ),
   options
 );
 
 it.effect(
   "a waiting request fails if the account is switched",
-  () => {
-    return withSession((session) =>
+  () =>
+    withSession((session) =>
       Effect.gen(function* () {
         yield* waitForRequest("auth_token_access");
         const ping = yield* Effect.forkScoped(
@@ -255,15 +254,14 @@ it.effect(
         yield* authenticate();
         assert.equal(sentIndex("ping"), -1);
       })
-    );
-  },
+    ),
   options
 );
 
 it.effect(
   "a waiting request fails on logout",
-  () => {
-    return withSession((session) =>
+  () =>
+    withSession((session) =>
       Effect.gen(function* () {
         yield* waitForRequest("auth_token_access");
         const ping = yield* Effect.forkScoped(
@@ -280,8 +278,7 @@ it.effect(
         );
         assert.equal(sentIndex("ping"), -1);
       })
-    );
-  },
+    ),
   options
 );
 
@@ -296,7 +293,7 @@ it.effect(
         authStore.selectAccount(other);
 
         const auth = yield* waitForRequest("auth_token_access");
-        const request = auth.request.request;
+        const { request } = auth.request;
         assert.equal(request.type, "auth_token_access");
         assert.equal(request.data.access_token, "other");
         assert.equal(sockets[0].readyState, 3);
@@ -327,8 +324,8 @@ it.effect(
 
 it.effect(
   "logging out cancels a login in progress",
-  () => {
-    return withSession((session) =>
+  () =>
+    withSession((session) =>
       Effect.gen(function* () {
         yield* authenticate();
         const attempt = yield* Effect.forkScoped(
@@ -347,15 +344,14 @@ it.effect(
           "disconnected"
         );
       })
-    );
-  },
+    ),
   options
 );
 
 it.effect(
   "background syncs keep a login's connection until it finishes",
-  () => {
-    return withSession((session) =>
+  () =>
+    withSession((session) =>
       Effect.gen(function* () {
         yield* authenticate();
         const attempt = yield* Effect.forkScoped(
@@ -398,15 +394,14 @@ it.effect(
         );
         assert.equal(sentIndex("ping"), -1);
       })
-    );
-  },
+    ),
   options
 );
 
 it.effect(
   "a request fails if the socket drops before the session sees it",
-  () => {
-    return withSession((session) =>
+  () =>
+    withSession((session) =>
       Effect.gen(function* () {
         yield* authenticate();
         // The SDK reports the close before its status changes, so the session
@@ -435,7 +430,6 @@ it.effect(
         );
         assert.equal(sentIndex("ping"), -1);
       })
-    );
-  },
+    ),
   options
 );

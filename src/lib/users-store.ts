@@ -1,12 +1,12 @@
-import { type User, type UserRef } from "@runelink/sdk";
+import type { User, UserRef } from "@runelink/sdk";
 import * as Effect from "effect/Effect";
 import { setState, stateAtom } from "@/lib/atom-registry";
 import { request } from "@/lib/runelink-session";
 import {
   bindStoreToActiveAccount,
-  type TargetHost,
   userRefKey,
 } from "@/lib/runelink-store-utils";
+import type { TargetHost } from "@/lib/runelink-store-utils";
 
 type UsersState = {
   userByRefKey: Record<string, User>;

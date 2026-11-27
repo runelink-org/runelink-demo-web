@@ -1,11 +1,5 @@
-import {
-  useEffect,
-  useRef,
-  useState,
-  type ComponentProps,
-  type HTMLAttributes,
-  type SyntheticEvent,
-} from "react";
+import { useEffect, useRef, useState } from "react";
+import type { ComponentProps, HTMLAttributes, SyntheticEvent } from "react";
 import type { DropdownMenu } from "@/components/ui/dropdown-menu";
 
 function isInsideTarget(event: SyntheticEvent<HTMLElement>): boolean {
@@ -29,7 +23,12 @@ export function useContextActionsMenu(moveThreshold = 10) {
     touchStart.current = undefined;
   }
 
-  useEffect(() => () => clearTimeout(longPressTimer.current), []);
+  useEffect(
+    () => () => {
+      clearTimeout(longPressTimer.current);
+    },
+    []
+  );
 
   function openMenuAt(x: number, y: number) {
     const point = new DOMRect(x, y, 0, 0);
@@ -110,6 +109,8 @@ export function useContextActionsMenu(moveThreshold = 10) {
     anchor: menuAnchor,
     side: menuAnchor?.side ?? "bottom",
     openMenuAbove,
-    closeMenu: () => setMenuOpen(false),
+    closeMenu: () => {
+      setMenuOpen(false);
+    },
   };
 }

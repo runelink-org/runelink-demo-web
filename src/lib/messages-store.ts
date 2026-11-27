@@ -3,27 +3,24 @@ import {
   takeChannelNavigationPrefetch,
 } from "@/lib/channel-navigation-hints";
 import { mergeMessages } from "./message-cache";
-import { type Message, type NewMessage } from "@runelink/sdk";
+import type { Message, NewMessage } from "@runelink/sdk";
 import * as Cause from "effect/Cause";
 import * as Effect from "effect/Effect";
 import * as Deferred from "effect/Deferred";
 import * as Option from "effect/Option";
 import { getState, setState, stateAtom } from "@/lib/atom-registry";
 import { requestFailureMessage } from "@/lib/request-failure";
-import {
-  request,
-  type RequestFailure,
-  type RunelinkSession,
-} from "@/lib/runelink-session";
-import {
-  bindStoreToActiveAccount,
-  type MessageId,
-  type TargetHost,
-  type TextChannelId,
+import { request } from "@/lib/runelink-session";
+import type { RequestFailure, RunelinkSession } from "@/lib/runelink-session";
+import { bindStoreToActiveAccount } from "@/lib/runelink-store-utils";
+import type {
+  MessageId,
+  TargetHost,
+  TextChannelId,
 } from "@/lib/runelink-store-utils";
 
 type MessagesState = {
-  messagesByTextChannelId: Record<string, ReadonlyArray<Message>>;
+  messagesByTextChannelId: Record<string, readonly Message[]>;
   hasFetchedByTextChannelId: Record<string, boolean>;
   isLoadingByTextChannelId: Record<string, boolean>;
   errorByTextChannelId: Record<string, string | null>;
@@ -38,12 +35,12 @@ const initialState: MessagesState = {
 
 export const messagesAtom = stateAtom(initialState);
 
-type History = Deferred.Deferred<ReadonlyArray<Message>, RequestFailure>;
+type History = Deferred.Deferred<readonly Message[], RequestFailure>;
 let pendingFetches = new Map<string, History>();
 
 function storeMessages(
   textChannelId: TextChannelId,
-  messages: ReadonlyArray<Message>
+  messages: readonly Message[]
 ): void {
   setState(messagesAtom, (state) => ({
     messagesByTextChannelId: {
@@ -61,7 +58,7 @@ function storeMessages(
 export function fetchMessagesByTextChannel(
   textChannelId: TextChannelId,
   targetHost: TargetHost = null
-): Effect.Effect<ReadonlyArray<Message>, RequestFailure, RunelinkSession> {
+): Effect.Effect<readonly Message[], RequestFailure, RunelinkSession> {
   // Uninterruptible until the shared load is running, so it is never
   // registered without starting
   return Effect.uninterruptibleMask((restore) =>

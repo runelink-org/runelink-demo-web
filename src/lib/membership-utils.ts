@@ -7,8 +7,8 @@ import type {
 import { userRefKey } from "@/lib/runelink-store-utils";
 
 export function sortMemberships(
-  memberships: ReadonlyArray<ServerMembership>
-): ReadonlyArray<ServerMembership> {
+  memberships: readonly ServerMembership[]
+): readonly ServerMembership[] {
   return [...memberships].sort((left, right) => {
     const titleComparison = left.server.title.localeCompare(right.server.title);
     if (titleComparison !== 0) {
@@ -19,9 +19,9 @@ export function sortMemberships(
 }
 
 export function upsertMembership(
-  memberships: ReadonlyArray<ServerMembership>,
+  memberships: readonly ServerMembership[],
   nextMembership: ServerMembership
-): ReadonlyArray<ServerMembership> {
+): readonly ServerMembership[] {
   return sortMemberships([
     ...memberships.filter(
       (membership) => membership.server.id !== nextMembership.server.id
@@ -31,16 +31,16 @@ export function upsertMembership(
 }
 
 export function removeMembership(
-  memberships: ReadonlyArray<ServerMembership>,
+  memberships: readonly ServerMembership[],
   serverId: string
-): ReadonlyArray<ServerMembership> {
+): readonly ServerMembership[] {
   return memberships.filter((membership) => membership.server.id !== serverId);
 }
 
 export function upsertMember(
-  members: ReadonlyArray<ServerMember>,
+  members: readonly ServerMember[],
   nextMember: ServerMember
-): ReadonlyArray<ServerMember> {
+): readonly ServerMember[] {
   const key = userRefKey(nextMember.user);
   return [
     ...members.filter((member) => userRefKey(member.user) !== key),
@@ -49,9 +49,9 @@ export function upsertMember(
 }
 
 export function removeMember(
-  members: ReadonlyArray<ServerMember>,
+  members: readonly ServerMember[],
   userRef: UserRef
-): ReadonlyArray<ServerMember> {
+): readonly ServerMember[] {
   const key = userRefKey(userRef);
   return members.filter((member) => userRefKey(member.user) !== key);
 }

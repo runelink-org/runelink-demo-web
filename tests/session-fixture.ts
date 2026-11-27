@@ -27,7 +27,9 @@ export function controlledSession(
             assert.ok(matches(reply));
             resume(Effect.succeed(reply));
           },
-          reject: (error) => resume(Effect.fail(error)),
+          reject: (error) => {
+            resume(Effect.fail(error));
+          },
         });
       }),
     login: () => Effect.die("Unexpected login"),

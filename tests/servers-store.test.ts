@@ -9,6 +9,7 @@ import type { PendingRequest } from "./session-fixture.ts";
 let servers: typeof import("../src/lib/servers-store.ts");
 let session: Layer.Layer<RunelinkSession>;
 import type { RunelinkSession } from "../src/lib/runelink-session.ts";
+
 let NotConnectedError: typeof import("../src/lib/runelink-session.ts").NotConnectedError;
 const requests: PendingRequest[] = [];
 const originalWindow = globalThis.window;

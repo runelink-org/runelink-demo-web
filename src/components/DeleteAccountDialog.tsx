@@ -1,5 +1,6 @@
 import { useAtomValue } from "@effect/atom-react";
-import { padHost, type UserRef } from "@runelink/sdk";
+import { padHost } from "@runelink/sdk";
+import type { UserRef } from "@runelink/sdk";
 import { useState } from "react";
 import { TypedConfirmationField } from "@/components/TypedConfirmationField";
 import {
@@ -84,7 +85,9 @@ export function DeleteAccountDialog({
           },
         })
       )
-    ).finally(() => setIsDeleting(false));
+    ).finally(() => {
+      setIsDeleting(false);
+    });
   }
 
   return (

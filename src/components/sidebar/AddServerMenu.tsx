@@ -22,7 +22,7 @@ type AddServerMenuProps = {
     title: string,
     description: string
   ) => RequestEffect<void>;
-  onSearchServers: (host: string) => RequestEffect<ReadonlyArray<Server>>;
+  onSearchServers: (host: string) => RequestEffect<readonly Server[]>;
   onJoinServer: (serverId: string, serverHost: string) => RequestEffect<void>;
 };
 
@@ -126,11 +126,11 @@ export function AddServerMenu({
             <Plus className="size-4" />
             <div className="flex flex-col">
               <span className="font-medium">Create Server</span>
-              {!contextMenu.anchor ? (
+              {contextMenu.anchor ? null : (
                 <span className="text-xs text-muted-foreground">
                   Start a new server.
                 </span>
-              ) : null}
+              )}
             </div>
           </DropdownMenuItem>
           <DropdownMenuItem
@@ -142,11 +142,11 @@ export function AddServerMenu({
             <Search className="size-4" />
             <div className="flex flex-col">
               <span className="font-medium">Join Server</span>
-              {!contextMenu.anchor ? (
+              {contextMenu.anchor ? null : (
                 <span className="text-xs text-muted-foreground">
                   Look up existing servers.
                 </span>
-              ) : null}
+              )}
             </div>
           </DropdownMenuItem>
         </DropdownMenuContent>

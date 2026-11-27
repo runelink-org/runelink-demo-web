@@ -5,7 +5,7 @@ import * as Schema from "effect/Schema";
 import { appAtomRegistry, stateAtom } from "@/lib/atom-registry";
 
 const STORAGE_KEY = "runelink.demo.host-transports";
-const PROBE_TIMEOUT_MS = 5_000;
+const PROBE_TIMEOUT_MS = 5000;
 
 // The host could not be reached now, but may be later.
 export class HostUnreachableError extends Schema.TaggedError<HostUnreachableError>()(
@@ -57,9 +57,9 @@ function confirmInsecureHost(host: string): Effect.Effect<boolean> {
       },
     });
     // Interrupted, such as when the connection attempt is cancelled
-    return Effect.sync(() =>
-      appAtomRegistry.set(hostTransportPromptAtom, null)
-    );
+    return Effect.sync(() => {
+      appAtomRegistry.set(hostTransportPromptAtom, null);
+    });
   });
 }
 
@@ -143,8 +143,9 @@ export const resolveHostTransport = Effect.fn("HostTransport.resolve")(
       allow_insecure: !secure || (hosts[host]?.allow_insecure ?? false),
     };
     yield* Effect.try({
-      try: () =>
-        window.localStorage.setItem(STORAGE_KEY, JSON.stringify(hosts)),
+      try: () => {
+        window.localStorage.setItem(STORAGE_KEY, JSON.stringify(hosts));
+      },
       catch: (error) =>
         new HostTransportError({
           message:

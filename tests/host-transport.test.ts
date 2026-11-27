@@ -11,7 +11,7 @@ import * as Socket from "effect/socket/Socket";
 let hostTransport: typeof import("../src/lib/host-transport.ts");
 let registry: typeof import("../src/lib/atom-registry.ts").appAtomRegistry;
 let storage: Map<string, string>;
-let calls: Array<{ url: string; options?: RequestInit }>;
+let calls: { url: string; options?: RequestInit }[];
 const originalFetch = globalThis.fetch;
 const originalWindow = globalThis.window;
 

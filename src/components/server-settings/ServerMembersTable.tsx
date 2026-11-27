@@ -19,7 +19,7 @@ import {
 type ServerMembersTableProps = {
   serverId: string;
   serverHost: string;
-  members: ReadonlyArray<ServerMember>;
+  members: readonly ServerMember[];
   isLoadingMembers: boolean;
   membersError: string | null;
   activeAccount: { name: string; host: string } | null;

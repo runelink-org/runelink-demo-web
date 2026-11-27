@@ -14,14 +14,8 @@ import type {
 } from "@runelink/sdk";
 import { useAtomValue } from "@effect/atom-react";
 import * as Effect from "effect/Effect";
-import {
-  type Dispatch,
-  type SetStateAction,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import type { Dispatch, SetStateAction } from "react";
 import { toast } from "sonner";
 import { AuthScreen } from "@/components/AuthScreen";
 import { ServerMemberList } from "@/components/members/ServerMemberList";
@@ -36,7 +30,8 @@ import {
   getActiveAccountAuth,
   setAuthError,
 } from "@/lib/auth-store";
-import { type AppRoute, getContentRoute } from "@/lib/app-route";
+import { getContentRoute } from "@/lib/app-route";
+import type { AppRoute } from "@/lib/app-route";
 import {
   createChannel,
   deleteChannel,
@@ -48,8 +43,8 @@ import {
   cancelPendingAuthentication as cancelPendingAuthenticationEffect,
   connectionAtom,
   SessionChangedError,
-  type RequestEffect,
 } from "@/lib/runelink-session";
+import type { RequestEffect } from "@/lib/runelink-session";
 import {
   deleteMembership,
   fetchMembersByServer,
@@ -77,7 +72,7 @@ import { useAppNavigation } from "@/lib/use-app-navigation";
 import { useIsWideLayout } from "@/lib/use-wide-layout";
 import { fetchUserByRef, usersAtom } from "@/lib/users-store";
 
-const EMPTY_MESSAGES: ReadonlyArray<Message> = [];
+const EMPTY_MESSAGES: readonly Message[] = [];
 
 function cancelPendingAuthentication() {
   runFork(cancelPendingAuthenticationEffect);
@@ -101,12 +96,12 @@ function loadServerDetails(
   ).pipe(
     Effect.catch((error) =>
       Effect.logWarning("Failed to load server", error).pipe(
-        Effect.map(() =>
+        Effect.map(() => {
           setServerErrorById((errors) => ({
             ...errors,
             [serverId]: `Couldn't load channels from ${serverHost}. ${requestFailureMessage(error)}`,
-          }))
-        )
+          }));
+        })
       )
     ),
     Effect.asVoid
@@ -354,26 +349,30 @@ export function App() {
     ? membershipsByUserRefKey[userRefKey(activeAccount)]
     : undefined;
 
-  const hydratedServers = useMemo(() => {
-    return (activeMemberships ?? [])
-      .map(
-        (membership) =>
-          serverWithChannelsById[membership.server.id] ?? {
-            server: membership.server,
-            channels: [],
-          }
-      )
-      .filter((value): value is ServerWithChannels => value !== undefined);
-  }, [activeMemberships, serverWithChannelsById]);
+  const hydratedServers = useMemo(
+    () =>
+      (activeMemberships ?? [])
+        .map(
+          (membership) =>
+            serverWithChannelsById[membership.server.id] ?? {
+              server: membership.server,
+              channels: [],
+            }
+        )
+        .filter((value): value is ServerWithChannels => value !== undefined),
+    [activeMemberships, serverWithChannelsById]
+  );
 
-  const hydratedServerById = useMemo(() => {
-    return Object.fromEntries(
-      hydratedServers.map((serverWithChannels) => [
-        serverWithChannels.server.id,
-        serverWithChannels,
-      ])
-    );
-  }, [hydratedServers]);
+  const hydratedServerById = useMemo(
+    () =>
+      Object.fromEntries(
+        hydratedServers.map((serverWithChannels) => [
+          serverWithChannels.server.id,
+          serverWithChannels,
+        ])
+      ),
+    [hydratedServers]
+  );
 
   const missingMembershipServers = useMemo(() => {
     if (!activeAccount || !activeMemberships) {
@@ -488,9 +487,9 @@ export function App() {
   const hasLoadedServers = resolvedSidebarAccountKey === activeAccountKey;
   const serversError = hasLoadedServers
     ? sidebarError
-    : connectionStatus !== "connected"
-      ? connectionError
-      : null;
+    : connectionStatus === "connected"
+      ? null
+      : connectionError;
   const isServersLoading = !hasLoadedServers && !serversError;
   const selectedServerError =
     selectedServer && !(selectedServer.server.id in serverWithChannelsById)
@@ -568,7 +567,7 @@ export function App() {
     }
 
     if (!selectedChannel) {
-      document.title = `${selectedServer.server.title}`;
+      document.title = selectedServer.server.title;
       return;
     }
 
@@ -619,12 +618,12 @@ export function App() {
       ).pipe(
         // Shown in the members list
         Effect.catch((error) =>
-          Effect.sync(() =>
+          Effect.sync(() => {
             setMembersErrorByServerId((errors) => ({
               ...errors,
               [membersServerId]: requestFailureMessage(error),
-            }))
-          )
+            }));
+          })
         ),
         Effect.ensuring(
           Effect.sync(() =>
@@ -815,8 +814,9 @@ export function App() {
     body: string,
     replyTo: string | null
   ): RequestEffect<void> {
-    if (!activeAccount || !selectedServer || !selectedTextChannelId)
+    if (!activeAccount || !selectedServer || !selectedTextChannelId) {
       return Effect.void;
+    }
     return createMessage(
       selectedTextChannelId,
       {
@@ -829,8 +829,9 @@ export function App() {
   }
 
   function handleDeleteMessage(message: Message): RequestEffect<void> {
-    if (!activeAccount || !selectedServer || !selectedTextChannelId)
+    if (!activeAccount || !selectedServer || !selectedTextChannelId) {
       return Effect.void;
+    }
     return deleteMessage(
       selectedTextChannelId,
       message.id,
@@ -896,8 +897,9 @@ export function App() {
       if (
         !accountAfterDelete ||
         userRefKey(accountAfterDelete) !== userRefKey(activeAccount)
-      )
+      ) {
         return;
+      }
       const current = getCurrentRoute();
       if (
         current.screen === "channel-settings" &&
@@ -952,9 +954,7 @@ export function App() {
     });
   }
 
-  function handleSearchServers(
-    host: string
-  ): RequestEffect<ReadonlyArray<Server>> {
+  function handleSearchServers(host: string): RequestEffect<readonly Server[]> {
     if (!activeAccount) return Effect.succeed([]);
     return fetchServers(getTargetHost(host, activeAccount.host));
   }
@@ -1042,8 +1042,12 @@ export function App() {
           isSelectedServerHydrating={isSelectedServerHydrating}
           activeHost={activeAccount?.host ?? null}
           accountRailOnly={shouldShowAuthScreen}
-          onManageAccounts={() => handleOpenAuth(false)}
-          onSelectAccount={() => handleOpenAuth(true)}
+          onManageAccounts={() => {
+            handleOpenAuth(false);
+          }}
+          onSelectAccount={() => {
+            handleOpenAuth(true);
+          }}
           onSelectServer={handleSelectServer}
           onSelectChannel={handleSelectChannel}
           onCreateServer={handleCreateServer}
@@ -1104,7 +1108,7 @@ export function App() {
                 ? canManageServer(channelSettingsServer.server)
                 : false
             }
-            onDone={() =>
+            onDone={() => {
               backOrReplace(
                 channelSettingsChannel?.kind === "text"
                   ? {
@@ -1113,8 +1117,8 @@ export function App() {
                       channelId: route.channelId,
                     }
                   : { screen: "server", serverId: route.serverId }
-              )
-            }
+              );
+            }}
             onDeleteChannel={handleDeleteChannel}
           />
         ) : isServerSettingsOpen ? (

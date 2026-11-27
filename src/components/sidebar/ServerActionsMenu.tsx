@@ -67,7 +67,9 @@ export function ServerActionsMenu({
         <DropdownMenuItem
           className="cursor-pointer gap-3 rounded-xl px-3 py-2"
           disabled={!canCreateChannels}
-          onClick={() => onCreateChannel(server, "text")}
+          onClick={() => {
+            onCreateChannel(server, "text");
+          }}
         >
           <Hash className="size-4" />
           <span className="font-medium">Create Channel</span>
@@ -75,7 +77,9 @@ export function ServerActionsMenu({
         <DropdownMenuItem
           className="cursor-pointer gap-3 rounded-xl px-3 py-2"
           disabled={!canCreateChannels}
-          onClick={() => onCreateChannel(server, "category")}
+          onClick={() => {
+            onCreateChannel(server, "category");
+          }}
         >
           <FolderPlus className="size-4" />
           <span className="font-medium">Create Category</span>

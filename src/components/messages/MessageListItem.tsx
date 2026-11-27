@@ -91,7 +91,9 @@ export function MessageListItem({
                 <button
                   type="button"
                   className="flex min-w-0 items-center gap-2 text-left hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                  onClick={() => onJumpToMessage(replyTarget.id)}
+                  onClick={() => {
+                    onJumpToMessage(replyTarget.id);
+                  }}
                   aria-label={`Jump to message from ${replyTarget.author?.name ?? "Unknown user"}`}
                 >
                   <span
@@ -118,7 +120,7 @@ export function MessageListItem({
               )}
             </div>
           ) : null}
-          {!editing ? (
+          {editing ? null : (
             <div
               className={`absolute right-1 z-10 flex w-8 justify-end ${
                 isCompact && isOneLine
@@ -137,14 +139,14 @@ export function MessageListItem({
                 onEdit={onEdit}
               />
             </div>
-          ) : null}
+          )}
           <div className="flex items-start gap-3">
             {isCompact ? (
               <div className="flex w-10 shrink-0 cursor-text select-text items-center justify-end self-stretch whitespace-nowrap text-[10px] text-muted-foreground/90 opacity-0 transition group-hover:opacity-100">
                 {compactTimestamp}
               </div>
             ) : null}
-            {!isCompact ? (
+            {isCompact ? null : (
               <button
                 type="button"
                 {...(message.author ? authorContextMenu.targetProps : {})}
@@ -157,9 +159,9 @@ export function MessageListItem({
               >
                 {authorName.slice(0, 2).toUpperCase()}
               </button>
-            ) : null}
+            )}
             <div className="min-w-0 flex-1">
-              {!isCompact ? (
+              {isCompact ? null : (
                 <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
                   <button
                     type="button"
@@ -176,7 +178,7 @@ export function MessageListItem({
                     {fullTimestamp}
                   </span>
                 </div>
-              ) : null}
+              )}
               {editing ? (
                 <InlineMessageEditor
                   message={editing}
@@ -185,7 +187,9 @@ export function MessageListItem({
                     channelRoute.channelId
                   )}
                   host={host}
-                  onDelete={() => onDeleteMessage(message)}
+                  onDelete={() => {
+                    onDeleteMessage(message);
+                  }}
                   onClose={(reason) => {
                     if (reason === "cancel") onCancelEdit();
                   }}

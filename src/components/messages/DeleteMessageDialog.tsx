@@ -1,5 +1,6 @@
 import type { Message } from "@runelink/sdk";
-import { useRef, useState, type RefObject } from "react";
+import { useRef, useState } from "react";
+import type { RefObject } from "react";
 import { toast } from "sonner";
 import {
   AlertDialog,
@@ -50,11 +51,14 @@ export function DeleteMessageDialog({
             toast.success("Deleted message.");
             onOpenChange(false);
           },
-          onFailure: (failure) =>
-            setError(toastFailure("Couldn't delete message", failure)),
+          onFailure: (failure) => {
+            setError(toastFailure("Couldn't delete message", failure));
+          },
         })
       )
-    ).finally(() => setIsDeleting(false));
+    ).finally(() => {
+      setIsDeleting(false);
+    });
   }
 
   return (

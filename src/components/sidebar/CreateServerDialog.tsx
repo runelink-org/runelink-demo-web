@@ -119,7 +119,9 @@ function CreateServerDialogForm({
         <Input
           id="server-host"
           value={host}
-          onChange={(event) => setHost(event.target.value)}
+          onChange={(event) => {
+            setHost(event.target.value);
+          }}
           placeholder="runelink.chat"
           disabled={isCreating}
         />
@@ -131,7 +133,9 @@ function CreateServerDialogForm({
           id="server-title"
           ref={titleInputRef}
           value={title}
-          onChange={(event) => setTitle(event.target.value)}
+          onChange={(event) => {
+            setTitle(event.target.value);
+          }}
           placeholder="Game Night"
           disabled={isCreating}
           autoFocus
@@ -143,7 +147,9 @@ function CreateServerDialogForm({
         <Textarea
           id="server-description"
           value={description}
-          onChange={(event) => setDescription(event.target.value)}
+          onChange={(event) => {
+            setDescription(event.target.value);
+          }}
           placeholder="What kind of conversations happen here?"
           className="min-h-24 resize-none"
           disabled={isCreating}

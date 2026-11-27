@@ -1,23 +1,13 @@
 import { newestResource } from "./resource-version";
 import { newestChannels } from "./channels-store";
-import {
-  type NewServer,
-  type Server,
-  type ServerWithChannels,
-} from "@runelink/sdk";
+import type { NewServer, Server, ServerWithChannels } from "@runelink/sdk";
 import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
 import { setState, stateAtom } from "@/lib/atom-registry";
-import {
-  request,
-  type RequestFailure,
-  type RunelinkSession,
-} from "@/lib/runelink-session";
-import {
-  bindStoreToActiveAccount,
-  type ServerId,
-  type TargetHost,
-} from "@/lib/runelink-store-utils";
+import { request } from "@/lib/runelink-session";
+import type { RequestFailure, RunelinkSession } from "@/lib/runelink-session";
+import { bindStoreToActiveAccount } from "@/lib/runelink-store-utils";
+import type { ServerId, TargetHost } from "@/lib/runelink-store-utils";
 
 type ServersState = {
   serverById: Record<string, Server>;

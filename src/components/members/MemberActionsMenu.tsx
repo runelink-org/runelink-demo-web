@@ -104,7 +104,9 @@ export function MemberActionsMenu({
             ),
         })
       )
-    ).finally(() => setIsUpdatingRole(false));
+    ).finally(() => {
+      setIsUpdatingRole(false);
+    });
   }
 
   async function handleKickMember() {

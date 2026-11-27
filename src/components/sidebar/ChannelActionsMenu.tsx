@@ -2,10 +2,8 @@ import { useRef } from "react";
 import type { ServerChannel, ServerChannelKind } from "@runelink/sdk";
 import { Ellipsis, FolderPlus, Hash, Pencil, Trash2 } from "lucide-react";
 import { IdIcon } from "@/components/icons/IdIcon";
-import {
-  CopyOtherSubmenu,
-  type CopyOption,
-} from "@/components/CopyOtherSubmenu";
+import { CopyOtherSubmenu } from "@/components/CopyOtherSubmenu";
+import type { CopyOption } from "@/components/CopyOtherSubmenu";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -35,7 +33,7 @@ type ChannelActionsMenuProps = {
 function getCopyOptions(host: string, channel: ServerChannel): CopyOption[] {
   const path = formatChannelCliPath(host, channel.id);
   switch (channel.kind) {
-    case "text":
+    case "text": {
       return [
         {
           label: "Channel Link",
@@ -65,7 +63,8 @@ function getCopyOptions(host: string, channel: ServerChannel): CopyOption[] {
           successLabel: "Copied CLI path (text channel).",
         },
       ];
-    case "category":
+    }
+    case "category": {
       return [
         {
           label: "Path for CLI",
@@ -73,6 +72,7 @@ function getCopyOptions(host: string, channel: ServerChannel): CopyOption[] {
           successLabel: "Copied CLI path.",
         },
       ];
+    }
   }
 }
 

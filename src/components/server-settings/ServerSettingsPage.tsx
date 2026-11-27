@@ -35,7 +35,7 @@ import type { RequestEffect } from "@/lib/runelink-session";
 
 type ServerSettingsPageProps = {
   server: ServerWithChannels | null;
-  members: ReadonlyArray<ServerMember>;
+  members: readonly ServerMember[];
   isLoadingMembers: boolean;
   membersError: string | null;
   onDone: () => void;
@@ -66,7 +66,7 @@ export function ServerSettingsPage(props: ServerSettingsPageProps) {
 }
 
 function normalizeDescription(value: string | null): string {
-  return (value ?? "").replace(/[^\S\r\n]+$/gm, "").trim();
+  return (value ?? "").replaceAll(/[^\S\r\n]+$/gm, "").trim();
 }
 
 function ServerSettingsContent({
@@ -106,15 +106,17 @@ function ServerSettingsContent({
       ? (state.userByRefKey[userRefKey(activeAccount)] ?? null)
       : null
   );
-  const sortedMembers = useMemo(() => {
-    return [...members].sort((left, right) => {
-      if (left.role !== right.role) {
-        return left.role === "admin" ? -1 : 1;
-      }
+  const sortedMembers = useMemo(
+    () =>
+      [...members].sort((left, right) => {
+        if (left.role !== right.role) {
+          return left.role === "admin" ? -1 : 1;
+        }
 
-      return compareMemberNames(left, right);
-    });
-  }, [members]);
+        return compareMemberNames(left, right);
+      }),
+    [members]
+  );
   const activeServerMember = useMemo(() => {
     if (!activeAccount) {
       return null;
@@ -149,8 +151,9 @@ function ServerSettingsContent({
       isSaving ||
       !dirty ||
       !submittedTitle
-    )
+    ) {
       return;
+    }
     const account = activeAccount;
     setIsSaving(true);
     setError(null);
@@ -171,8 +174,12 @@ function ServerSettingsContent({
         Effect.match({
           onSuccess: (reply) => {
             const active = getActiveAccount(getState(authAtom));
-            if (active?.name !== account.name || active?.host !== account.host)
+            if (
+              active?.name !== account.name ||
+              active?.host !== account.host
+            ) {
               return;
+            }
             handleRunelinkUpdate({ type: "server_upserted", data: reply.data });
             if (!mountedRef.current) return;
             setBaseline(reply.data);
@@ -282,11 +289,11 @@ function ServerSettingsContent({
                     disabled={!canModerateMembers || isSaving}
                   />
                 </div>
-                {!canModerateMembers ? (
+                {canModerateMembers ? null : (
                   <p className="text-sm text-muted-foreground">
                     Only server admins can edit server settings.
                   </p>
-                ) : null}
+                )}
                 {error ? (
                   <p role="alert" className="text-sm text-destructive">
                     {error} Your changes have been kept. Reset to load the

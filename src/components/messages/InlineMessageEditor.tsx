@@ -61,8 +61,9 @@ export function InlineMessageEditor({
     if (
       body === input.value &&
       sameTextareaSelection(editing?.selection ?? null, selection)
-    )
+    ) {
       return;
+    }
     updateEdit(channelKey, session, { body: input.value, selection });
   }
 
@@ -111,13 +112,16 @@ export function InlineMessageEditor({
             }
             close("saved");
           },
-          onFailure: (failure) =>
+          onFailure: (failure) => {
             updateEdit(channelKey, session, {
               error: requestFailureMessage(failure),
-            }),
+            });
+          },
         })
       )
-    ).finally(() => updateEdit(channelKey, session, { isSaving: false }));
+    ).finally(() => {
+      updateEdit(channelKey, session, { isSaving: false });
+    });
   }
 
   return (
@@ -142,10 +146,18 @@ export function InlineMessageEditor({
               : { ...state, focusedInput: "edit" }
           );
         }}
-        onChange={(event) => updateBody(event.currentTarget)}
-        onSelect={(event) => updateBody(event.currentTarget)}
-        onContextMenu={(event) => event.stopPropagation()}
-        onTouchStart={(event) => event.stopPropagation()}
+        onChange={(event) => {
+          updateBody(event.currentTarget);
+        }}
+        onSelect={(event) => {
+          updateBody(event.currentTarget);
+        }}
+        onContextMenu={(event) => {
+          event.stopPropagation();
+        }}
+        onTouchStart={(event) => {
+          event.stopPropagation();
+        }}
         onKeyDown={(event) => {
           if (event.nativeEvent.isComposing) return;
           if (event.key === "Escape") {
@@ -171,7 +183,9 @@ export function InlineMessageEditor({
           variant="link"
           className="h-auto p-0 text-xs"
           disabled={isSaving}
-          onClick={() => close("cancel")}
+          onClick={() => {
+            close("cancel");
+          }}
         >
           cancel
         </Button>

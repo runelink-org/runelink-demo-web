@@ -13,15 +13,12 @@ import type {
 } from "@runelink/sdk";
 import {
   useCallback,
-  type SubmitEvent,
-  type KeyboardEvent,
-  type ReactNode,
-  type RefObject,
   useEffect,
   useLayoutEffect,
   useRef,
   useState,
 } from "react";
+import type { SubmitEvent, KeyboardEvent, ReactNode, RefObject } from "react";
 import {
   ArrowLeft,
   Hash,
@@ -64,7 +61,7 @@ type MessagesPaneProps = {
   selectedServer: ServerWithChannels | null;
   selectedChannel: ServerWithChannels["channels"][number] | undefined;
   selectedChannelKey: string | null;
-  selectedMessages: ReadonlyArray<Message>;
+  selectedMessages: readonly Message[];
   targetMessageId: string | null;
   hasLoadedMessages: boolean;
   isSidebarLoading: boolean;
@@ -161,7 +158,7 @@ function formatMessageTimestamp(timestamp: string): string {
     value.getDate()
   );
   const dayDifference = Math.round(
-    (startOfToday.getTime() - startOfTargetDay.getTime()) / 86400000
+    (startOfToday.getTime() - startOfTargetDay.getTime()) / 86_400_000
   );
 
   const timeLabel = new Intl.DateTimeFormat(undefined, {
@@ -272,7 +269,7 @@ function MessageList({
 }: {
   host: string;
   channelRoute: Extract<AppRoute, { screen: "channel" }>;
-  messages: ReadonlyArray<Message>;
+  messages: readonly Message[];
   scrollContainerRef: RefObject<HTMLDivElement | null>;
   composerRef: RefObject<HTMLTextAreaElement | null>;
   onScroll: () => void;
@@ -476,11 +473,11 @@ export function MessagesPane({
   const linkedMessage = targetMessageId
     ? selectedMessages.find((message) => message.id === targetMessageId)
     : undefined;
-  const messageLinkError = !linkedMessage
-    ? "The linked message could not be found."
-    : linkedMessage.deleted_at !== null
+  const messageLinkError = linkedMessage
+    ? linkedMessage.deleted_at !== null
       ? "The linked message has been deleted."
-      : null;
+      : null
+    : "The linked message could not be found.";
 
   useEffect(() => {
     if (
@@ -642,8 +639,8 @@ export function MessagesPane({
     wasAtBottomRef.current = true;
   }, [selectedChannelKey, selectedMessages.length]);
 
-  useLayoutEffect(() => {
-    return () => {
+  useLayoutEffect(
+    () => () => {
       // Skip saving until the channel's scroll position has been restored, so
       // a premature cleanup (e.g. StrictMode remount) doesn't persist the top.
       if (!hasRestoredScrollRef.current) {
@@ -654,8 +651,9 @@ export function MessagesPane({
         previousChannelKeyRef.current,
         lastKnownScrollTopRef.current
       );
-    };
-  }, [saveScrollPosition, selectedChannelKey]);
+    },
+    [saveScrollPosition, selectedChannelKey]
+  );
 
   useLayoutEffect(() => {
     if (previousTargetMessageIdRef.current === targetMessageId) return;
@@ -694,10 +692,10 @@ export function MessagesPane({
         behavior: "instant",
       });
       highlightMessage(target);
-    } else if (savedScrollTop !== undefined) {
-      element.scrollTop = savedScrollTop;
-    } else {
+    } else if (savedScrollTop === undefined) {
       scrollToBottom();
+    } else {
+      element.scrollTop = savedScrollTop;
     }
 
     lastKnownScrollTopRef.current = element.scrollTop;
@@ -785,7 +783,7 @@ export function MessagesPane({
     await runPromise(
       onSendMessage(nextBody, replyTarget?.id ?? null).pipe(
         Effect.match({
-          onSuccess: () =>
+          onSuccess: () => {
             updateChannel(selectedChannelKey, (state) =>
               state.sending === sending
                 ? {
@@ -796,8 +794,11 @@ export function MessagesPane({
                     sending: null,
                   }
                 : state
-            ),
-          onFailure: (failure) => fail(requestFailureMessage(failure)),
+            );
+          },
+          onFailure: (failure) => {
+            fail(requestFailureMessage(failure));
+          },
         }),
         Effect.catchDefect((defect) =>
           Effect.sync(() => {
@@ -935,7 +936,9 @@ export function MessagesPane({
                   <button
                     type="button"
                     className="block w-full cursor-pointer truncate rounded-sm text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
-                    onClick={() => onEditChannel(selectedChannel)}
+                    onClick={() => {
+                      onEditChannel(selectedChannel);
+                    }}
                   >
                     {selectedChannel.title}
                   </button>
@@ -992,7 +995,9 @@ export function MessagesPane({
 
         <div
           className="relative flex min-h-0 min-w-0 flex-1 flex-col bg-background"
-          onContextMenu={(event) => event.preventDefault()}
+          onContextMenu={(event) => {
+            event.preventDefault();
+          }}
         >
           {sidebarError ? (
             <div className="flex flex-1 items-center justify-center px-6">
@@ -1058,19 +1063,9 @@ export function MessagesPane({
                 </p>
               </div>
             </div>
-          ) : !selectedMessages.some(
+          ) : selectedMessages.some(
               (message) => message.deleted_at === null
             ) ? (
-            <div className="flex flex-1 items-center justify-center px-6">
-              <div className="max-w-md rounded-3xl border border-border/70 bg-background/80 p-6 text-center shadow-sm backdrop-blur">
-                <h2 className="text-lg font-semibold">No messages yet</h2>
-                <p className="mt-2 text-sm text-muted-foreground">
-                  This channel is quiet right now. Once someone posts, messages
-                  will appear here.
-                </p>
-              </div>
-            </div>
-          ) : (
             <MessageList
               host={selectedServer.server.host}
               channelRoute={{
@@ -1103,6 +1098,16 @@ export function MessagesPane({
                 textareaRef.current?.focus();
               }}
             />
+          ) : (
+            <div className="flex flex-1 items-center justify-center px-6">
+              <div className="max-w-md rounded-3xl border border-border/70 bg-background/80 p-6 text-center shadow-sm backdrop-blur">
+                <h2 className="text-lg font-semibold">No messages yet</h2>
+                <p className="mt-2 text-sm text-muted-foreground">
+                  This channel is quiet right now. Once someone posts, messages
+                  will appear here.
+                </p>
+              </div>
+            </div>
           )}
 
           {canCompose ? (
@@ -1134,7 +1139,9 @@ export function MessagesPane({
                     size="icon"
                     className="size-6 shrink-0"
                     aria-label="Cancel reply"
-                    onClick={() => setReplyTo(null)}
+                    onClick={() => {
+                      setReplyTo(null);
+                    }}
                   >
                     <X className="size-3.5" />
                   </Button>
@@ -1158,7 +1165,9 @@ export function MessagesPane({
                         : { ...state, focusedInput: "draft" }
                     );
                   }}
-                  onSelect={(event) => updateDraft(event.currentTarget)}
+                  onSelect={(event) => {
+                    updateDraft(event.currentTarget);
+                  }}
                   onKeyDown={(event) => {
                     void handleKeyDown(event);
                   }}

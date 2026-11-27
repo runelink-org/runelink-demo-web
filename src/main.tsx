@@ -11,7 +11,7 @@ import { initializeThemeStore } from "@/lib/theme";
 
 initializeThemeStore();
 
-createRoot(document.getElementById("root")!).render(
+createRoot(document.querySelector("#root")!).render(
   <StrictMode>
     <AppAtomRegistryProvider>
       <TooltipProvider>

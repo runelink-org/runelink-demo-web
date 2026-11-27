@@ -6,7 +6,9 @@ const wideLayoutQuery = window.matchMedia("(min-width: 64rem)");
 
 function subscribeToWideLayout(onChange: () => void): () => void {
   wideLayoutQuery.addEventListener("change", onChange);
-  return () => wideLayoutQuery.removeEventListener("change", onChange);
+  return () => {
+    wideLayoutQuery.removeEventListener("change", onChange);
+  };
 }
 
 function getIsWideLayout(): boolean {

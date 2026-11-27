@@ -33,7 +33,9 @@ export function TypedConfirmationField({
           autoCapitalize="off"
           autoCorrect="off"
           spellCheck={false}
-          onChange={(event) => onChange(event.target.value)}
+          onChange={(event) => {
+            onChange(event.target.value);
+          }}
           onKeyDown={(event) => {
             if (event.key === "Enter") {
               event.preventDefault();
