@@ -285,8 +285,9 @@ export function App() {
       });
       // A server that fails to load, such as on an unreachable peer host, is
       // shown from its membership until it loads, so it doesn't keep the
-      // others from being used
-      const [fullServers] = yield* Effect.partition(
+      // others from being used. The servers are reconciled with the route
+      // from the memberships once the load finishes.
+      yield* Effect.forEach(
         memberships,
         (membership) =>
           loadServerDetails(
@@ -294,10 +295,9 @@ export function App() {
             membership.server.host,
             account.host,
             setServerErrorById
-          ),
-        { concurrency: "unbounded" }
+          ).pipe(Effect.ignore),
+        { concurrency: "unbounded", discard: true }
       );
-      return fullServers;
     });
 
     function startSidebarLoad() {
@@ -307,17 +307,14 @@ export function App() {
       setServerErrorById({});
       void runPromise(
         loadSidebar.pipe(
-          Effect.match({
-            onSuccess: (fullServers) => {
-              if (!isCancelled) reconcileServers(fullServers);
-            },
-            onFailure: (error) => {
+          Effect.catch((error) =>
+            Effect.sync(() => {
               if (isCancelled) return;
               console.warn("Failed to load servers", error);
               setSidebarError(requestFailureMessage(error));
               reconcileServers([]);
-            },
-          }),
+            })
+          ),
           Effect.ensuring(
             Effect.sync(() => {
               if (isCancelled) return;
