@@ -484,16 +484,15 @@ export function App() {
     ? canManageServer(selectedServer.server)
     : false;
   const canModerateSelectedMessages = canDeleteSelectedServer;
-  // The servers stay loading until their first load for the account finishes,
-  // which can't start while the host is unreachable
+  // The servers stay loading until their load for the active account
+  // finishes, which can't start while the host is unreachable
   const hasLoadedServers = resolvedSidebarAccountKey === activeAccountKey;
-  const serversError =
-    sidebarError ??
-    (!hasLoadedServers && connectionStatus !== "connected"
+  const serversError = hasLoadedServers
+    ? sidebarError
+    : connectionStatus !== "connected"
       ? connectionError
-      : null);
-  const isServersLoading =
-    !serversError && (isSidebarLoading || !hasLoadedServers);
+      : null;
+  const isServersLoading = !hasLoadedServers && !serversError;
   const selectedServerError =
     selectedServer && !(selectedServer.server.id in serverWithChannelsById)
       ? (serverErrorById[selectedServer.server.id] ?? null)
