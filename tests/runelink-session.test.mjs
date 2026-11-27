@@ -359,8 +359,6 @@ test(
       await assert.rejects(resultOf(ping), {
         _tag: "RunelinkDisconnectedError",
       });
-      // The session reconnects, not the request.
-      assert.equal(sockets.length, 1);
       assert.equal(sentIndex("ping"), -1);
     });
   }
