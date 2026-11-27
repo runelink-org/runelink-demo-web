@@ -167,6 +167,23 @@ for (const fails of [false, true]) {
   });
 }
 
+for (const fails of [false, true]) {
+  test(`a late ${fails ? "failure" : "history"} does not restore a removed channel`, async () => {
+    const empty = state();
+    const pending = fetchMessages("channel");
+    // Removed, such as by a deletion update
+    registry.set(messages.messagesAtom, empty);
+    if (fails) {
+      requests[0].reject(new NotConnectedError());
+      await assert.rejects(pending, { _tag: "NotConnectedError" });
+    } else {
+      reply(requests[0]);
+      await pending;
+    }
+    assert.deepEqual(state(), empty);
+  });
+}
+
 const account = { name: "alice", host: "example.com" };
 const serverId = "11111111-1111-4111-8111-111111111111";
 const channelId = "22222222-2222-4222-8222-222222222222";
