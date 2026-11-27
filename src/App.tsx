@@ -87,8 +87,8 @@ function getTargetHost(serverHost: string, activeHost: string): string | null {
   return serverHost === activeHost ? null : serverHost;
 }
 
-// Loads a server's channels, recording why it failed, such as an unreachable
-// peer host, for the channel list
+// Loads a server's channels. A failure, such as on an unreachable peer host,
+// is recorded for the channel list rather than returned.
 function loadServerDetails(
   serverId: string,
   serverHost: string,
@@ -99,7 +99,7 @@ function loadServerDetails(
     serverId,
     getTargetHost(serverHost, activeHost)
   ).pipe(
-    Effect.tapError((error) =>
+    Effect.catch((error) =>
       Effect.logWarning("Failed to load server", error).pipe(
         Effect.map(() =>
           setServerErrorById((errors) => ({
@@ -108,7 +108,8 @@ function loadServerDetails(
           }))
         )
       )
-    )
+    ),
+    Effect.asVoid
   );
 }
 
@@ -295,7 +296,7 @@ export function App() {
             membership.server.host,
             account.host,
             setServerErrorById
-          ).pipe(Effect.ignore),
+          ),
         { concurrency: "unbounded", discard: true }
       );
     });
@@ -405,7 +406,6 @@ export function App() {
           activeAccount.host,
           setServerErrorById
         ).pipe(
-          Effect.ignore,
           Effect.ensuring(
             Effect.sync(() =>
               pendingServerDetailsRef.current.delete(membership.server.id)
@@ -937,7 +937,7 @@ export function App() {
         server.host,
         activeAccount.host,
         setServerErrorById
-      ).pipe(Effect.ignore);
+      );
       navigate({ screen: "server", serverId: server.id }, "push");
     });
   }
@@ -975,7 +975,7 @@ export function App() {
         serverHost,
         activeAccount.host,
         setServerErrorById
-      ).pipe(Effect.ignore);
+      );
       debugRunelink("join server finished", {
         serverId,
         serverHost,
