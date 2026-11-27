@@ -5,9 +5,14 @@ import {
   type Server,
   type ServerWithChannels,
 } from "@runelink/sdk";
+import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
 import { setState, stateAtom } from "@/lib/atom-registry";
-import { request } from "@/lib/runelink-session";
+import {
+  request,
+  type RequestFailure,
+  type RunelinkSession,
+} from "@/lib/runelink-session";
 import {
   bindStoreToActiveAccount,
   type ServerId,
@@ -25,6 +30,12 @@ const initialState: ServersState = {
 };
 
 export const serversAtom = stateAtom(initialState);
+
+type ServerWithChannelsLoad = Deferred.Deferred<
+  ServerWithChannels,
+  RequestFailure
+>;
+let pendingServerWithChannelsLoads = new Map<string, ServerWithChannelsLoad>();
 
 function cachedServer(
   state: ServersState,
@@ -58,8 +69,8 @@ export const fetchServers = Effect.fn("Servers.fetchAll")(function* (
   return reply.data;
 });
 
-export const fetchServerWithChannels = Effect.fn("Servers.fetchWithChannels")(
-  function* (serverId: ServerId, targetHost: TargetHost = null) {
+const loadServerWithChannels = Effect.fn("Servers.fetchWithChannels")(
+  function* (serverId: ServerId, targetHost: TargetHost) {
     const reply = yield* request({
       type: "servers_get_with_channels",
       data: {
@@ -86,6 +97,38 @@ export const fetchServerWithChannels = Effect.fn("Servers.fetchWithChannels")(
     return reply.data;
   }
 );
+
+// Loads a server with its channels. Concurrent callers, such as the server
+// load and a new membership, share one request.
+export function fetchServerWithChannels(
+  serverId: ServerId,
+  targetHost: TargetHost = null
+): Effect.Effect<ServerWithChannels, RequestFailure, RunelinkSession> {
+  // Uninterruptible until the shared load is running, so it is never
+  // registered without starting
+  return Effect.uninterruptibleMask((restore) =>
+    Effect.suspend(() => {
+      const pending = pendingServerWithChannelsLoads.get(serverId);
+      if (pending) return restore(Deferred.await(pending));
+
+      // Reset replaces this map, so an old account's load is never shared
+      const loads = pendingServerWithChannelsLoads;
+      const load: ServerWithChannelsLoad = Deferred.makeUnsafe();
+      loads.set(serverId, load);
+      // Detached, so a caller that stops waiting does not cancel the load for
+      // the others
+      return Effect.forkDetach(
+        Deferred.into(
+          loadServerWithChannels(serverId, targetHost).pipe(
+            Effect.ensuring(Effect.sync(() => loads.delete(serverId)))
+          ),
+          load
+        ),
+        { startImmediately: true }
+      ).pipe(Effect.andThen(restore(Deferred.await(load))));
+    })
+  );
+}
 
 export const createServer = Effect.fn("Servers.create")(function* (
   newServer: NewServer,
@@ -131,5 +174,6 @@ export const deleteServer = Effect.fn("Servers.delete")(function* (
 });
 
 bindStoreToActiveAccount(() => {
+  pendingServerWithChannelsLoads = new Map();
   setState(serversAtom, initialState);
 });
