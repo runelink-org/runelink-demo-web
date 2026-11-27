@@ -26,12 +26,20 @@ import {
   upsertMembership,
 } from "@/lib/membership-utils";
 import { membershipsAtom } from "@/lib/memberships-store";
-import { messagesAtom } from "@/lib/messages-store";
+import { closeMessageEdit } from "@/lib/message-composer-store";
+import { isDeletingMessage, messagesAtom } from "@/lib/messages-store";
 import { navigationAtom } from "@/lib/navigation-store";
 import { userRefKey } from "@/lib/runelink-store-utils";
 import { debugRunelink } from "@/lib/runelink-debug";
 import { serversAtom } from "@/lib/servers-store";
 import { usersAtom } from "@/lib/users-store";
+
+// Set by the app, so the stores that use this module never import UI code.
+let notify: (message: string) => void = () => {};
+
+export function setUpdateNotifier(notifier: (message: string) => void): void {
+  notify = notifier;
+}
 
 function omitRecordKeys<T>(
   record: Record<string, T>,
@@ -319,6 +327,13 @@ function handleMessageUpsert(message: Message): void {
       ),
     },
   }));
+  if (
+    message.deleted_at !== null &&
+    closeMessageEdit(message.id) &&
+    !isDeletingMessage(message.id)
+  ) {
+    notify("The message you were editing was deleted.");
+  }
 }
 
 // Applies an update to the data this client has loaded. Replies to this
