@@ -189,6 +189,7 @@ const AUTH_REQUEST_TIMEOUT_MS = 10_000;
 const RESUME_RECONNECT_AFTER_MS = 60_000;
 const AUTH_RETRY_INITIAL_DELAY_MS = 1_000;
 const AUTH_RETRY_MAX_DELAY_MS = 30_000;
+const REQUEST_RECONNECT_TIMEOUT_MS = 30_000;
 
 function setConnectionState(patch: Partial<ConnectionState>): void {
   setState(connectionAtom, patch);
@@ -832,6 +833,11 @@ const make = Effect.gen(function* () {
         : yield* Effect.raceFirst(
             Effect.andThen(joinSync, waitForConnectedAccount(account)),
             sessionEnd(account)
+          ).pipe(
+            Effect.timeoutOrElse({
+              duration: REQUEST_RECONNECT_TIMEOUT_MS,
+              orElse: () => Effect.fail(new NotConnectedError()),
+            })
           );
     // The connection was replaced since it connected, and sending on it would
     // reopen it.
