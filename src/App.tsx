@@ -522,6 +522,14 @@ export function App() {
           (channel) => channel.id === route.channelId
         ) ?? null)
       : null;
+  const isChannelSettingsServerHydrating =
+    !!channelSettingsServer &&
+    !(channelSettingsServer.server.id in serverWithChannelsById);
+  const channelSettingsError =
+    serversError ??
+    (isChannelSettingsServerHydrating
+      ? (serverErrorById[channelSettingsServer.server.id] ?? null)
+      : null);
   const isLoadingServerSettingsMembers = serverSettingsServerId
     ? (isLoadingMembersByServerId[serverSettingsServerId] ?? false)
     : false;
@@ -1088,11 +1096,10 @@ export function App() {
             channel={channelSettingsChannel}
             host={channelSettingsServer?.server.host ?? null}
             isLoading={
-              isServersLoading ||
-              (!!channelSettingsServer &&
-                !(route.serverId in serverWithChannelsById))
+              !channelSettingsError &&
+              (isServersLoading || isChannelSettingsServerHydrating)
             }
-            error={serversError}
+            error={channelSettingsError}
             canManage={
               channelSettingsServer
                 ? canManageServer(channelSettingsServer.server)
