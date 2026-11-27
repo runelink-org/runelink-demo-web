@@ -1088,11 +1088,11 @@ export function App() {
             channel={channelSettingsChannel}
             host={channelSettingsServer?.server.host ?? null}
             isLoading={
-              isSidebarLoading ||
-              !resolvedSidebarAccountKey ||
+              isServersLoading ||
               (!!channelSettingsServer &&
                 !(route.serverId in serverWithChannelsById))
             }
+            error={serversError}
             canManage={
               channelSettingsServer
                 ? canManageServer(channelSettingsServer.server)

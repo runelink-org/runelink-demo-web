@@ -30,6 +30,7 @@ type ChannelSettingsPageProps = {
   host: string | null;
   canManage: boolean;
   isLoading: boolean;
+  error: string | null;
   onDone: () => void;
   onDeleteChannel: (channel: ServerChannel) => RequestEffect<void>;
 };
@@ -39,6 +40,7 @@ export function ChannelSettingsPage({
   host,
   canManage,
   isLoading,
+  error,
   onDone,
   onDeleteChannel,
 }: ChannelSettingsPageProps) {
@@ -62,7 +64,7 @@ export function ChannelSettingsPage({
           </h2>
           {!isLoading ? (
             <p className="mt-2 text-sm text-muted-foreground">
-              The selected channel or category could not be found.
+              {error ?? "The selected channel or category could not be found."}
             </p>
           ) : null}
         </div>
