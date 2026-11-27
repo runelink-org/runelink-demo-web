@@ -54,8 +54,12 @@ function JoinServerDialogForm({
   const [host, setHost] = useState(activeHost ?? "");
   const [error, setError] = useState<string | null>(null);
   const [results, setResults] = useState<readonly Server[]>([]);
-  const [hasSearched, setHasSearched] = useState(open && !!activeHost?.trim());
-  const [isSearching, setIsSearching] = useState(open && !!activeHost?.trim());
+  const [hasSearched, setHasSearched] = useState(
+    open && Boolean(activeHost?.trim())
+  );
+  const [isSearching, setIsSearching] = useState(
+    open && Boolean(activeHost?.trim())
+  );
   const [joiningServerId, setJoiningServerId] = useState<string | null>(null);
 
   async function searchServers(nextHost: string) {
@@ -87,7 +91,7 @@ function JoinServerDialogForm({
 
   useEffect(() => {
     const nextHost = activeHost?.trim();
-    if (!open || !nextHost) return;
+    if (!open || nextHost == null || nextHost === "") return undefined;
     let cancelled = false;
     void runPromise(
       searchInitialServers(nextHost).pipe(
@@ -142,7 +146,12 @@ function JoinServerDialogForm({
         </AlertDialogDescription>
       </AlertDialogHeader>
 
-      <form className="space-y-3" onSubmit={handleSearch}>
+      <form
+        className="space-y-3"
+        onSubmit={(event) => {
+          void handleSearch(event);
+        }}
+      >
         <div className="space-y-2">
           <Label htmlFor="join-server-host">Host Name</Label>
           <div className="flex gap-2">
@@ -179,6 +188,8 @@ function JoinServerDialogForm({
           {results.map((server) => {
             const isJoined = joinedServerIds.has(server.id);
             const isJoining = joiningServerId === server.id;
+            const joinAction = isJoining ? "Joining..." : "Join";
+            const joinLabel = isJoined ? "Joined" : joinAction;
 
             return (
               <div
@@ -195,7 +206,7 @@ function JoinServerDialogForm({
                   <p className="mt-0.5 text-xs text-muted-foreground">
                     @{server.host}
                   </p>
-                  {server.description ? (
+                  {server.description != null && server.description !== "" ? (
                     <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">
                       {server.description}
                     </p>
@@ -210,7 +221,7 @@ function JoinServerDialogForm({
                     void handleJoin(server);
                   }}
                 >
-                  {isJoined ? "Joined" : isJoining ? "Joining..." : "Join"}
+                  {joinLabel}
                 </Button>
               </div>
             );
@@ -230,7 +241,9 @@ function JoinServerDialogForm({
         </div>
       </div>
 
-      {error ? <p className="text-sm text-destructive">{error}</p> : null}
+      {error != null && error !== "" ? (
+        <p className="text-sm text-destructive">{error}</p>
+      ) : null}
 
       <AlertDialogFooter>
         <AlertDialogCancel disabled={isSearching || joiningServerId !== null}>

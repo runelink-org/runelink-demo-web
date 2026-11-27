@@ -1,4 +1,5 @@
 {
+  "extends": "./tsconfig.effect.json",
   "compilerOptions": {
     "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.node.tsbuildinfo",
     "target": "ES2023",
@@ -16,6 +17,7 @@
 
     /* Linting */
     "strict": true,
+    "noImplicitReturns": true,
     "noUnusedLocals": true,
     "noUnusedParameters": true,
     "erasableSyntaxOnly": true,

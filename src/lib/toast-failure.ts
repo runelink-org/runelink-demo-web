@@ -1,4 +1,5 @@
 import { toast } from "sonner";
+import { reportRunelinkFailure } from "@/lib/runelink-debug";
 import { requestFailureMessage } from "@/lib/request-failure";
 import type { RequestFailure } from "@/lib/runelink-session";
 
@@ -6,7 +7,7 @@ import type { RequestFailure } from "@/lib/runelink-session";
 // inline error. The error itself, with the host's message, goes to the console.
 export function toastFailure(title: string, error: RequestFailure): string {
   const reason = requestFailureMessage(error);
-  console.warn(title, error);
+  reportRunelinkFailure("warn", title, error);
   toast.error(title, { description: reason });
   return reason;
 }

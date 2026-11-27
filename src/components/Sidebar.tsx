@@ -88,7 +88,7 @@ function loadStoredChannelPanelWidth(): number {
   }
 
   const storedWidth = window.localStorage.getItem(CHANNEL_PANEL_WIDTH_KEY);
-  if (!storedWidth) {
+  if (storedWidth == null || storedWidth === "") {
     return DEFAULT_CHANNEL_PANEL_WIDTH;
   }
 
@@ -153,11 +153,12 @@ export function Sidebar({
     pendingSelection?.serverId ?? selectedServerId;
   const effectiveSelectedChannelId =
     pendingSelection?.channelId ?? selectedChannelId;
-  const selectedServer = effectiveSelectedServerId
-    ? (servers.find(
-        (server) => server.server.id === effectiveSelectedServerId
-      ) ?? null)
-    : null;
+  const selectedServer =
+    effectiveSelectedServerId != null && effectiveSelectedServerId !== ""
+      ? (servers.find(
+          (server) => server.server.id === effectiveSelectedServerId
+        ) ?? null)
+      : null;
   const createChannelServer = createChannelRequest
     ? servers.find(({ server }) => server.id === createChannelRequest.server.id)
     : undefined;
@@ -189,7 +190,7 @@ export function Sidebar({
         serverId: selectedServerId,
         channelId: selectedChannelId,
       };
-      return;
+      return undefined;
     }
 
     const selectionChangedExternally =
@@ -219,6 +220,7 @@ export function Sidebar({
       serverId: selectedServerId,
       channelId: selectedChannelId,
     };
+    return undefined;
   }, [pendingSelection, selectedChannelId, selectedServerId]);
 
   function openCreateChannel(
@@ -268,6 +270,64 @@ export function Sidebar({
     }, 0);
   }
 
+  const serverSelectionHint =
+    error != null && error !== ""
+      ? "RuneLink could not load your available servers."
+      : "Select a server on the left to browse its channels.";
+
+  function renderServerRail() {
+    if (accountRailOnly) return null;
+    if (isLoading) {
+      return (
+        <div className="flex size-12 items-center justify-center rounded-2xl border border-sidebar-border bg-sidebar-accent text-sidebar-foreground/70">
+          <LoaderCircle className="size-4 animate-spin" />
+        </div>
+      );
+    }
+    if (servers.length === 0) {
+      return (
+        <div className="flex size-12 items-center justify-center rounded-2xl border border-dashed border-sidebar-border bg-sidebar-accent/60 text-sidebar-foreground/50">
+          <Layers3 className="size-4" />
+        </div>
+      );
+    }
+    return servers.map(({ server }) => {
+      const isSelected = server.id === effectiveSelectedServerId;
+
+      return (
+        <ServerRailButton
+          key={server.id}
+          isSelected={isSelected}
+          server={server}
+          href={getAppRoutePath(
+            getContentRoute(
+              server.id,
+              selectedChannelIdByServerId[server.id] ?? null
+            )
+          )}
+          onOpenServerSettings={onOpenServerSettings}
+          canCreateChannels={canManageServer(server)}
+          onCreateChannel={openCreateChannel}
+          onLeaveServer={setServerPendingLeave}
+          onSelect={(nextServerId) => {
+            const nextChannelId =
+              selectedChannelIdByServerId[nextServerId] ?? null;
+
+            scheduleSelectionCommit(
+              {
+                serverId: nextServerId,
+                channelId: nextChannelId,
+              },
+              () => {
+                onSelectServer(nextServerId);
+              }
+            );
+          }}
+        />
+      );
+    });
+  }
+
   return (
     <aside
       className={[
@@ -280,69 +340,23 @@ export function Sidebar({
         className="flex w-20 flex-col items-center gap-4 border-r border-sidebar-border/80 py-4"
       >
         <div className="flex flex-col items-center gap-2 text-center">
-          <>
-            <img
-              src="/logos/runelink_logo_black.svg"
-              alt="RuneLink"
-              className="size-12 drop-shadow-sm dark:hidden"
-            />
-            <img
-              src="/logos/runelink_logo_white.svg"
-              alt="RuneLink"
-              className="hidden size-12 drop-shadow-sm dark:block"
-            />
-          </>
+          <img
+            src="/logos/runelink_logo_black.svg"
+            alt="RuneLink"
+            className="size-12 drop-shadow-sm dark:hidden"
+          />
+          <img
+            src="/logos/runelink_logo_white.svg"
+            alt="RuneLink"
+            className="hidden size-12 drop-shadow-sm dark:block"
+          />
         </div>
 
         <div
           className="flex min-h-0 w-full flex-1 flex-col items-center gap-3 overflow-y-auto px-3 pb-1"
           data-sidebar-scroll
         >
-          {accountRailOnly ? null : isLoading ? (
-            <div className="flex size-12 items-center justify-center rounded-2xl border border-sidebar-border bg-sidebar-accent text-sidebar-foreground/70">
-              <LoaderCircle className="size-4 animate-spin" />
-            </div>
-          ) : servers.length === 0 ? (
-            <div className="flex size-12 items-center justify-center rounded-2xl border border-dashed border-sidebar-border bg-sidebar-accent/60 text-sidebar-foreground/50">
-              <Layers3 className="size-4" />
-            </div>
-          ) : (
-            servers.map(({ server }) => {
-              const isSelected = server.id === effectiveSelectedServerId;
-
-              return (
-                <ServerRailButton
-                  key={server.id}
-                  isSelected={isSelected}
-                  server={server}
-                  href={getAppRoutePath(
-                    getContentRoute(
-                      server.id,
-                      selectedChannelIdByServerId[server.id] ?? null
-                    )
-                  )}
-                  onOpenServerSettings={onOpenServerSettings}
-                  canCreateChannels={canManageServer(server)}
-                  onCreateChannel={openCreateChannel}
-                  onLeaveServer={setServerPendingLeave}
-                  onSelect={(nextServerId) => {
-                    const nextChannelId =
-                      selectedChannelIdByServerId[nextServerId] ?? null;
-
-                    scheduleSelectionCommit(
-                      {
-                        serverId: nextServerId,
-                        channelId: nextChannelId,
-                      },
-                      () => {
-                        onSelectServer(nextServerId);
-                      }
-                    );
-                  }}
-                />
-              );
-            })
-          )}
+          {renderServerRail()}
 
           {accountRailOnly ? null : (
             <AddServerMenu
@@ -406,9 +420,7 @@ export function Sidebar({
             <p className="mt-1 line-clamp-2 text-sm text-sidebar-foreground/70">
               {selectedServer
                 ? (selectedServer.server.description ?? "")
-                : error
-                  ? "RuneLink could not load your available servers."
-                  : "Select a server on the left to browse its channels."}
+                : serverSelectionHint}
             </p>
           </div>
 

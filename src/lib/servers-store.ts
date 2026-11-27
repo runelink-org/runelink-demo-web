@@ -1,9 +1,15 @@
+import { omitRecordKey } from "./record";
 import { newestResource } from "./resource-version";
-import { newestChannels } from "./channels-store";
-import type { NewServer, Server, ServerWithChannels } from "@runelink/sdk";
+import { channelsAtom } from "./channel-state";
+import type {
+  NewServer,
+  Server,
+  ServerChannel,
+  ServerWithChannels,
+} from "@runelink/sdk";
 import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
-import { setState, stateAtom } from "@/lib/atom-registry";
+import { getState, setState, stateAtom } from "@/lib/atom-registry";
 import { request } from "@/lib/runelink-session";
 import type { RequestFailure, RunelinkSession } from "@/lib/runelink-session";
 import { bindStoreToActiveAccount } from "@/lib/runelink-store-utils";
@@ -20,6 +26,27 @@ const initialState: ServersState = {
 };
 
 export const serversAtom = stateAtom(initialState);
+
+export function newestChannel(
+  channel: ServerChannel,
+  byId = getState(channelsAtom).channelById,
+  servers = getState(serversAtom).serverWithChannelsById
+): ServerChannel {
+  return newestResource(
+    newestResource(channel, byId[channel.id]),
+    servers[channel.server_id]?.channels.find(
+      (cached) => cached.id === channel.id
+    )
+  );
+}
+
+export function newestChannels(
+  channels: readonly ServerChannel[]
+): readonly ServerChannel[] {
+  const byId = getState(channelsAtom).channelById;
+  const servers = getState(serversAtom).serverWithChannelsById;
+  return channels.map((channel) => newestChannel(channel, byId, servers));
+}
 
 type ServerWithChannelsLoad = Deferred.Deferred<
   ServerWithChannels,
@@ -154,13 +181,13 @@ export const deleteServer = Effect.fn("Servers.delete")(function* (
     },
   });
 
-  setState(serversAtom, (state) => {
-    const serverById = { ...state.serverById };
-    const serverWithChannelsById = { ...state.serverWithChannelsById };
-    delete serverById[serverId];
-    delete serverWithChannelsById[serverId];
-    return { serverById, serverWithChannelsById };
-  });
+  setState(serversAtom, (state) => ({
+    serverById: omitRecordKey(state.serverById, serverId),
+    serverWithChannelsById: omitRecordKey(
+      state.serverWithChannelsById,
+      serverId
+    ),
+  }));
 });
 
 bindStoreToActiveAccount(() => {

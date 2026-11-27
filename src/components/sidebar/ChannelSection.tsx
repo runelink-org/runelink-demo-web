@@ -60,6 +60,12 @@ type PressState = {
 };
 
 // Where a pointer would drop
+function getCategoryPlacement(fraction: number, hasVisibleChildren: boolean) {
+  if (fraction < 0.3) return "before";
+  if (fraction > 0.7 && !hasVisibleChildren) return "after";
+  return "inside";
+}
+
 function dropTargetAt(
   channels: readonly ServerChannel[],
   rows: ChannelRow[],
@@ -88,12 +94,7 @@ function dropTargetAt(
     const hasVisibleChildren = rows.some(
       (r) => r.channel.parent_channel_id === channel.id
     );
-    const placement =
-      fraction < 0.3
-        ? "before"
-        : fraction > 0.7 && !hasVisibleChildren
-          ? "after"
-          : "inside";
+    const placement = getCategoryPlacement(fraction, hasVisibleChildren);
     target = { channelId: channel.id, placement };
   } else {
     target = {
@@ -109,7 +110,7 @@ export function ChannelSection({
   selectedServer,
   selectedChannelId,
   isLoading,
-  error,
+  error: loadError,
   isSelectedServerHydrating,
   canManageChannels,
   onOpenCreateChannel,
@@ -138,7 +139,7 @@ export function ChannelSection({
   // just created in a collapsed category
   if (selectedChannelId !== revealedChannelId) {
     setRevealedChannelId(selectedChannelId);
-    if (selectedChannelId) {
+    if (selectedChannelId != null && selectedChannelId !== "") {
       const ancestors = ancestorIds(channels, selectedChannelId);
       setCollapsedIds((current) =>
         ancestors.some((id) => current.has(id))
@@ -176,7 +177,8 @@ export function ChannelSection({
       !canManageChannels ||
       event.button !== 0 ||
       // Pressing the actions menu opens it rather than dragging
-      (event.target as Element).closest("[aria-haspopup]")
+      (event.target instanceof Element &&
+        event.target.closest("[aria-haspopup]") !== null)
     ) {
       return;
     }
@@ -190,7 +192,7 @@ export function ChannelSection({
 
   function handlePointerMove(event: React.PointerEvent<HTMLDivElement>) {
     let channelId = drag?.channelId;
-    if (!channelId) {
+    if (channelId == null || channelId === "") {
       const press = pressRef.current;
       if (
         !press ||
@@ -200,7 +202,7 @@ export function ChannelSection({
       ) {
         return;
       }
-      channelId = press.channelId;
+      ({ channelId } = press);
       pressRef.current = null;
       event.currentTarget.setPointerCapture(event.pointerId);
     }
@@ -235,7 +237,7 @@ export function ChannelSection({
       return;
     }
     const parentId = channelMove.parent_channel_id;
-    if (parentId) {
+    if (parentId != null && parentId !== "") {
       // Reveal the moved channel in its new category
       setCollapsedIds((current) => {
         const next = new Set(current);
@@ -245,12 +247,157 @@ export function ChannelSection({
     }
     void runPromise(
       onMoveChannel(channel, channelMove).pipe(
-        Effect.catch((error_) =>
+        Effect.catch((error) =>
           Effect.sync(() =>
-            toastFailure(`Couldn't move ${channel.title}`, error_)
+            toastFailure(`Couldn't move ${channel.title}`, error)
           )
         )
       )
+    );
+  }
+
+  function renderChannelTree() {
+    if (loadError != null && loadError !== "") {
+      return (
+        <div className="rounded-2xl border border-destructive/15 bg-destructive/5 px-4 py-3 text-sm text-sidebar-foreground/80">
+          {loadError}
+        </div>
+      );
+    }
+    if (isLoading) {
+      return (
+        <div className="rounded-2xl border border-sidebar-border/70 bg-sidebar-accent/70 px-4 py-3 text-sm text-sidebar-foreground/70">
+          Loading servers and channels...
+        </div>
+      );
+    }
+    if (selectedServer) {
+      if (isSelectedServerHydrating) {
+        return (
+          <div className="rounded-2xl border border-sidebar-border/70 bg-sidebar-accent/70 px-4 py-3 text-sm text-sidebar-foreground/70">
+            Loading channels...
+          </div>
+        );
+      }
+      if (channels.length === 0) {
+        return (
+          <div className="flex items-center justify-between gap-2 px-2">
+            <p className="text-sm text-sidebar-foreground/70">Add Channel</p>
+            <span className="inline-flex" title={createChannelTooltip}>
+              <Button
+                type="button"
+                size="icon"
+                variant="ghost"
+                className="size-7 rounded-xl text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground"
+                onClick={() => {
+                  onOpenCreateChannel("text", null);
+                }}
+                disabled={!canManageChannels}
+                aria-label={createChannelTooltip}
+              >
+                <Plus className="size-4" />
+              </Button>
+            </span>
+          </div>
+        );
+      }
+      return (
+        <div className="relative" role="tree">
+          {rows.map(({ channel, depth, isCollapsed }) => {
+            const indentPx = depth * INDENT_PX;
+            const isDragged = drag?.channelId === channel.id;
+            const placement =
+              drag?.target?.channelId === channel.id
+                ? drag.target.placement
+                : null;
+
+            return (
+              <div
+                key={channel.id}
+                role="treeitem"
+                data-channel-row={channel.id}
+                className={cn(
+                  "relative rounded-2xl py-0.5",
+                  canManageChannels && "select-none",
+                  isDragged && "cursor-grabbing opacity-50",
+                  placement === "inside" &&
+                    "bg-primary/10 ring-2 ring-primary/40"
+                )}
+                style={{ paddingLeft: indentPx }}
+                onPointerDown={(event) => {
+                  handlePointerDown(event, channel);
+                }}
+                onPointerMove={handlePointerMove}
+                onPointerUp={handlePointerUp}
+                onPointerCancel={() => {
+                  pressRef.current = null;
+                }}
+                onLostPointerCapture={() => {
+                  setDrag(null);
+                }}
+                onClickCapture={(event) => {
+                  if (suppressClickRef.current) {
+                    suppressClickRef.current = false;
+                    event.preventDefault();
+                    event.stopPropagation();
+                  }
+                }}
+              >
+                {placement === "before" || placement === "after" ? (
+                  <div
+                    aria-hidden
+                    className={cn(
+                      "pointer-events-none absolute right-1 z-10 h-0.5 rounded-full bg-primary",
+                      placement === "before" ? "-top-px" : "-bottom-px"
+                    )}
+                    style={{ left: indentPx }}
+                  />
+                ) : null}
+
+                {channel.kind === "category" ? (
+                  <CategoryListItem
+                    host={selectedServer.server.host}
+                    channel={channel}
+                    isCollapsed={isCollapsed}
+                    canManageChannels={canManageChannels}
+                    onToggleCollapsed={() => {
+                      toggleCollapsed(channel, isCollapsed);
+                    }}
+                    onCreateChild={(kind) => {
+                      onOpenCreateChannel(kind, channel.id);
+                    }}
+                    onDeleteChannel={onDeleteChannel}
+                    onEditChannel={onEditChannel}
+                  />
+                ) : (
+                  <ChannelListItem
+                    host={selectedServer.server.host}
+                    channel={channel}
+                    isSelected={channel.id === selectedChannelId}
+                    canDeleteChannel={canManageChannels}
+                    onSelect={(nextChannel) => {
+                      onSelectChannel(selectedServer.server.id, nextChannel);
+                    }}
+                    onDeleteChannel={onDeleteChannel}
+                    onEditChannel={onEditChannel}
+                  />
+                )}
+              </div>
+            );
+          })}
+          {drag?.target?.placement === "root-end" ? (
+            <div
+              aria-hidden
+              className="pointer-events-none absolute right-1 -bottom-px left-0 h-0.5 rounded-full bg-primary"
+            />
+          ) : null}
+        </div>
+      );
+    }
+    return (
+      <div className="rounded-2xl border border-dashed border-sidebar-border bg-sidebar-accent/50 px-4 py-3 text-sm text-sidebar-foreground/70">
+        Pick a server to see its channels.
+      </div>
     );
   }
 
@@ -270,138 +417,7 @@ export function ChannelSection({
         data-channel-tree
         data-sidebar-scroll
       >
-        {error ? (
-          <div className="rounded-2xl border border-destructive/15 bg-destructive/5 px-4 py-3 text-sm text-sidebar-foreground/80">
-            {error}
-          </div>
-        ) : isLoading ? (
-          <div className="rounded-2xl border border-sidebar-border/70 bg-sidebar-accent/70 px-4 py-3 text-sm text-sidebar-foreground/70">
-            Loading servers and channels...
-          </div>
-        ) : selectedServer ? (
-          isSelectedServerHydrating ? (
-            <div className="rounded-2xl border border-sidebar-border/70 bg-sidebar-accent/70 px-4 py-3 text-sm text-sidebar-foreground/70">
-              Loading channels...
-            </div>
-          ) : channels.length === 0 ? (
-            <div className="flex items-center justify-between gap-2 px-2">
-              <p className="text-sm text-sidebar-foreground/70">Add Channel</p>
-              <span className="inline-flex" title={createChannelTooltip}>
-                <Button
-                  type="button"
-                  size="icon"
-                  variant="ghost"
-                  className="size-7 rounded-xl text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground"
-                  onClick={() => {
-                    onOpenCreateChannel("text", null);
-                  }}
-                  disabled={!canManageChannels}
-                  aria-label={createChannelTooltip}
-                >
-                  <Plus className="size-4" />
-                </Button>
-              </span>
-            </div>
-          ) : (
-            <div className="relative" role="tree">
-              {rows.map(({ channel, depth, isCollapsed }) => {
-                const indentPx = depth * INDENT_PX;
-                const isDragged = drag?.channelId === channel.id;
-                const placement =
-                  drag?.target?.channelId === channel.id
-                    ? drag.target.placement
-                    : null;
-
-                return (
-                  <div
-                    key={channel.id}
-                    role="treeitem"
-                    data-channel-row={channel.id}
-                    className={cn(
-                      "relative rounded-2xl py-0.5",
-                      canManageChannels && "select-none",
-                      isDragged && "cursor-grabbing opacity-50",
-                      placement === "inside" &&
-                        "bg-primary/10 ring-2 ring-primary/40"
-                    )}
-                    style={{ paddingLeft: indentPx }}
-                    onPointerDown={(event) => {
-                      handlePointerDown(event, channel);
-                    }}
-                    onPointerMove={handlePointerMove}
-                    onPointerUp={handlePointerUp}
-                    onPointerCancel={() => {
-                      pressRef.current = null;
-                    }}
-                    onLostPointerCapture={() => {
-                      setDrag(null);
-                    }}
-                    onClickCapture={(event) => {
-                      if (suppressClickRef.current) {
-                        suppressClickRef.current = false;
-                        event.preventDefault();
-                        event.stopPropagation();
-                      }
-                    }}
-                  >
-                    {placement === "before" || placement === "after" ? (
-                      <div
-                        aria-hidden
-                        className={cn(
-                          "pointer-events-none absolute right-1 z-10 h-0.5 rounded-full bg-primary",
-                          placement === "before" ? "-top-px" : "-bottom-px"
-                        )}
-                        style={{ left: indentPx }}
-                      />
-                    ) : null}
-
-                    {channel.kind === "category" ? (
-                      <CategoryListItem
-                        host={selectedServer.server.host}
-                        channel={channel}
-                        isCollapsed={isCollapsed}
-                        canManageChannels={canManageChannels}
-                        onToggleCollapsed={() => {
-                          toggleCollapsed(channel, isCollapsed);
-                        }}
-                        onCreateChild={(kind) => {
-                          onOpenCreateChannel(kind, channel.id);
-                        }}
-                        onDeleteChannel={onDeleteChannel}
-                        onEditChannel={onEditChannel}
-                      />
-                    ) : (
-                      <ChannelListItem
-                        host={selectedServer.server.host}
-                        channel={channel}
-                        isSelected={channel.id === selectedChannelId}
-                        canDeleteChannel={canManageChannels}
-                        onSelect={(nextChannel) => {
-                          onSelectChannel(
-                            selectedServer.server.id,
-                            nextChannel
-                          );
-                        }}
-                        onDeleteChannel={onDeleteChannel}
-                        onEditChannel={onEditChannel}
-                      />
-                    )}
-                  </div>
-                );
-              })}
-              {drag?.target?.placement === "root-end" ? (
-                <div
-                  aria-hidden
-                  className="pointer-events-none absolute right-1 -bottom-px left-0 h-0.5 rounded-full bg-primary"
-                />
-              ) : null}
-            </div>
-          )
-        ) : (
-          <div className="rounded-2xl border border-dashed border-sidebar-border bg-sidebar-accent/50 px-4 py-3 text-sm text-sidebar-foreground/70">
-            Pick a server to see its channels.
-          </div>
-        )}
+        {renderChannelTree()}
       </div>
       <DropdownMenu {...backgroundMenu.menuProps}>
         <DropdownMenuContent

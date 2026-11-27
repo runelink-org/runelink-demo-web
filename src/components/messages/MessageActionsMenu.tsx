@@ -39,7 +39,7 @@ export function MessageActionsMenu({
 }: MessageActionsMenuProps) {
   const activeAccount = useAtomValue(authAtom, getActiveAccount);
   const canEdit =
-    !!message.author &&
+    message.author !== null &&
     message.author.name === activeAccount?.name &&
     message.author.host === activeAccount?.host;
   const actionOnCloseRef = useRef<"reply" | "edit" | "delete" | null>(null);
@@ -70,9 +70,11 @@ export function MessageActionsMenu({
         finalFocus={() => {
           const action = actionOnCloseRef.current;
           actionOnCloseRef.current = null;
-          if (action === "edit") onEdit(message);
-          else if (action === "reply") onReply(message);
-          else if (action === "delete") onDeleteMessage(message);
+          if (action === "edit") {
+            onEdit(message);
+          } else if (action === "reply") {
+            onReply(message);
+          } else if (action === "delete") onDeleteMessage(message);
           return action === null;
         }}
       >

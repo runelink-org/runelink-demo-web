@@ -24,13 +24,18 @@ const decodeHints = Schema.decodeUnknownOption(
 
 type Hints = Record<string, (typeof HintsSchema.Type)[string]>;
 
+const readStoredHints = Option.liftThrowable(() =>
+  window.localStorage.getItem(STORAGE_KEY)
+);
+const saveHints = Option.liftThrowable((hints: Hints) => {
+  window.localStorage.setItem(STORAGE_KEY, JSON.stringify(hints));
+});
+
 function readHints(): Hints {
-  try {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
-    return raw ? { ...Option.getOrElse(decodeHints(raw), () => ({})) } : {};
-  } catch {
-    return {};
-  }
+  return readStoredHints().pipe(
+    Option.flatMap(decodeHints),
+    Option.match({ onNone: () => ({}), onSome: (hints) => ({ ...hints }) })
+  );
 }
 
 // Persist mappings, not content. Each fresh server snapshot replaces its hints,
@@ -56,11 +61,8 @@ export function rememberChannelNavigationHints(
   }
   if (JSON.stringify(previous) === JSON.stringify(next)) return;
   hints[key] = next;
-  try {
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(hints));
-  } catch {
-    // Storage is optional; ordinary metadata-first loading still works.
-  }
+  // Storage is optional. Ordinary metadata-first loading still works.
+  saveHints(hints);
 }
 
 type NavigationPrefetch = {
@@ -90,7 +92,7 @@ export const startChannelNavigationPrefetch = Effect.fn(
   if (route.screen !== "channel" && route.screen !== "channel-members") return;
   const server = readHints()[accountStorageKey(account)]?.[route.serverId];
   const textChannelId = server?.channels[route.channelId];
-  if (!server || !textChannelId) return;
+  if (server == null || !textChannelId) return;
   // Reconnects can rerun startup while a channel is already cached or loading.
   if (textChannelId in cachedMessages) return;
   const targetHost = server.host === account.host ? null : server.host;

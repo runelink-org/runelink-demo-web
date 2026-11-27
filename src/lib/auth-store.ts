@@ -1,3 +1,4 @@
+import { omitRecordKey } from "./record";
 import type { TokenResponse, UserRef } from "@runelink/sdk";
 import * as Effect from "effect/Effect";
 import type * as Scope from "effect/Scope";
@@ -57,10 +58,9 @@ function clearTokenState(
   authCache: BrowserAuthCache,
   userRef: UserRef
 ): BrowserAuthCache {
-  const nextAccounts = { ...authCache.accounts };
-  delete nextAccounts[accountStorageKey(userRef)];
-
-  return { accounts: nextAccounts };
+  return {
+    accounts: omitRecordKey(authCache.accounts, accountStorageKey(userRef)),
+  };
 }
 
 function buildStoredAuth(
@@ -172,14 +172,11 @@ export function removeAccount(
     return false;
   }
 
-  const nextConfig = {
-    active_account: sameUserRef(state.config.active_account, userRef)
-      ? selectNext
-        ? (accounts[0] ?? null)
-        : null
-      : state.config.active_account,
-    accounts,
-  };
+  let activeAccount = state.config.active_account;
+  if (sameUserRef(activeAccount, userRef)) {
+    activeAccount = selectNext ? (accounts[0] ?? null) : null;
+  }
+  const nextConfig = { active_account: activeAccount, accounts };
   const nextAuthCache = clearTokenState(loadBrowserAuthCache(), userRef);
 
   persistState(nextConfig, nextAuthCache);

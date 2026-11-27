@@ -1,0 +1,5 @@
+#!/bin/sh
+set -eu
+root="$(cd "$(dirname "$0")/../.." && pwd)"
+binary="$("$root/node_modules/.bin/effect-tsgo" get-exe-path)"
+exec "$binary" "$@"

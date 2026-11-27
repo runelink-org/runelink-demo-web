@@ -1,3 +1,4 @@
+import * as Clock from "effect/Clock";
 import {
   RunelinkConnection,
   RunelinkIncompatibleHostError,
@@ -11,6 +12,7 @@ import type {
   RunelinkRequestFailure,
   UserRef,
   WsRequest,
+  WsUpdate,
 } from "@runelink/sdk";
 import * as Cause from "effect/Cause";
 import * as Context from "effect/Context";
@@ -25,7 +27,7 @@ import * as Schema from "effect/Schema";
 import * as Scope from "effect/Scope";
 import * as Stream from "effect/Stream";
 import type * as Socket from "effect/socket/Socket";
-import type { Atom } from "effect/reactivity";
+import type * as Atom from "effect/reactivity/Atom";
 import {
   appAtomRegistry,
   getState,
@@ -45,7 +47,6 @@ import {
   persistAuthenticatedAccount,
   storeAccountToken,
 } from "@/lib/auth-store";
-import { handleRunelinkUpdate } from "@/lib/runelink-updates";
 import type {
   HostTransportError,
   HostUnreachableError,
@@ -198,6 +199,10 @@ function getConnectedAccount(): UserRef | null {
   return getState(connectionAtom).connectedAccount;
 }
 
+function connectionMatches(userRef: UserRef | null): boolean {
+  return sameUserRef(getConnectedAccount(), userRef);
+}
+
 // Waits until `select` returns an effect for the atom's state, then runs it
 function waitForAtom<S, A, E>(
   atom: Atom.Atom<S>,
@@ -207,7 +212,7 @@ function waitForAtom<S, A, E>(
     const initial = select(getState(atom));
     if (initial) {
       resume(initial);
-      return;
+      return undefined;
     }
     const unsubscribe = appAtomRegistry.subscribe(atom, (state) => {
       const result = select(state);
@@ -218,6 +223,23 @@ function waitForAtom<S, A, E>(
     return Effect.sync(unsubscribe);
   });
 }
+
+// Fails once the active account changes or loses its stored session, such
+// as by logging out. Token refreshes keep the session.
+const sessionEnd = (account: UserRef) =>
+  waitForAtom(
+    authAtom,
+    (state): Effect.Effect<never, RequestFailure> | undefined => {
+      if (!sameUserRef(getActiveAccount(state), account)) {
+        return Effect.fail(new SessionChangedError());
+      }
+      if (!getActiveAccountAuth(state)) {
+        return Effect.fail(new NotConnectedError());
+      }
+
+      return undefined;
+    }
+  );
 
 function getAuthSnapshot() {
   const state = getState(authAtom);
@@ -263,16 +285,18 @@ function getActiveSessionKey(): string | null {
 // cannot then log in.
 const requireCapabilities = Effect.fn("RunelinkSession.requireCapabilities")(
   function* (connection: Connection, host: string, capabilities: string[]) {
-    const issues = Option.getOrElse(
-      yield* connection.capabilityIssues,
-      () => []
-    ).filter((issue) => capabilities.includes(issue.capability));
+    const capabilityIssues = yield* connection.capabilityIssues;
+    const issues = Option.getOrElse(capabilityIssues, () => []).filter(
+      (issue) => capabilities.includes(issue.capability)
+    );
     if (issues.length > 0) {
       return yield* new RunelinkIncompatibleHostError({
         host,
         reason: issues.map((issue) => issue.message).join("; "),
       });
     }
+
+    return undefined;
   }
 );
 
@@ -294,6 +318,8 @@ const authenticateWithAccessToken = Effect.fn(
       reason: "Websocket authentication returned an unexpected account",
     });
   }
+
+  return undefined;
 });
 
 const authenticateWithRefreshToken = Effect.fn(
@@ -303,6 +329,8 @@ const authenticateWithRefreshToken = Effect.fn(
   userRef: UserRef,
   auth: StoredAccountAuth
 ) {
+  // Keep the browser randomUUID contract. Effect uuidV4Unsafe uses getRandomValues instead.
+  // @effect-diagnostics-next-line cryptoRandomUUIDInEffect:off
   const clientId = auth.client_id ?? crypto.randomUUID();
   const reply = yield* connection
     .request({
@@ -332,11 +360,12 @@ function failureMessage(cause: Cause.Cause<unknown>, fallback: string): string {
   return error instanceof Error ? error.message : fallback;
 }
 
-const saveSession = (save: () => void) =>
-  Effect.try({
+function saveSession(save: () => void) {
+  return Effect.try({
     try: save,
     catch: (cause) => new SessionStorageError({ cause }),
   });
+}
 
 // An unexpected error in a listener is logged rather than stopping it.
 const logDefect = Effect.catchDefect((defect) =>
@@ -352,7 +381,13 @@ const normalizeCredentials = (credentials: AccountCredentials) =>
       }),
   });
 
-const make = Effect.gen(function* () {
+function* make(
+  handleRunelinkUpdate: (update: WsUpdate) => void
+): Effect.fn.Return<
+  RunelinkSession["Service"],
+  never,
+  Scope.Scope | Socket.WebSocketConstructor
+> {
   const layerScope = yield* Effect.scope;
   const context = yield* Effect.context<Socket.WebSocketConstructor>();
   // Runs effects from browser and atom listeners until the layer closes
@@ -367,7 +402,7 @@ const make = Effect.gen(function* () {
     Deferred.Deferred<never, ConnectionCancelledError> | undefined;
   let replaceInProgress = false;
   let explicitAuthenticationInProgress = false;
-  let syncing: Deferred.Deferred<void> | undefined;
+  let syncing: Deferred.Deferred<undefined> | undefined;
   let syncQueued = false;
   let authRetryAttempt = 0;
   let authRetry: Fiber.Fiber<void> | undefined;
@@ -375,10 +410,6 @@ const make = Effect.gen(function* () {
 
   const isCurrent = (connection: Connection) =>
     current?.connection === connection;
-
-  function connectionMatches(userRef: UserRef | null): boolean {
-    return sameUserRef(getConnectedAccount(), userRef);
-  }
 
   function setUnauthenticatedStatus(status: AccountConnectionStatus): void {
     currentAuthenticated = false;
@@ -401,9 +432,9 @@ const make = Effect.gen(function* () {
     // Fails after the caller continues, like an aborted fetch, so the
     // cancelled attempt cannot resume inside the caller.
     if (cancel) {
-      queueMicrotask(() =>
-        Deferred.doneUnsafe(cancel, Exit.fail(new ConnectionCancelledError()))
-      );
+      queueMicrotask(() => {
+        Deferred.doneUnsafe(cancel, Exit.fail(new ConnectionCancelledError()));
+      });
     }
   }
 
@@ -430,40 +461,7 @@ const make = Effect.gen(function* () {
   // the running sync's completion.
   // Uninterruptible until the sync is running, so `syncing` is never set
   // without one.
-  const startSync: Effect.Effect<Deferred.Deferred<void>> = Effect.suspend(
-    () => {
-      if (syncing) {
-        syncQueued = true;
-        return Effect.succeed(syncing);
-      }
-      const done = Deferred.makeUnsafe<void>();
-      syncing = done;
-      return syncConnectionToActiveAccount.pipe(
-        // Failures are reflected in the connection state, and unexpected
-        // errors must not stop the queued sync.
-        Effect.catchDefect((defect) =>
-          Effect.logError("RuneLink sync failed", defect)
-        ),
-        Effect.ensuring(
-          Effect.suspend(() => {
-            syncing = undefined;
-            // The queued sync starts before waiters resume, as it did before.
-            const next = syncQueued ? triggerSync : Effect.void;
-            syncQueued = false;
-            return next.pipe(
-              Effect.ensuring(
-                Effect.sync(() => Deferred.doneUnsafe(done, Exit.void))
-              )
-            );
-          })
-        ),
-        // Runs until it first waits before returning, as the old sync did, so
-        // its first steps cannot undo work started right after
-        Effect.forkIn(layerScope, { startImmediately: true }),
-        Effect.as(done)
-      );
-    }
-  ).pipe(Effect.uninterruptible);
+  const startSync = Effect.suspend(beginSync).pipe(Effect.uninterruptible);
   const triggerSync = Effect.asVoid(startSync);
   // Waits for the running sync, or starts one, without queueing another
   const joinSync = Effect.suspend(() =>
@@ -477,11 +475,9 @@ const make = Effect.gen(function* () {
     if (!isCurrent(connection)) return;
 
     if (status === "connected") {
+      const capabilityIssues = yield* connection.capabilityIssues;
       setConnectionState({
-        capabilityIssues: Option.getOrElse(
-          yield* connection.capabilityIssues,
-          () => []
-        ),
+        capabilityIssues: Option.getOrElse(capabilityIssues, () => []),
       });
       if (currentAuthenticated) {
         const connectedAccount = getConnectedAccount();
@@ -658,10 +654,15 @@ const make = Effect.gen(function* () {
         // Refresh-token sign-in is the fallback for every stored session.
         yield* requireCapabilities(connection, userRef.host, ["auth.token"]);
         const refresh = authenticateWithRefreshToken(connection, userRef, auth);
-        const nowInSeconds = Math.floor(Date.now() / 1000);
+        // Token expiry is stored in Unix seconds. Refresh a minute early.
+        const now = yield* Clock.currentTimeMillis;
+        const nowInSeconds = Math.floor(now / 1000);
         if (
-          !auth.access_token ||
-          (auth.expires_at && auth.expires_at <= nowInSeconds + 60)
+          auth.access_token == null ||
+          auth.access_token === "" ||
+          (auth.expires_at != null &&
+            auth.expires_at !== 0 &&
+            auth.expires_at <= nowInSeconds + 60)
         ) {
           return yield* refresh;
         }
@@ -671,15 +672,15 @@ const make = Effect.gen(function* () {
           auth.access_token
         ).pipe(
           Effect.as(auth),
-          Effect.catchCause((cause) =>
-            // Sending on a replaced connection would reopen it, and an
-            // incompatible host would fail the refresh the same way.
-            Cause.hasInterrupts(cause) ||
-            !isCurrent(connection) ||
-            Option.getOrUndefined(Cause.findErrorOption(cause))?._tag ===
-              "RunelinkIncompatibleHostError"
-              ? Effect.failCause(cause)
-              : refresh
+          // Sending on a replaced connection would reopen it. Refreshing
+          // cannot repair an incompatible host either.
+          Effect.catchCauseIf(
+            (cause) =>
+              !Cause.hasInterrupts(cause) &&
+              isCurrent(connection) &&
+              cause.pipe(Cause.findErrorOption, Option.getOrUndefined)?._tag !==
+                "RunelinkIncompatibleHostError",
+            () => refresh
           )
         );
       })
@@ -698,7 +699,7 @@ const make = Effect.gen(function* () {
       return;
     }
     // Unexpected errors are retried like transient failures.
-    const error = Option.getOrUndefined(Exit.findErrorOption(exit));
+    const error = exit.pipe(Exit.findErrorOption, Option.getOrUndefined);
     const errorMessage = failureMessage(
       exit.cause,
       "Unable to authenticate websocket"
@@ -768,7 +769,7 @@ const make = Effect.gen(function* () {
       const socket = reusable
         ? Option.some(reusable)
         : yield* replaceConnection(activeAccount.host).pipe(
-            Effect.map(Option.some),
+            Effect.asSome,
             // Failures are reflected in the connection state.
             Effect.catch((error) =>
               error._tag === "HostUnreachableError" &&
@@ -793,6 +794,41 @@ const make = Effect.gen(function* () {
     }
   ).pipe(Effect.withSpan("RunelinkSession.sync"));
 
+  function beginSync(): Effect.Effect<Deferred.Deferred<undefined>> {
+    if (syncing) {
+      syncQueued = true;
+      return Effect.succeed(syncing);
+    }
+    const done = Deferred.makeUnsafe<undefined>();
+    syncing = done;
+    return syncConnectionToActiveAccount.pipe(
+      // Failures are reflected in the connection state, and unexpected
+      // errors must not stop the queued sync.
+      Effect.catchDefect((defect) =>
+        Effect.logError("RuneLink sync failed", defect)
+      ),
+      Effect.ensuring(
+        Effect.suspend(() => {
+          syncing = undefined;
+          // The queued sync starts before waiters resume, as it did before.
+          const next = syncQueued ? triggerSync : Effect.void;
+          syncQueued = false;
+          return next.pipe(
+            Effect.ensuring(
+              Effect.sync(() =>
+                Deferred.doneUnsafe(done, Exit.succeed(undefined))
+              )
+            )
+          );
+        })
+      ),
+      // Runs until it first waits before returning, as the old sync did, so
+      // its first steps cannot undo work started right after
+      Effect.forkIn(layerScope, { startImmediately: true }),
+      Effect.as(done)
+    );
+  }
+
   // Waits until the account is connected, or fails once disconnected. A
   // connection that reports another account, such as during a switch, is
   // waited out.
@@ -808,22 +844,9 @@ const make = Effect.gen(function* () {
       if (state.status === "disconnected") {
         return Effect.fail(new NotConnectedError());
       }
-    });
 
-  // Fails once the active account changes or loses its stored session, such
-  // as by logging out. Token refreshes keep the session.
-  const sessionEnd = (account: UserRef) =>
-    waitForAtom(
-      authAtom,
-      (state): Effect.Effect<never, RequestFailure> | undefined => {
-        if (!sameUserRef(getActiveAccount(state), account)) {
-          return Effect.fail(new SessionChangedError());
-        }
-        if (!getActiveAccountAuth(state)) {
-          return Effect.fail(new NotConnectedError());
-        }
-      }
-    );
+      return undefined;
+    });
 
   const sendRequest = Effect.fn("RunelinkSession.request")(function* <
     Request extends WsRequest,
@@ -853,15 +876,17 @@ const make = Effect.gen(function* () {
   });
 
   // Signs in to an account the user entered, replacing the active connection
-  function passwordAuth(signup: boolean) {
-    const fallbackError = signup
+  function passwordAuth(isSignup: boolean) {
+    const fallbackError = isSignup
       ? "Unable to create account"
       : "Unable to log in";
     return Effect.fn(
-      signup ? "RunelinkSession.signup" : "RunelinkSession.login"
+      isSignup ? "RunelinkSession.signup" : "RunelinkSession.login"
     )(function* (credentials: AccountCredentials) {
       const userRef = yield* normalizeCredentials(credentials);
       const { password } = credentials;
+      // Keep the browser randomUUID contract. Effect uuidV4Unsafe uses getRandomValues instead.
+      // @effect-diagnostics-next-line cryptoRandomUUIDInEffect:off
       const clientId = crypto.randomUUID();
       const tokenResponse = yield* Effect.gen(function* () {
         explicitAuthenticationInProgress = true;
@@ -880,9 +905,9 @@ const make = Effect.gen(function* () {
         yield* requireCapabilities(
           connection,
           userRef.host,
-          signup ? ["auth.signup", "auth.token"] : ["auth.token"]
+          isSignup ? ["auth.signup", "auth.token"] : ["auth.token"]
         );
-        if (signup) {
+        if (isSignup) {
           yield* connection.request({
             type: "auth_signup",
             data: { name: userRef.name, password },
@@ -923,7 +948,7 @@ const make = Effect.gen(function* () {
     });
   }
 
-  const cancelPendingAuthentication = Effect.sync(() => {
+  const cancelAuthentication = Effect.sync(() => {
     if (!explicitAuthenticationInProgress) return;
     // Tear down rather than disconnect, since the SDK reconnects on the next
     // request and could finish a cancelled signup's login.
@@ -947,29 +972,30 @@ const make = Effect.gen(function* () {
   let lastActiveAccount = getAuthSnapshot().activeAccount;
   yield* triggerSync;
 
+  function handleVisibilityChange() {
+    if (document.visibilityState === "hidden") {
+      hiddenAt = Date.now();
+      return;
+    }
+    if (
+      hiddenAt !== null &&
+      (Date.now() - hiddenAt >= RESUME_RECONNECT_AFTER_MS ||
+        getState(connectionAtom).incompatibleHost !== null)
+    ) {
+      run(reconnectActiveSession);
+    }
+    hiddenAt = null;
+  }
+  function handlePageShow(event: PageTransitionEvent) {
+    // Restored from the back/forward cache with a dead socket.
+    if (event.persisted) run(reconnectActiveSession);
+  }
+  function handleOnline() {
+    run(reconnectActiveSession);
+  }
+
   yield* Effect.acquireRelease(
     Effect.sync(() => {
-      function handleVisibilityChange() {
-        if (document.visibilityState === "hidden") {
-          hiddenAt = Date.now();
-          return;
-        }
-        if (
-          hiddenAt !== null &&
-          (Date.now() - hiddenAt >= RESUME_RECONNECT_AFTER_MS ||
-            getState(connectionAtom).incompatibleHost !== null)
-        ) {
-          run(reconnectActiveSession);
-        }
-        hiddenAt = null;
-      }
-      function handlePageShow(event: PageTransitionEvent) {
-        // Restored from the back/forward cache with a dead socket.
-        if (event.persisted) run(reconnectActiveSession);
-      }
-      function handleOnline() {
-        run(reconnectActiveSession);
-      }
       document.addEventListener("visibilitychange", handleVisibilityChange);
       window.addEventListener("pageshow", handlePageShow);
       window.addEventListener("online", handleOnline);
@@ -1021,8 +1047,13 @@ const make = Effect.gen(function* () {
     request: sendRequest,
     login: passwordAuth(false),
     signup: passwordAuth(true),
-    cancelPendingAuthentication,
+    cancelPendingAuthentication: cancelAuthentication,
   });
-});
+}
 
-export const layer = Layer.effect(RunelinkSession, make);
+export function layer(handleRunelinkUpdate: (update: WsUpdate) => void) {
+  return Layer.effect(
+    RunelinkSession,
+    Effect.gen(() => make(handleRunelinkUpdate))
+  );
+}

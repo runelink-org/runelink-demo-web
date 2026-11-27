@@ -9,8 +9,8 @@ import type {
 
 export interface PendingRequest {
   request: WsRequest;
-  resolve(reply: WsReply): void;
-  reject(error: RequestFailure): void;
+  resolve: (reply: WsReply) => void;
+  reject: (error: RequestFailure) => void;
 }
 
 export function controlledSession(

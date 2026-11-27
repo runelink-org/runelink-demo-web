@@ -64,9 +64,9 @@ function applyTheme(
   const resolvedTheme = resolveTheme(selectedTheme, systemTheme);
 
   document.documentElement.classList.toggle("dark", resolvedTheme === "dark");
-  document.querySelectorAll('meta[name="theme-color"]').forEach((meta) => {
+  for (const meta of document.querySelectorAll('meta[name="theme-color"]')) {
     meta.setAttribute("content", THEME_COLORS[resolvedTheme]);
-  });
+  }
 }
 
 export function setSelectedTheme(theme: ThemePreference): void {

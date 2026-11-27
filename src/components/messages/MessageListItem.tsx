@@ -81,7 +81,7 @@ export function MessageListItem({
             editing && "bg-muted pr-3"
           )}
         >
-          {message.reply_to ? (
+          {message.reply_to != null && message.reply_to !== "" ? (
             <div className="relative mb-1 flex h-5 min-w-0 items-center gap-2 pl-[52px] text-xs text-muted-foreground">
               <span
                 aria-hidden="true"
@@ -201,7 +201,7 @@ export function MessageListItem({
                   }`}
                 >
                   {message.body}
-                  {message.edited_at ? (
+                  {message.edited_at != null && message.edited_at !== "" ? (
                     <span
                       className="ml-2 text-xs text-muted-foreground"
                       title={`Edited ${new Date(message.edited_at).toLocaleString()}`}

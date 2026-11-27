@@ -3,7 +3,7 @@ import { createRoot } from "react-dom/client";
 import { Toaster } from "sonner";
 
 import "./index.css";
-import App from "./App.tsx";
+import { App } from "./App.tsx";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { HostTransportDialog } from "@/components/HostTransportDialog";
 import { AppAtomRegistryProvider } from "@/lib/atom-registry";
@@ -11,7 +11,9 @@ import { initializeThemeStore } from "@/lib/theme";
 
 initializeThemeStore();
 
-createRoot(document.querySelector("#root")!).render(
+const root = document.querySelector("#root");
+if (root === null) throw new Error("Runelink requires a root element");
+createRoot(root).render(
   <StrictMode>
     <AppAtomRegistryProvider>
       <TooltipProvider>

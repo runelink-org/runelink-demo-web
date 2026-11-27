@@ -58,7 +58,7 @@ import {
   fetchMessagesByTextChannel,
   messagesAtom,
 } from "@/lib/messages-store";
-import { debugRunelink } from "@/lib/runelink-debug";
+import { debugRunelink, reportRunelinkFailure } from "@/lib/runelink-debug";
 import { serverChannelKey, userRefKey } from "@/lib/runelink-store-utils";
 import { runFork, runPromise, startApp } from "@/lib/runtime";
 import {
@@ -96,17 +96,25 @@ function loadServerDetails(
   ).pipe(
     Effect.catch((error) =>
       Effect.logWarning("Failed to load server", error).pipe(
-        Effect.map(() => {
-          setServerErrorById((errors) => ({
-            ...errors,
-            [serverId]: `Couldn't load channels from ${serverHost}. ${requestFailureMessage(error)}`,
-          }));
-        })
+        Effect.andThen(
+          Effect.sync(() => {
+            setServerErrorById((errors) => ({
+              ...errors,
+              [serverId]: `Couldn't load channels from ${serverHost}. ${requestFailureMessage(error)}`,
+            }));
+          })
+        )
       )
     ),
     Effect.asVoid
   );
 }
+
+// Capture trace definitions once, while handlers still close over the current render.
+const withCreateChannelSpan = Effect.fn("App.createChannel");
+const withDeleteChannelSpan = Effect.fn("App.deleteChannel");
+const withCreateServerSpan = Effect.fn("App.createServer");
+const withJoinServerSpan = Effect.fn("App.joinServer");
 
 export function App() {
   const pendingServerDetailsRef = useRef<Set<string>>(new Set());
@@ -240,7 +248,9 @@ export function App() {
   }, [activeAccount, isSignedIn, navigate, route]);
 
   useEffect(() => {
-    startApp(toast);
+    startApp((message) => {
+      toast(message);
+    });
   }, []);
 
   if (
@@ -256,7 +266,7 @@ export function App() {
 
   useEffect(() => {
     if (!activeAccount || !isSignedIn || connectionStatus !== "connected") {
-      return;
+      return undefined;
     }
 
     const account = activeAccount;
@@ -307,10 +317,11 @@ export function App() {
         loadSidebar.pipe(
           Effect.catch((error) =>
             Effect.sync(() => {
-              if (isCancelled) return;
-              console.warn("Failed to load servers", error);
-              setSidebarError(requestFailureMessage(error));
-              reconcileServers([]);
+              if (!isCancelled) {
+                reportRunelinkFailure("warn", "Failed to load servers", error);
+                setSidebarError(requestFailureMessage(error));
+                reconcileServers([]);
+              }
             })
           ),
           Effect.ensuring(
@@ -437,7 +448,8 @@ export function App() {
   useEffect(() => {
     if (
       isSidebarLoading ||
-      !activeAccountKey ||
+      activeAccountKey == null ||
+      activeAccountKey === "" ||
       resolvedSidebarAccountKey !== activeAccountKey
     ) {
       return;
@@ -455,17 +467,20 @@ export function App() {
     isSidebarLoading,
     reconcileServers,
     resolvedSidebarAccountKey,
+    // oxlint-disable-next-line react/exhaustive-effect-dependencies -- Reconcile the route when the stored channel selection changes.
     selectedChannelIdByServerId,
     selectedServerId,
   ]);
 
-  const selectedChannelId = selectedServerId
-    ? (selectedChannelIdByServerId[selectedServerId] ?? null)
-    : null;
+  const selectedChannelId =
+    selectedServerId != null && selectedServerId !== ""
+      ? (selectedChannelIdByServerId[selectedServerId] ?? null)
+      : null;
 
-  const selectedServer = selectedServerId
-    ? (hydratedServerById[selectedServerId] ?? null)
-    : null;
+  const selectedServer =
+    selectedServerId != null && selectedServerId !== ""
+      ? (hydratedServerById[selectedServerId] ?? null)
+      : null;
   const activeUser = activeAccount
     ? (userByRefKey[userRefKey(activeAccount)] ?? null)
     : null;
@@ -485,12 +500,15 @@ export function App() {
   // The servers stay loading until their load for the active account
   // finishes, which can't start while the host is unreachable
   const hasLoadedServers = resolvedSidebarAccountKey === activeAccountKey;
-  const serversError = hasLoadedServers
-    ? sidebarError
-    : connectionStatus === "connected"
-      ? null
-      : connectionError;
-  const isServersLoading = !hasLoadedServers && !serversError;
+  function getServersError() {
+    if (hasLoadedServers) return sidebarError;
+    if (connectionStatus === "connected") return null;
+    return connectionError;
+  }
+
+  const serversError = getServersError();
+  const isServersLoading =
+    !hasLoadedServers && (serversError == null || serversError === "");
   const selectedServerError =
     selectedServer && !(selectedServer.server.id in serverWithChannelsById)
       ? (serverErrorById[selectedServer.server.id] ?? null)
@@ -502,13 +520,15 @@ export function App() {
   const selectedChannel = selectedServer?.channels.find(
     (channel) => channel.id === selectedChannelId && channel.kind === "text"
   );
-  const serverSettingsServer = serverSettingsServerId
-    ? (hydratedServerById[serverSettingsServerId] ?? null)
-    : null;
-  const serverSettingsMembers = serverSettingsServerId
-    ? (membersByServerId[serverSettingsServerId] ?? [])
-    : [];
-  const isServerSettingsOpen = !!serverSettingsServerId;
+  const serverSettingsServer =
+    serverSettingsServerId != null && serverSettingsServerId !== ""
+      ? (hydratedServerById[serverSettingsServerId] ?? null)
+      : null;
+  const serverSettingsMembers =
+    serverSettingsServerId != null && serverSettingsServerId !== ""
+      ? (membersByServerId[serverSettingsServerId] ?? [])
+      : [];
+  const isServerSettingsOpen = Boolean(serverSettingsServerId);
   const isChannelSettingsOpen = route.screen === "channel-settings";
   const channelSettingsServer =
     route.screen === "channel-settings"
@@ -521,26 +541,34 @@ export function App() {
         ) ?? null)
       : null;
   const isChannelSettingsServerHydrating =
-    !!channelSettingsServer &&
+    channelSettingsServer !== null &&
     !(channelSettingsServer.server.id in serverWithChannelsById);
   const channelSettingsError =
     serversError ??
     (isChannelSettingsServerHydrating
       ? (serverErrorById[channelSettingsServer.server.id] ?? null)
       : null);
-  const isLoadingServerSettingsMembers = serverSettingsServerId
-    ? (isLoadingMembersByServerId[serverSettingsServerId] ?? false)
-    : false;
-  const serverSettingsMembersError =
-    isServerSettingsOpen &&
-    !isLoadingServerSettingsMembers &&
-    !serverSettingsServer
-      ? "Failed to load the selected server."
-      : serverSettingsServerId
-        ? (membersErrorByServerId[serverSettingsServerId] ?? null)
-        : null;
+  const isLoadingServerSettingsMembers =
+    serverSettingsServerId != null && serverSettingsServerId !== ""
+      ? (isLoadingMembersByServerId[serverSettingsServerId] ?? false)
+      : false;
+  function getServerSettingsMembersError() {
+    if (
+      isServerSettingsOpen &&
+      !isLoadingServerSettingsMembers &&
+      !serverSettingsServer
+    ) {
+      return "Failed to load the selected server.";
+    }
+    if (serverSettingsServerId != null && serverSettingsServerId !== "") {
+      return membersErrorByServerId[serverSettingsServerId] ?? null;
+    }
+    return null;
+  }
+
+  const serverSettingsMembersError = getServerSettingsMembersError();
   const membersServerId = serverSettingsServerId ?? selectedServerId;
-  const isChannelOpen = !!selectedServer && !!selectedChannel;
+  const isChannelOpen = Boolean(selectedServer) && Boolean(selectedChannel);
   // Wide layouts show members beside the channel instead of on their own page
   const isMembersPageOpen =
     route.screen === "channel-members" && isChannelOpen && !isWideLayout;
@@ -589,14 +617,10 @@ export function App() {
   ]);
 
   useEffect(() => {
-    if (!membersServerId) {
-      return;
-    }
+    if (membersServerId == null || membersServerId === "") return;
 
     const server = hydratedServerById[membersServerId] ?? null;
-    if (!server) {
-      return;
-    }
+    if (server == null) return;
 
     if (!activeAccount || connectionStatus !== "connected") {
       return;
@@ -642,37 +666,41 @@ export function App() {
   ]);
 
   const selectedChannelKey =
-    selectedServerId && selectedChannelId
+    selectedServerId != null &&
+    selectedServerId !== "" &&
+    selectedChannelId != null &&
+    selectedChannelId !== ""
       ? serverChannelKey(selectedServerId, selectedChannelId)
       : null;
-  const selectedTextChannelId =
+  const textChannelId =
     selectedChannel?.kind === "text" ? selectedChannel.text_channel_id : null;
+  const selectedTextChannelId = textChannelId === "" ? null : textChannelId;
   // Background prefetches should not rerender the selected conversation.
   const selectedMessages =
     useAtomValue(messagesAtom, (state) =>
-      selectedTextChannelId
-        ? state.messagesByTextChannelId[selectedTextChannelId]
-        : undefined
+      selectedTextChannelId === null
+        ? undefined
+        : state.messagesByTextChannelId[selectedTextChannelId]
     ) ?? EMPTY_MESSAGES;
   const isMessagesLoading = useAtomValue(messagesAtom, (state) =>
-    selectedTextChannelId
-      ? (state.isLoadingByTextChannelId[selectedTextChannelId] ?? false)
-      : false
+    selectedTextChannelId === null
+      ? false
+      : (state.isLoadingByTextChannelId[selectedTextChannelId] ?? false)
   );
   const hasFetchedSelectedMessages = useAtomValue(messagesAtom, (state) =>
-    selectedTextChannelId
-      ? (state.hasFetchedByTextChannelId[selectedTextChannelId] ?? false)
-      : false
+    selectedTextChannelId === null
+      ? false
+      : (state.hasFetchedByTextChannelId[selectedTextChannelId] ?? false)
   );
   const messagesError = useAtomValue(messagesAtom, (state) =>
-    selectedTextChannelId
-      ? (state.errorByTextChannelId[selectedTextChannelId] ?? null)
-      : null
+    selectedTextChannelId === null
+      ? null
+      : (state.errorByTextChannelId[selectedTextChannelId] ?? null)
   );
 
   useEffect(() => {
     if (
-      !selectedTextChannelId ||
+      selectedTextChannelId === null ||
       hasFetchedSelectedMessages ||
       connectionStatus !== "connected" ||
       !selectedServer ||
@@ -706,8 +734,8 @@ export function App() {
   // a different account is ready.
   const switchedToReadyAccount =
     route.screen === "auth" &&
-    !!manageOriginAccountKey &&
-    !!activeAccount &&
+    Boolean(manageOriginAccountKey) &&
+    Boolean(activeAccount) &&
     isSignedIn &&
     (shouldPrefillAccount || activeAccountKey !== manageOriginAccountKey) &&
     connectedAccountKey === activeAccountKey &&
@@ -770,7 +798,12 @@ export function App() {
   }
 
   function handleOpenMembers() {
-    if (!selectedServerId || !selectedChannelId) {
+    if (
+      selectedServerId == null ||
+      selectedServerId === "" ||
+      selectedChannelId == null ||
+      selectedChannelId === ""
+    ) {
       return;
     }
 
@@ -814,7 +847,7 @@ export function App() {
     body: string,
     replyTo: string | null
   ): RequestEffect<void> {
-    if (!activeAccount || !selectedServer || !selectedTextChannelId) {
+    if (!activeAccount || !selectedServer || selectedTextChannelId === null) {
       return Effect.void;
     }
     return createMessage(
@@ -829,7 +862,7 @@ export function App() {
   }
 
   function handleDeleteMessage(message: Message): RequestEffect<void> {
-    if (!activeAccount || !selectedServer || !selectedTextChannelId) {
+    if (!activeAccount || !selectedServer || selectedTextChannelId === null) {
       return Effect.void;
     }
     return deleteMessage(
@@ -839,77 +872,72 @@ export function App() {
     );
   }
 
-  function handleCreateChannel(
+  const handleCreateChannel = withCreateChannelSpan(function* (
     server: Server,
     kind: ServerChannelKind,
     title: string,
     parentChannelId: string | null
-  ): RequestEffect<void> {
-    return Effect.gen(function* () {
-      if (!activeAccount) {
-        return;
-      }
-      const channel = yield* createChannel(
-        server.id,
-        {
-          kind,
-          title,
-          description: null,
-          parent_channel_id: parentChannelId,
-        },
-        getTargetHost(server.host, activeAccount.host)
-      );
-      if (channel.kind !== "text") {
-        return;
-      }
+  ) {
+    if (!activeAccount) return;
+    const channel = yield* createChannel(
+      server.id,
+      {
+        kind,
+        title,
+        description: null,
+        parent_channel_id: parentChannelId,
+      },
+      getTargetHost(server.host, activeAccount.host)
+    );
+    if (channel.kind !== "text") return;
 
-      navigate(
-        {
-          screen: "channel",
-          serverId: server.id,
-          channelId: channel.id,
-        },
-        "push"
-      );
-    });
-  }
+    navigate(
+      {
+        screen: "channel",
+        serverId: server.id,
+        channelId: channel.id,
+      },
+      "push"
+    );
+  });
 
-  function handleDeleteChannel(channel: ServerChannel): RequestEffect<void> {
-    return Effect.gen(function* () {
-      const server = hydratedServerById[channel.server_id]?.server;
-      const currentAccount = getActiveAccount(getState(authAtom));
-      // The account changed, or the server was removed, since the
-      // confirmation opened
-      if (
-        !activeAccount ||
-        !currentAccount ||
-        userRefKey(currentAccount) !== userRefKey(activeAccount) ||
-        !server
-      ) {
-        return yield* new SessionChangedError();
-      }
-      yield* deleteChannel(
-        channel.server_id,
-        channel.id,
-        getTargetHost(server.host, activeAccount.host)
-      );
-      const accountAfterDelete = getActiveAccount(getState(authAtom));
-      if (
-        !accountAfterDelete ||
-        userRefKey(accountAfterDelete) !== userRefKey(activeAccount)
-      ) {
-        return;
-      }
-      const current = getCurrentRoute();
-      if (
-        current.screen === "channel-settings" &&
-        current.serverId === channel.server_id &&
-        current.channelId === channel.id
-      ) {
-        navigate({ screen: "server", serverId: channel.server_id }, "replace");
-      }
-    });
-  }
+  const handleDeleteChannel = withDeleteChannelSpan(function* (
+    channel: ServerChannel
+  ) {
+    const server = hydratedServerById[channel.server_id]?.server;
+    const currentAccount = authAtom.pipe(getState, getActiveAccount);
+    // The account changed, or the server was removed, since the
+    // confirmation opened
+    if (
+      !activeAccount ||
+      !currentAccount ||
+      userRefKey(currentAccount) !== userRefKey(activeAccount) ||
+      server == null
+    ) {
+      return yield* new SessionChangedError();
+    }
+    yield* deleteChannel(
+      channel.server_id,
+      channel.id,
+      getTargetHost(server.host, activeAccount.host)
+    );
+    const accountAfterDelete = authAtom.pipe(getState, getActiveAccount);
+    if (
+      !accountAfterDelete ||
+      userRefKey(accountAfterDelete) !== userRefKey(activeAccount)
+    ) {
+      return undefined;
+    }
+    const current = getCurrentRoute();
+    if (
+      current.screen === "channel-settings" &&
+      current.serverId === channel.server_id &&
+      current.channelId === channel.id
+    ) {
+      navigate({ screen: "server", serverId: channel.server_id }, "replace");
+    }
+    return undefined;
+  });
 
   function handleMoveChannel(
     channel: ServerChannel,
@@ -924,76 +952,72 @@ export function App() {
     ).pipe(Effect.asVoid);
   }
 
-  function handleCreateServer(
+  const handleCreateServer = withCreateServerSpan(function* (
     host: string,
     title: string,
     description: string
-  ): RequestEffect<void> {
-    return Effect.gen(function* () {
-      if (!activeAccount) return;
+  ) {
+    if (!activeAccount) return;
 
-      const targetHost = getTargetHost(host.trim(), activeAccount.host);
-      const server = yield* createServer(
-        {
-          title,
-          description: description.trim() || null,
-          default_channels: true,
-        },
-        targetHost
-      );
+    const targetHost = getTargetHost(host.trim(), activeAccount.host);
+    const server = yield* createServer(
+      {
+        title,
+        description: description.trim() || null,
+        default_channels: true,
+      },
+      targetHost
+    );
 
-      // The server exists now, so a failed channel load shows in its channel
-      // list rather than failing the create
-      yield* loadServerDetails(
-        server.id,
-        server.host,
-        activeAccount.host,
-        setServerErrorById
-      );
-      navigate({ screen: "server", serverId: server.id }, "push");
-    });
-  }
+    // The server exists now, so a failed channel load shows in its channel
+    // list rather than failing the create
+    yield* loadServerDetails(
+      server.id,
+      server.host,
+      activeAccount.host,
+      setServerErrorById
+    );
+    navigate({ screen: "server", serverId: server.id }, "push");
+  });
 
   function handleSearchServers(host: string): RequestEffect<readonly Server[]> {
     if (!activeAccount) return Effect.succeed([]);
     return fetchServers(getTargetHost(host, activeAccount.host));
   }
 
-  function handleJoinServer(
+  const handleJoinServer = withJoinServerSpan(function* (
     serverId: string,
     serverHost: string
-  ): RequestEffect<void> {
-    return Effect.gen(function* () {
-      if (!activeAccount) return;
+  ) {
+    if (!activeAccount) return;
 
-      debugRunelink("join server start", {
-        serverId,
-        serverHost,
-        activeAccount,
-      });
-
-      yield* upsertMembership(serverId, {
-        user_ref: activeAccount,
-        server_id: serverId,
-        server_host: serverHost,
-        role: "member",
-      });
-      // The membership exists now, so a failed channel load shows in the
-      // server's channel list rather than failing the join
-      yield* loadServerDetails(
-        serverId,
-        serverHost,
-        activeAccount.host,
-        setServerErrorById
-      );
-      debugRunelink("join server finished", {
-        serverId,
-        serverHost,
-        activeAccount,
-      });
-      navigate({ screen: "server", serverId }, "push");
+    debugRunelink("join server start", {
+      serverId,
+      serverHost,
+      activeAccount,
     });
-  }
+
+    yield* upsertMembership(serverId, {
+      user_ref: activeAccount,
+      server_id: serverId,
+      server_host: serverHost,
+      role: "member",
+    });
+    // The membership exists now, so a failed channel load shows in the
+    // server's channel list rather than failing the join
+    yield* loadServerDetails(
+      serverId,
+      serverHost,
+      activeAccount.host,
+      setServerErrorById
+    );
+    debugRunelink("join server finished", {
+      serverId,
+      serverHost,
+      activeAccount,
+    });
+    navigate({ screen: "server", serverId }, "push");
+  });
 
   function handleLeaveServer(
     serverId: string,
@@ -1018,20 +1042,122 @@ export function App() {
     );
   }
 
+  function renderMainContent() {
+    if (shouldShowAuthScreen) {
+      return (
+        <AuthScreen
+          key={`${manageSessionId}:${activeAccount ? `${activeAccount.name}@${activeAccount.host}` : "no-account"}`}
+          canClose={Boolean(activeAccount) && isSignedIn}
+          prefillAccount={shouldPrefillAccount}
+          onDone={() => {
+            setManageOriginAccountKey(null);
+            setShouldPrefillAccount(true);
+            const destination: AppRoute = authReturnRouteRef.current ?? {
+              screen: "home",
+            };
+            authReturnRouteRef.current = null;
+            navigate(destination, "push");
+          }}
+          onBack={handleCloseAuthScreen}
+        />
+      );
+    }
+    if (route.screen === "channel-settings") {
+      return (
+        <ChannelSettingsPage
+          key={`${activeAccountKey}:${route.serverId}:${route.channelId}`}
+          channel={channelSettingsChannel}
+          host={channelSettingsServer?.server.host ?? null}
+          isLoading={
+            !(channelSettingsError != null && channelSettingsError !== "") &&
+            (isServersLoading || isChannelSettingsServerHydrating)
+          }
+          error={channelSettingsError}
+          canManage={
+            channelSettingsServer
+              ? canManageServer(channelSettingsServer.server)
+              : false
+          }
+          onDone={() => {
+            backOrReplace(
+              channelSettingsChannel?.kind === "text"
+                ? {
+                    screen: "channel",
+                    serverId: route.serverId,
+                    channelId: route.channelId,
+                  }
+                : { screen: "server", serverId: route.serverId }
+            );
+          }}
+          onDeleteChannel={handleDeleteChannel}
+        />
+      );
+    }
+    if (isServerSettingsOpen) {
+      return (
+        <ServerSettingsPage
+          server={serverSettingsServer}
+          members={serverSettingsMembers}
+          isLoadingMembers={isLoadingServerSettingsMembers}
+          membersError={serverSettingsMembersError}
+          onDone={handleBackToContent}
+        />
+      );
+    }
+    if (isMembersPageOpen && selectedServer) {
+      return (
+        <ServerMembersPage
+          serverTitle={selectedServer.server.title}
+          onBack={handleBackToContent}
+        >
+          {selectedServerMemberList}
+        </ServerMembersPage>
+      );
+    }
+    return (
+      <MessagesPane
+        selectedServer={selectedServer}
+        selectedChannel={selectedChannel}
+        selectedChannelKey={selectedChannelKey}
+        selectedMessages={selectedMessages}
+        targetMessageId={
+          route.screen === "channel" &&
+          route.serverId === selectedServer?.server.id &&
+          route.channelId === selectedChannel?.id
+            ? (route.messageId ?? null)
+            : null
+        }
+        hasLoadedMessages={hasFetchedSelectedMessages}
+        isSidebarLoading={isServersLoading}
+        sidebarError={serversError}
+        hydratedServerCount={hydratedServers.length}
+        isMessagesLoading={isMessagesLoading}
+        messagesError={messagesError}
+        activeAccount={activeAccount}
+        canModerateMessages={canModerateSelectedMessages}
+        canModerateMembers={canDeleteSelectedServer}
+        canDeleteChannel={canDeleteSelectedServer}
+        onDeselectChannel={handleDeselectChannel}
+        onSendMessage={handleSendMessage}
+        onDeleteChannel={handleDeleteChannel}
+        onEditChannel={handleOpenChannelSettings}
+        onDeleteMessage={handleDeleteMessage}
+        membersPane={isWideLayout ? selectedServerMemberList : null}
+        onOpenMembers={handleOpenMembers}
+      />
+    );
+  }
+
+  function sidebarLayoutClass() {
+    if (shouldShowAuthScreen) return "flex w-auto";
+    if (isServerSettingsOpen || isChannelSettingsOpen) return "hidden";
+    if (isChannelOpen) return "hidden sm:flex";
+    return "flex w-full sm:w-auto";
+  }
+
   return (
     <div className="flex h-dvh overflow-hidden bg-background">
-      <div
-        className={[
-          "min-w-0 shrink-0",
-          shouldShowAuthScreen
-            ? "flex w-auto"
-            : isServerSettingsOpen || isChannelSettingsOpen
-              ? "hidden"
-              : isChannelOpen
-                ? "hidden sm:flex"
-                : "flex w-full sm:w-auto",
-        ].join(" ")}
-      >
+      <div className={["min-w-0 shrink-0", sidebarLayoutClass()].join(" ")}>
         <Sidebar
           servers={hydratedServers}
           selectedServerId={selectedServerId}
@@ -1070,107 +1196,16 @@ export function App() {
       <main
         className={[
           "min-h-0 min-w-0 overflow-hidden",
-          shouldShowAuthScreen
+          shouldShowAuthScreen ||
+          isChannelOpen ||
+          isServerSettingsOpen ||
+          isChannelSettingsOpen
             ? "flex flex-1"
-            : isChannelOpen || isServerSettingsOpen || isChannelSettingsOpen
-              ? "flex flex-1"
-              : "hidden flex-1 sm:flex",
+            : "hidden flex-1 sm:flex",
         ].join(" ")}
       >
-        {shouldShowAuthScreen ? (
-          <AuthScreen
-            key={`${manageSessionId}:${activeAccount ? `${activeAccount.name}@${activeAccount.host}` : "no-account"}`}
-            canClose={!!activeAccount && isSignedIn}
-            prefillAccount={shouldPrefillAccount}
-            onDone={() => {
-              setManageOriginAccountKey(null);
-              setShouldPrefillAccount(true);
-              const destination: AppRoute = authReturnRouteRef.current ?? {
-                screen: "home",
-              };
-              authReturnRouteRef.current = null;
-              navigate(destination, "push");
-            }}
-            onBack={handleCloseAuthScreen}
-          />
-        ) : route.screen === "channel-settings" ? (
-          <ChannelSettingsPage
-            key={`${activeAccountKey}:${route.serverId}:${route.channelId}`}
-            channel={channelSettingsChannel}
-            host={channelSettingsServer?.server.host ?? null}
-            isLoading={
-              !channelSettingsError &&
-              (isServersLoading || isChannelSettingsServerHydrating)
-            }
-            error={channelSettingsError}
-            canManage={
-              channelSettingsServer
-                ? canManageServer(channelSettingsServer.server)
-                : false
-            }
-            onDone={() => {
-              backOrReplace(
-                channelSettingsChannel?.kind === "text"
-                  ? {
-                      screen: "channel",
-                      serverId: route.serverId,
-                      channelId: route.channelId,
-                    }
-                  : { screen: "server", serverId: route.serverId }
-              );
-            }}
-            onDeleteChannel={handleDeleteChannel}
-          />
-        ) : isServerSettingsOpen ? (
-          <ServerSettingsPage
-            server={serverSettingsServer}
-            members={serverSettingsMembers}
-            isLoadingMembers={isLoadingServerSettingsMembers}
-            membersError={serverSettingsMembersError}
-            onDone={handleBackToContent}
-          />
-        ) : isMembersPageOpen && selectedServer ? (
-          <ServerMembersPage
-            serverTitle={selectedServer.server.title}
-            onBack={handleBackToContent}
-          >
-            {selectedServerMemberList}
-          </ServerMembersPage>
-        ) : (
-          <MessagesPane
-            selectedServer={selectedServer}
-            selectedChannel={selectedChannel}
-            selectedChannelKey={selectedChannelKey}
-            selectedMessages={selectedMessages}
-            targetMessageId={
-              route.screen === "channel" &&
-              route.serverId === selectedServer?.server.id &&
-              route.channelId === selectedChannel?.id
-                ? (route.messageId ?? null)
-                : null
-            }
-            hasLoadedMessages={hasFetchedSelectedMessages}
-            isSidebarLoading={isServersLoading}
-            sidebarError={serversError}
-            hydratedServerCount={hydratedServers.length}
-            isMessagesLoading={isMessagesLoading}
-            messagesError={messagesError}
-            activeAccount={activeAccount}
-            canModerateMessages={canModerateSelectedMessages}
-            canModerateMembers={canDeleteSelectedServer}
-            canDeleteChannel={canDeleteSelectedServer}
-            onDeselectChannel={handleDeselectChannel}
-            onSendMessage={handleSendMessage}
-            onDeleteChannel={handleDeleteChannel}
-            onEditChannel={handleOpenChannelSettings}
-            onDeleteMessage={handleDeleteMessage}
-            membersPane={isWideLayout ? selectedServerMemberList : null}
-            onOpenMembers={handleOpenMembers}
-          />
-        )}
+        {renderMainContent()}
       </main>
     </div>
   );
 }
-
-export default App;

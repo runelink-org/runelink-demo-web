@@ -134,7 +134,12 @@ function CreateChannelDialogForm({
   }
 
   return (
-    <form className="space-y-4" onSubmit={handleSubmit}>
+    <form
+      className="space-y-4"
+      onSubmit={(event) => {
+        void handleSubmit(event);
+      }}
+    >
       <AlertDialogHeader>
         <AlertDialogTitle>Create {nounLabel}</AlertDialogTitle>
         <AlertDialogDescription>
@@ -215,7 +220,9 @@ function CreateChannelDialogForm({
         </div>
       ) : null}
 
-      {error ? <p className="text-sm text-destructive">{error}</p> : null}
+      {error != null && error !== "" ? (
+        <p className="text-sm text-destructive">{error}</p>
+      ) : null}
 
       <AlertDialogFooter>
         <AlertDialogCancel disabled={isCreating}>Cancel</AlertDialogCancel>

@@ -35,9 +35,10 @@ function getFallbackSelection(
     return { serverId: null, channelId: null };
   }
 
-  const selectedServer = currentSelection.serverId
-    ? servers.find((server) => server.server.id === currentSelection.serverId)
-    : null;
+  const selectedServer =
+    currentSelection.serverId != null && currentSelection.serverId !== ""
+      ? servers.find((server) => server.server.id === currentSelection.serverId)
+      : null;
   // Fall back to a server whose channels loaded, rather than one on an
   // unreachable host
   const nextServer =
@@ -45,11 +46,9 @@ function getFallbackSelection(
     servers.find((server) => server.channels.length > 0) ??
     servers[0];
 
-  if (!nextServer) {
-    return { serverId: null, channelId: null };
-  }
+  if (nextServer == null) return { serverId: null, channelId: null };
 
-  if (!currentSelection.channelId) {
+  if (currentSelection.channelId == null || currentSelection.channelId === "") {
     return { serverId: nextServer.server.id, channelId: null };
   }
 
@@ -113,18 +112,21 @@ export function useAppNavigation() {
       const navigationState = getState(navigationAtom);
       const nextSelection = getFallbackSelection(servers, {
         serverId: navigationState.selectedServerId,
-        channelId: navigationState.selectedServerId
-          ? (navigationState.selectedChannelIdByServerId[
-              navigationState.selectedServerId
-            ] ?? null)
-          : null,
+        channelId:
+          navigationState.selectedServerId != null &&
+          navigationState.selectedServerId !== ""
+            ? (navigationState.selectedChannelIdByServerId[
+                navigationState.selectedServerId
+              ] ?? null)
+            : null,
       });
 
       if (nextSelection.serverId !== navigationState.selectedServerId) {
         selectServer(nextSelection.serverId);
       }
       if (
-        nextSelection.serverId &&
+        nextSelection.serverId != null &&
+        nextSelection.serverId !== "" &&
         (navigationState.selectedChannelIdByServerId[nextSelection.serverId] ??
           null) !== nextSelection.channelId
       ) {

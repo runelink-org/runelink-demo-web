@@ -10,7 +10,7 @@ export function compareResourceVersions(
   // Compare fractional seconds separately because Date.parse drops precision
   // beyond milliseconds. Parsing above also accounts for timezone offsets.
   function fraction(resource: VersionedResource): string {
-    return (/\.(\d+)/.exec(resource.updated_at)?.[1] ?? "").padEnd(9, "0");
+    return (/\.(\d+)/u.exec(resource.updated_at)?.[1] ?? "").padEnd(9, "0");
   }
   return fraction(left).localeCompare(fraction(right));
 }

@@ -48,13 +48,17 @@ function InputGroupAddon({
   ...props
 }: React.ComponentProps<"div"> & VariantProps<typeof inputGroupAddonVariants>) {
   return (
+    // oxlint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-noninteractive-element-interactions -- Clicking the decorative addon forwards focus to the input, which has its own keyboard focus.
     <div
       role="group"
       data-slot="input-group-addon"
       data-align={align}
       className={cn(inputGroupAddonVariants({ align }), className)}
       onClick={(e) => {
-        if ((e.target as HTMLElement).closest("button")) {
+        if (
+          e.target instanceof Element &&
+          e.target.closest("button") !== null
+        ) {
           return;
         }
         e.currentTarget.parentElement?.querySelector("input")?.focus();

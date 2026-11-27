@@ -1,3 +1,5 @@
+import * as Arr from "effect/Array";
+import * as Order from "effect/Order";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -22,7 +24,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { DeleteServerDialog } from "@/components/sidebar/DeleteServerDialog";
 import { LeaveServerDialog } from "@/components/sidebar/LeaveServerDialog";
 import { Button } from "@/components/ui/button";
-import { compareMemberNames } from "@/components/members/member-display";
+import { memberNameOrder } from "@/components/members/member-display";
 import { ServerMembersTable } from "@/components/server-settings/ServerMembersTable";
 import { authAtom, getActiveAccount } from "@/lib/auth-store";
 import { deleteMembership } from "@/lib/memberships-store";
@@ -31,7 +33,6 @@ import { deleteServer } from "@/lib/servers-store";
 import { usersAtom } from "@/lib/users-store";
 import * as Effect from "effect/Effect";
 import { requestFailureMessage } from "@/lib/request-failure";
-import type { RequestEffect } from "@/lib/runelink-session";
 
 type ServerSettingsPageProps = {
   server: ServerWithChannels | null;
@@ -66,8 +67,20 @@ export function ServerSettingsPage(props: ServerSettingsPageProps) {
 }
 
 function normalizeDescription(value: string | null): string {
-  return (value ?? "").replaceAll(/[^\S\r\n]+$/gm, "").trim();
+  return (value ?? "").replaceAll(/[^\S\r\n]+$/gmu, "").trim();
 }
+
+const memberRoleOrder = Order.combine(
+  Order.mapInput(
+    Order.Boolean,
+    (member: ServerMember) => member.role !== "admin"
+  ),
+  memberNameOrder
+);
+
+// Capture trace definitions once, while handlers still close over the current render.
+const withLeaveServerSpan = Effect.fn("ServerSettings.leaveServer");
+const withDeleteServerSpan = Effect.fn("ServerSettings.deleteServer");
 
 function ServerSettingsContent({
   server,
@@ -107,14 +120,7 @@ function ServerSettingsContent({
       : null
   );
   const sortedMembers = useMemo(
-    () =>
-      [...members].sort((left, right) => {
-        if (left.role !== right.role) {
-          return left.role === "admin" ? -1 : 1;
-        }
-
-        return compareMemberNames(left, right);
-      }),
+    () => Arr.sort(members, memberRoleOrder),
     [members]
   );
   const activeServerMember = useMemo(() => {
@@ -173,7 +179,7 @@ function ServerSettingsContent({
       }).pipe(
         Effect.match({
           onSuccess: (reply) => {
-            const active = getActiveAccount(getState(authAtom));
+            const active = authAtom.pipe(getState, getActiveAccount);
             if (
               active?.name !== account.name ||
               active?.host !== account.host
@@ -197,34 +203,30 @@ function ServerSettingsContent({
     });
   }
 
-  function handleLeaveServer(
+  const handleLeaveServer = withLeaveServerSpan(function* (
     serverId: string,
     serverHost: string
-  ): RequestEffect<void> {
-    return Effect.gen(function* () {
-      if (!activeAccount) return;
-      yield* deleteMembership(
-        serverId,
-        activeAccount,
-        getTargetHost(serverHost, activeAccount.host)
-      );
-      onDone();
-    });
-  }
+  ) {
+    if (!activeAccount) return;
+    yield* deleteMembership(
+      serverId,
+      activeAccount,
+      getTargetHost(serverHost, activeAccount.host)
+    );
+    onDone();
+  });
 
-  function handleDeleteServer(
+  const handleDeleteServer = withDeleteServerSpan(function* (
     serverId: string,
     serverHost: string
-  ): RequestEffect<void> {
-    return Effect.gen(function* () {
-      if (!activeAccount) return;
-      yield* deleteServer(
-        serverId,
-        getTargetHost(serverHost, activeAccount.host)
-      );
-      onDone();
-    });
-  }
+  ) {
+    if (!activeAccount) return;
+    yield* deleteServer(
+      serverId,
+      getTargetHost(serverHost, activeAccount.host)
+    );
+    onDone();
+  });
 
   return (
     <section className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
@@ -236,8 +238,11 @@ function ServerSettingsContent({
             size="icon"
             className="-ml-2 size-9 shrink-0 rounded-full"
             onClick={() => {
-              if (dirty) setIsDiscardOpen(true);
-              else onDone();
+              if (dirty) {
+                setIsDiscardOpen(true);
+              } else {
+                onDone();
+              }
             }}
             disabled={isSaving}
             aria-label="Back from server settings"
@@ -261,7 +266,12 @@ function ServerSettingsContent({
               <h2 className="text-base font-semibold text-foreground">
                 Overview
               </h2>
-              <form className="mt-5 space-y-6" onSubmit={save}>
+              <form
+                className="mt-5 space-y-6"
+                onSubmit={(event) => {
+                  void save(event);
+                }}
+              >
                 <div className="space-y-2">
                   <Label htmlFor="server-title">Server Title</Label>
                   <Input
@@ -294,7 +304,7 @@ function ServerSettingsContent({
                     Only server admins can edit server settings.
                   </p>
                 )}
-                {error ? (
+                {error != null && error !== "" ? (
                   <p role="alert" className="text-sm text-destructive">
                     {error} Your changes have been kept. Reset to load the
                     latest values.
@@ -312,7 +322,7 @@ function ServerSettingsContent({
                   >
                     {isSaving ? "Saving..." : "Save Changes"}
                   </Button>
-                  {dirty || error ? (
+                  {dirty || (error != null && error !== "") ? (
                     <Button
                       type="button"
                       variant="outline"

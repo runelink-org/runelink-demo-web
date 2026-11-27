@@ -3,7 +3,7 @@ import { Hash } from "lucide-react";
 import { useEffect, useRef } from "react";
 import { ChannelActionsMenu } from "@/components/sidebar/ChannelActionsMenu";
 import { NavigationLink } from "@/components/NavigationLink";
-import { buttonVariants } from "@/components/ui/button";
+import { buttonVariants } from "@/components/ui/button-variants";
 import { getAppRoutePath } from "@/lib/app-route";
 import { useContextActionsMenu } from "@/lib/use-context-actions-menu";
 import { cn } from "@/lib/utils";
@@ -45,11 +45,12 @@ export function ChannelListItem({
       prefetchTimer.current = null;
     }
   }
+  // oxlint-disable-next-line react/exhaustive-effect-dependencies -- Cancel prefetch for the previous host or channel when the item is reused.
   useEffect(() => cancelPrefetch, [channel.id, host]);
 
   function prefetch() {
     cancelPrefetch();
-    const account = getActiveAccount(getState(authAtom));
+    const account = authAtom.pipe(getState, getActiveAccount);
     const connection = getState(connectionAtom);
     if (
       channel.kind !== "text" ||

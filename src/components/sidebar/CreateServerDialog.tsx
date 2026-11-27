@@ -57,9 +57,7 @@ function CreateServerDialogForm({
   const titleInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
-    if (!open) {
-      return;
-    }
+    if (!open) return undefined;
 
     const frame = window.requestAnimationFrame(() => {
       titleInputRef.current?.focus();
@@ -106,7 +104,12 @@ function CreateServerDialogForm({
   }
 
   return (
-    <form className="space-y-4" onSubmit={handleSubmit}>
+    <form
+      className="space-y-4"
+      onSubmit={(event) => {
+        void handleSubmit(event);
+      }}
+    >
       <AlertDialogHeader>
         <AlertDialogTitle>Create Server</AlertDialogTitle>
         <AlertDialogDescription>
@@ -156,7 +159,9 @@ function CreateServerDialogForm({
         />
       </div>
 
-      {error ? <p className="text-sm text-destructive">{error}</p> : null}
+      {error != null && error !== "" ? (
+        <p className="text-sm text-destructive">{error}</p>
+      ) : null}
 
       <AlertDialogFooter>
         <AlertDialogCancel disabled={isCreating}>Cancel</AlertDialogCancel>

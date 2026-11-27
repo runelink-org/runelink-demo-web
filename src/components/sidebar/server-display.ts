@@ -1,5 +1,5 @@
 export function getServerMonogram(title: string): string {
-  const words = title.trim().split(/\s+/).filter(Boolean);
+  const words = title.trim().split(/\s+/u).filter(Boolean);
   return words
     .slice(0, 2)
     .map((word) => word[0])

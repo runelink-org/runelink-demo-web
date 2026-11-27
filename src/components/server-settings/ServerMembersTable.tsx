@@ -3,7 +3,7 @@ import { Badge } from "@/components/ui/badge";
 import { MemberActionsMenu } from "@/components/members/MemberActionsMenu";
 import { useContextActionsMenu } from "@/lib/use-context-actions-menu";
 import {
-  MEMBER_STATUS,
+  MemberStatus,
   ROLE_LABELS,
   ROLE_TEXT_CLASS_NAMES,
 } from "@/components/members/member-display";
@@ -87,8 +87,8 @@ function ServerMemberTableRow({
       </TableCell>
       <TableCell>
         <span className="text-muted-foreground inline-flex items-center gap-1.5 text-sm">
-          <MEMBER_STATUS.Icon className="size-3.5" />
-          {MEMBER_STATUS.label}
+          <MemberStatus.Icon className="size-3.5" />
+          {MemberStatus.label}
         </span>
       </TableCell>
       <TableCell className="whitespace-nowrap text-sm text-muted-foreground">
@@ -117,7 +117,7 @@ export function ServerMembersTable({
   activeAccount,
   canModerateMembers,
 }: ServerMembersTableProps) {
-  if (membersError) {
+  if (membersError != null && membersError !== "") {
     return (
       <div className="rounded-2xl border border-destructive/20 bg-destructive/5 px-4 py-3 text-sm text-destructive">
         {membersError}

@@ -55,7 +55,7 @@ export function DeleteAccountDialog({
   const typed = confirmation.trim();
   // Both default-port spellings are accepted, matching the CLI.
   const isConfirmed =
-    !!account &&
+    account !== null &&
     (typed === `delete ${name}` ||
       typed === `delete ${account.name}@${padHost(account.host)}`);
 
@@ -90,6 +90,12 @@ export function DeleteAccountDialog({
     });
   }
 
+  function deleteLabel() {
+    if (isDeleting) return "Deleting...";
+    if (isConnected) return "Delete Account";
+    return "Connecting...";
+  }
+
   return (
     <AlertDialog
       open={account !== null}
@@ -105,8 +111,8 @@ export function DeleteAccountDialog({
           <AlertDialogDescription>
             This permanently deletes{" "}
             <span className="font-semibold">{name}</span> on its home host and
-            removes it from that host's servers. Its messages stay, without an
-            author.
+            removes it from that host&apos;s servers. Its messages stay, without
+            an author.
           </AlertDialogDescription>
         </AlertDialogHeader>
 
@@ -122,7 +128,9 @@ export function DeleteAccountDialog({
           />
         ) : null}
 
-        {error ? <p className="text-sm text-destructive">{error}</p> : null}
+        {error != null && error !== "" ? (
+          <p className="text-sm text-destructive">{error}</p>
+        ) : null}
 
         <AlertDialogFooter>
           <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
@@ -134,11 +142,7 @@ export function DeleteAccountDialog({
               void handleConfirm();
             }}
           >
-            {isDeleting
-              ? "Deleting..."
-              : isConnected
-                ? "Delete Account"
-                : "Connecting..."}
+            {deleteLabel()}
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>

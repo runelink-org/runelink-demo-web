@@ -2,9 +2,18 @@ export function debugRunelink(label: string, payload?: unknown): void {
   if (!import.meta.env.DEV) {
     return;
   }
-  if (payload === undefined) {
-    console.debug(`[runelink-demo] ${label}`);
+  const args = payload === undefined ? [] : [payload];
+  console.debug(`[runelink-demo] ${label}`, ...args);
+}
+
+export function reportRunelinkFailure(
+  level: "warn" | "error",
+  message: string,
+  cause: unknown
+): void {
+  if (level === "warn") {
+    console.warn(message, cause);
     return;
   }
-  console.debug(`[runelink-demo] ${label}`, payload);
+  console.error(message, cause);
 }

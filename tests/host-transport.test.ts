@@ -1,5 +1,8 @@
+import type * as HostTransportModule from "../src/lib/host-transport.ts";
+import type * as AtomRegistryModule from "../src/lib/atom-registry.ts";
 import assert from "node:assert/strict";
 import { afterAll, beforeAll, it, vi } from "@effect/vitest";
+import * as Schema from "effect/Schema";
 import * as Clock from "effect/Clock";
 import * as Effect from "effect/Effect";
 import * as Fiber from "effect/Fiber";
@@ -8,17 +11,27 @@ import * as Exit from "effect/Exit";
 import * as Layer from "effect/Layer";
 import * as Socket from "effect/socket/Socket";
 
-let hostTransport: typeof import("../src/lib/host-transport.ts");
-let registry: typeof import("../src/lib/atom-registry.ts").appAtomRegistry;
+const json = Schema.fromJsonString(Schema.Unknown);
+const decodeJson = Schema.decodeSync(json);
+const encodeJson = Schema.encodeSync(json);
+
+let hostTransport: typeof HostTransportModule;
+let registry: typeof AtomRegistryModule.appAtomRegistry;
 let storage: Map<string, string>;
 let calls: { url: string; options?: RequestInit }[];
 const originalFetch = globalThis.fetch;
 const originalWindow = globalThis.window;
 
-beforeAll(async () => {
-  hostTransport = await import("../src/lib/host-transport.ts");
-  ({ appAtomRegistry: registry } = await import("../src/lib/atom-registry.ts"));
-});
+beforeAll(() =>
+  Effect.gen(function* () {
+    hostTransport = yield* Effect.promise(
+      () => import("../src/lib/host-transport.ts")
+    );
+    ({ appAtomRegistry: registry } = yield* Effect.promise(
+      () => import("../src/lib/atom-registry.ts")
+    ));
+  })
+);
 
 afterAll(() => {
   globalThis.fetch = originalFetch;
@@ -34,25 +47,26 @@ function setup({
   protocol = "http:",
   secureResponse,
 }: { stored?: object; protocol?: string; secureResponse?: Response } = {}) {
-  storage = new Map([
-    ["runelink.demo.host-transports", JSON.stringify(stored)],
-  ]);
+  storage = new Map([["runelink.demo.host-transports", encodeJson(stored)]]);
   calls = [];
-  vi.stubGlobal("window", {
-    location: { protocol },
-    localStorage: {
-      getItem: (key: string) => storage.get(key) ?? null,
-      setItem: (key: string, value: string) => storage.set(key, value),
-    },
-  });
-  globalThis.fetch = async (url, options) => {
+  vi.stubGlobal(
+    "window",
+    Object.assign(new EventTarget(), {
+      location: { protocol },
+      localStorage: {
+        getItem: (key: string) => storage.get(key) ?? null,
+        setItem: (key: string, value: string) => storage.set(key, value),
+      },
+    })
+  );
+  globalThis.fetch = (url, options) => {
     assert.ok(typeof url === "string");
     calls.push({ url, options });
     if (url.startsWith("https:")) {
-      if (secureResponse) return secureResponse;
-      throw new TypeError("TLS failed");
+      if (secureResponse) return Promise.resolve(secureResponse);
+      return Promise.reject(new TypeError("TLS failed"));
     }
-    return new Response("pong");
+    return Promise.resolve(new Response("pong"));
   };
 }
 
@@ -89,7 +103,7 @@ it.effect(
       const prompt = yield* waitForPrompt();
       assert.equal(prompt.host, "localhost:7000");
       assert.deepEqual(
-        JSON.parse(storage.get("runelink.demo.host-transports") ?? ""),
+        decodeJson(storage.get("runelink.demo.host-transports") ?? ""),
         {}
       );
       for (const { options } of calls) {
@@ -97,15 +111,14 @@ it.effect(
         assert.equal(options?.redirect, "manual");
       }
       prompt.respond(true);
-      assert.equal(yield* Fiber.join(pending), false);
-      assert.equal(
-        yield* hostTransport.resolveHostTransport("localhost:7000"),
-        false
-      );
-      assert.equal(
-        yield* hostTransport.resolveHostTransport("localhost:07000"),
-        false
-      );
+      const approved = yield* Fiber.join(pending);
+      assert.equal(approved, false);
+      const remembered =
+        yield* hostTransport.resolveHostTransport("localhost:7000");
+      assert.equal(remembered, false);
+      const alias =
+        yield* hostTransport.resolveHostTransport("localhost:07000");
+      assert.equal(alias, false);
       assert.equal(getPrompt(), null);
       const otherPort = yield* Effect.forkScoped(
         hostTransport.resolveHostTransport("localhost:7001"),
@@ -113,15 +126,14 @@ it.effect(
       );
       (yield* waitForPrompt()).respond(false);
       assert.match(
-        (yield* Effect.flip(Fiber.join(otherPort))).message,
-        /not approved/
+        (yield* otherPort.pipe(Fiber.join, Effect.flip)).message,
+        /not approved/u
       );
-      assert.equal(
-        JSON.parse(storage.get("runelink.demo.host-transports") ?? "")[
-          "localhost:7001"
-        ],
-        undefined
+      const persisted: unknown = decodeJson(
+        storage.get("runelink.demo.host-transports") ?? ""
       );
+      assert.ok(typeof persisted === "object" && persisted !== null);
+      assert.ok(!("localhost:7001" in persisted));
     })
 );
 
@@ -136,14 +148,20 @@ it.effect(
       );
       yield* waitForPrompt();
       yield* Fiber.interrupt(pending);
-      assert.ok(Exit.hasInterrupts(yield* Fiber.await(pending)));
+      const exit = yield* Fiber.await(pending);
+      assert.ok(Exit.hasInterrupts(exit));
       assert.equal(getPrompt(), null);
-      assert.equal(
-        JSON.parse(storage.get("runelink.demo.host-transports") ?? "")[
-          "localhost:7000"
-        ].allow_insecure,
-        undefined
+      const persisted: unknown = decodeJson(
+        storage.get("runelink.demo.host-transports") ?? ""
       );
+      assert.ok(
+        typeof persisted === "object" &&
+          persisted !== null &&
+          "localhost:7000" in persisted
+      );
+      const legacy = persisted["localhost:7000"];
+      assert.ok(typeof legacy === "object" && legacy !== null);
+      assert.ok(!("allow_insecure" in legacy));
     })
 );
 
@@ -152,10 +170,8 @@ it.effect(
   () =>
     Effect.gen(function* () {
       setup({ secureResponse: new Response("pong") });
-      assert.equal(
-        yield* hostTransport.resolveHostTransport("example.com"),
-        true
-      );
+      const secure = yield* hostTransport.resolveHostTransport("example.com");
+      assert.equal(secure, true);
       assert.equal(calls.length, 1);
       assert.equal(getPrompt(), null);
       setup({
@@ -165,7 +181,7 @@ it.effect(
       assert.match(
         (yield* Effect.flip(hostTransport.resolveHostTransport("localhost")))
           .message,
-        /requires a secure connection/
+        /requires a secure connection/u
       );
       assert.equal(calls.length, 1);
     })
@@ -183,7 +199,7 @@ it.effect("redirects and HTTP errors never trigger an HTTP fallback", () =>
       assert.match(
         (yield* Effect.flip(hostTransport.resolveHostTransport("example.com")))
           .message,
-        /redirects are not allowed|HTTP 503/
+        /redirects are not allowed|HTTP 503/u
       );
       assert.equal(calls.length, 1);
       assert.equal(getPrompt(), null);
@@ -202,8 +218,6 @@ it.effect(
           globalThis.document = originalDocument;
         })
       );
-      window.addEventListener = () => {};
-      window.removeEventListener = () => {};
       vi.stubGlobal("document", new EventTarget());
       globalThis.fetch = (url) => {
         assert.ok(typeof url === "string");
@@ -216,11 +230,14 @@ it.effect(
       const session = yield* Effect.promise(
         () => import("../src/lib/runelink-session.ts")
       );
+      const { handleRunelinkUpdate } = yield* Effect.promise(
+        () => import("../src/lib/runelink-updates.ts")
+      );
       const account = { name: "test", host: "localhost" };
       const authCache = {
         accounts: { "test@localhost": { refresh_token: "test" } },
       };
-      storage.set("runelink.demo.auth-cache", JSON.stringify(authCache));
+      storage.set("runelink.demo.auth-cache", encodeJson(authCache));
       registry.set(authAtom, {
         config: { active_account: account, accounts: [account] },
         authCache,
@@ -231,7 +248,12 @@ it.effect(
       const clock = yield* Clock.Clock;
       const activeSleeps = new Set<object>();
       const trackedClock: Clock.Clock = {
-        ...clock,
+        currentTimeMillisUnsafe: () => clock.currentTimeMillisUnsafe(),
+        currentTimeMillis: clock.currentTimeMillis,
+        currentTimeNanosUnsafe: () => clock.currentTimeNanosUnsafe(),
+        currentTimeNanos: clock.currentTimeNanos,
+        monotonicTimeNanosUnsafe: () => clock.monotonicTimeNanosUnsafe(),
+        monotonicTimeNanos: clock.monotonicTimeNanos,
         sleep: (duration) =>
           Effect.acquireUseRelease(
             Effect.sync(() => {
@@ -246,7 +268,7 @@ it.effect(
               })
           ),
       };
-      yield* Layer.build(session.layer).pipe(
+      yield* Layer.build(session.layer(handleRunelinkUpdate)).pipe(
         Effect.provideService(Clock.Clock, trackedClock),
         Effect.provideService(Socket.WebSocketConstructor, () => {
           throw new Error("No sockets in this test");
@@ -279,8 +301,6 @@ it.effect(
 
       // Denied approval is final and must not create an automatic prompt loop.
       setup();
-      window.addEventListener = () => {};
-      window.removeEventListener = () => {};
       yield* TestClock.adjust(1);
       (yield* waitForPrompt()).respond(false);
       yield* TestClock.adjust(0);

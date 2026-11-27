@@ -1,5 +1,13 @@
+import * as Arr from "effect/Array";
+import * as Order from "effect/Order";
 import { compareResourceVersions } from "./resource-version.ts";
 import type { Message } from "@runelink/sdk";
+
+const creationOrder = Order.make<Message>((left, right) => {
+  const difference = Date.parse(left.created_at) - Date.parse(right.created_at);
+  // Native sort treated an unparseable date as equal for this comparison.
+  return Number.isNaN(difference) ? 0 : Order.Number(difference, 0);
+});
 
 // Deletion is terminal. Late create replies, events, or history fetches must
 // never restore text after this client has received its deletion tombstone.
@@ -20,7 +28,5 @@ export function mergeMessages(
     }
     byId.set(message.id, message);
   }
-  return [...byId.values()].sort(
-    (left, right) => Date.parse(left.created_at) - Date.parse(right.created_at)
-  );
+  return Arr.sort(byId.values(), creationOrder);
 }

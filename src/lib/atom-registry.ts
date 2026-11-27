@@ -1,5 +1,6 @@
 import { RegistryContext } from "@effect/atom-react";
-import { Atom, AtomRegistry } from "effect/reactivity";
+import * as Atom from "effect/reactivity/Atom";
+import * as AtomRegistry from "effect/reactivity/AtomRegistry";
 import { createElement } from "react";
 import type { PropsWithChildren } from "react";
 

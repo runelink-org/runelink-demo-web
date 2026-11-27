@@ -1,4 +1,5 @@
 {
+  "extends": "./tsconfig.effect.json",
   "compilerOptions": {
     "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.app.tsbuildinfo",
     "target": "ES2022",
@@ -18,6 +19,7 @@
 
     /* Linting */
     "strict": true,
+    "noImplicitReturns": true,
     "noUnusedLocals": true,
     "noUnusedParameters": true,
     "erasableSyntaxOnly": true,

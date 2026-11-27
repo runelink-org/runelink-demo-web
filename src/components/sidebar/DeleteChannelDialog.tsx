@@ -40,13 +40,13 @@ export function DeleteChannelDialog({
       return;
     }
 
-    const account = getActiveAccount(getState(authAtom));
+    const account = authAtom.pipe(getState, getActiveAccount);
     if (!account) {
       setError("Select an account before deleting a channel.");
       return;
     }
     const isCurrentAccount = () =>
-      sameUserRef(account, getActiveAccount(getState(authAtom)));
+      sameUserRef(account, authAtom.pipe(getState, getActiveAccount));
     setIsDeleting(true);
     setError(null);
 
@@ -69,6 +69,14 @@ export function DeleteChannelDialog({
     });
   }
 
+  function deleteDescription() {
+    if (channel?.kind === "category") {
+      return `This will remove the ${channel.title} category. Only empty categories can be deleted.`;
+    }
+    if (channel) return `This will remove #${channel.title} from the server.`;
+    return "This will remove the selected channel from the server.";
+  }
+
   return (
     <AlertDialog
       open={channel !== null}
@@ -82,16 +90,12 @@ export function DeleteChannelDialog({
       <AlertDialogContent size="sm">
         <AlertDialogHeader>
           <AlertDialogTitle>Delete {nounLabel}?</AlertDialogTitle>
-          <AlertDialogDescription>
-            {channel?.kind === "category"
-              ? `This will remove the ${channel.title} category. Only empty categories can be deleted.`
-              : channel
-                ? `This will remove #${channel.title} from the server.`
-                : "This will remove the selected channel from the server."}
-          </AlertDialogDescription>
+          <AlertDialogDescription>{deleteDescription()}</AlertDialogDescription>
         </AlertDialogHeader>
 
-        {error ? <p className="text-sm text-destructive">{error}</p> : null}
+        {error != null && error !== "" ? (
+          <p className="text-sm text-destructive">{error}</p>
+        ) : null}
 
         <AlertDialogFooter>
           <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>

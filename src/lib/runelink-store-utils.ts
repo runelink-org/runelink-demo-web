@@ -25,12 +25,12 @@ export function serverChannelKey(
 }
 
 export function bindStoreToActiveAccount(reset: () => void): () => void {
-  let previousAccount = getActiveAccount(getState(authAtom));
-  let previousHasAuth = !!getActiveAccountAuth(getState(authAtom));
+  let previousAccount = authAtom.pipe(getState, getActiveAccount);
+  let previousHasAuth = Boolean(authAtom.pipe(getState, getActiveAccountAuth));
 
   return appAtomRegistry.subscribe(authAtom, (state) => {
     const nextAccount = getActiveAccount(state);
-    const nextHasAuth = !!getActiveAccountAuth(state);
+    const nextHasAuth = Boolean(getActiveAccountAuth(state));
     const accountChanged =
       previousAccount == null
         ? nextAccount != null

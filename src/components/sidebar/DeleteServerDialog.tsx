@@ -24,7 +24,7 @@ type DeleteServerDialogProps = {
 };
 
 function normalizeWhitespace(value: string): string {
-  return value.trim().replaceAll(/\s+/g, " ");
+  return value.trim().replaceAll(/\s+/gu, " ");
 }
 
 export function DeleteServerDialog({
@@ -44,7 +44,8 @@ export function DeleteServerDialog({
   }
   // Titles may contain whitespace that can't be typed into one line.
   const phrase = server ? normalizeWhitespace(`delete ${server.title}`) : "";
-  const isConfirmed = !!server && normalizeWhitespace(confirmation) === phrase;
+  const isConfirmed =
+    Boolean(server) && normalizeWhitespace(confirmation) === phrase;
 
   async function handleConfirm() {
     if (!server || !isConfirmed || isDeleting) {
@@ -113,7 +114,9 @@ export function DeleteServerDialog({
           </>
         ) : null}
 
-        {error ? <p className="text-sm text-destructive">{error}</p> : null}
+        {error != null && error !== "" ? (
+          <p className="text-sm text-destructive">{error}</p>
+        ) : null}
 
         <AlertDialogFooter>
           <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>

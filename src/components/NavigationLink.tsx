@@ -3,15 +3,22 @@ import { supportsBrowserTabs } from "@/lib/constants";
 
 type NavigationLinkProps = Omit<
   ComponentPropsWithRef<"a">,
-  "onClick" | "onAuxClick"
+  "onClick" | "onAuxClick" | "href"
 > & {
+  href: string;
   onNavigate: () => void;
 };
 
-export function NavigationLink({ onNavigate, ...props }: NavigationLinkProps) {
+export function NavigationLink({
+  onNavigate,
+  children,
+  href,
+  ...props
+}: NavigationLinkProps) {
   return (
     <a
       {...props}
+      href={href}
       draggable={false}
       onClick={(event) => {
         if (event.defaultPrevented) return;
@@ -35,6 +42,8 @@ export function NavigationLink({ onNavigate, ...props }: NavigationLinkProps) {
           onNavigate();
         }
       }}
-    />
+    >
+      {children}
+    </a>
   );
 }

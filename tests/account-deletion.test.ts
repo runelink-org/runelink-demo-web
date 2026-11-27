@@ -1,5 +1,13 @@
+import type * as AccountStorageModule from "../src/lib/account-storage.ts";
+import type * as AccountDeletionModule from "../src/lib/account-deletion.ts";
+import type * as AuthStoreModule from "../src/lib/auth-store.ts";
+import type * as AtomRegistryModule from "../src/lib/atom-registry.ts";
 import assert from "node:assert/strict";
+import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
+import * as Exit from "effect/Exit";
+import * as Fiber from "effect/Fiber";
+import * as TestClock from "effect/testing/TestClock";
 import { afterAll, beforeAll, beforeEach, it, vi } from "@effect/vitest";
 
 const CONFIG_KEY = "runelink.demo.app-config";
@@ -7,27 +15,37 @@ const AUTH_KEY = "runelink.demo.auth-cache";
 const alice = { name: "alice", host: "example.com" };
 
 let storage: Map<string, string>;
-let accountStorage: typeof import("../src/lib/account-storage.ts");
-let accountDeletion: typeof import("../src/lib/account-deletion.ts");
-let authAtom: typeof import("../src/lib/auth-store.ts").authAtom;
-let registry: typeof import("../src/lib/atom-registry.ts").appAtomRegistry;
+let accountStorage: typeof AccountStorageModule;
+let accountDeletion: typeof AccountDeletionModule;
+let authAtom: typeof AuthStoreModule.authAtom;
+let registry: typeof AtomRegistryModule.appAtomRegistry;
 const originalFetch = globalThis.fetch;
 const originalWindow = globalThis.window;
 
-beforeAll(async () => {
-  storage = new Map<string, string>();
-  vi.stubGlobal("window", {
-    location: { protocol: "https:" },
-    localStorage: {
-      getItem: (key: string) => storage.get(key) ?? null,
-      setItem: (key: string, value: string) => storage.set(key, value),
-    },
-  });
-  accountStorage = await import("../src/lib/account-storage.ts");
-  accountDeletion = await import("../src/lib/account-deletion.ts");
-  ({ authAtom } = await import("../src/lib/auth-store.ts"));
-  ({ appAtomRegistry: registry } = await import("../src/lib/atom-registry.ts"));
-});
+beforeAll(() =>
+  Effect.gen(function* () {
+    storage = new Map<string, string>();
+    vi.stubGlobal("window", {
+      location: { protocol: "https:" },
+      localStorage: {
+        getItem: (key: string) => storage.get(key) ?? null,
+        setItem: (key: string, value: string) => storage.set(key, value),
+      },
+    });
+    accountStorage = yield* Effect.promise(
+      () => import("../src/lib/account-storage.ts")
+    );
+    accountDeletion = yield* Effect.promise(
+      () => import("../src/lib/account-deletion.ts")
+    );
+    ({ authAtom } = yield* Effect.promise(
+      () => import("../src/lib/auth-store.ts")
+    ));
+    ({ appAtomRegistry: registry } = yield* Effect.promise(
+      () => import("../src/lib/atom-registry.ts")
+    ));
+  })
+);
 
 afterAll(() => {
   globalThis.fetch = originalFetch;
@@ -73,7 +91,7 @@ it("saved accounts drop the default port, keep the canonical session, and migrat
   });
 });
 
-for (const [label, respond, deleted] of [
+const lookupCases = [
   [
     "the host's not-found error",
     () => Response.json({ error: "Resource not found" }, { status: 404 }),
@@ -93,34 +111,84 @@ for (const [label, respond, deleted] of [
     },
     false,
   ],
-] as const) {
-  it.effect(
-    `a lookup returning ${label} ${deleted ? "removes" : "keeps"} the account`,
-    () =>
-      Effect.gen(function* () {
-        const urls: string[] = [];
-        globalThis.fetch = async (url) => {
-          assert.ok(typeof url === "string");
-          urls.push(url);
-          return respond();
-        };
-        registry.update(authAtom, (state) => ({
-          ...state,
-          config: { active_account: alice, accounts: [alice] },
-          authCache: {
-            accounts: { "alice@example.com": { refresh_token: "t" } },
+] as const;
+
+it.effect.each(
+  lookupCases.map(([label, respond, deleted]) => ({
+    title: `a lookup returning ${label} ${deleted ? "removes" : "keeps"} the account`,
+    respond,
+    deleted,
+  }))
+)("$title", ({ respond, deleted }) =>
+  Effect.gen(function* () {
+    const urls: string[] = [];
+    globalThis.fetch = (url) => {
+      assert.ok(typeof url === "string");
+      urls.push(url);
+      return Promise.resolve().then(respond);
+    };
+    registry.update(authAtom, (state) => ({
+      ...state,
+      config: { active_account: alice, accounts: [alice] },
+      authCache: {
+        accounts: { "alice@example.com": { refresh_token: "t" } },
+      },
+    }));
+
+    yield* accountDeletion.checkAccountDeleted(alice);
+
+    assert.deepEqual(urls, [
+      "https://example.com:7000/users/example.com/alice",
+    ]);
+    const { config, authCache } = registry.get(authAtom);
+    assert.deepEqual(config.accounts, deleted ? [] : [alice]);
+    assert.equal(config.active_account, deleted ? null : alice);
+    assert.equal("alice@example.com" in authCache.accounts, !deleted);
+  })
+);
+
+it.effect("a timed-out account lookup aborts the response body read", () =>
+  Effect.gen(function* () {
+    const reading = yield* Deferred.make<AbortSignal>();
+    globalThis.fetch = (_url, init) => {
+      const signal = init?.signal;
+      assert.ok(signal);
+      const body = new ReadableStream<Uint8Array>(
+        {
+          start(controller) {
+            signal.addEventListener(
+              "abort",
+              () => {
+                controller.error(
+                  new DOMException("The lookup timed out", "AbortError")
+                );
+              },
+              { once: true }
+            );
           },
-        }));
+          pull() {
+            Deferred.doneUnsafe(reading, Exit.succeed(signal));
+          },
+        },
+        { highWaterMark: 0 }
+      );
+      return Promise.resolve(new Response(body, { status: 404 }));
+    };
+    registry.update(authAtom, (state) => ({
+      ...state,
+      config: { active_account: alice, accounts: [alice] },
+    }));
 
-        yield* accountDeletion.checkAccountDeleted(alice);
+    const lookup = yield* Effect.forkScoped(
+      accountDeletion.checkAccountDeleted(alice),
+      { startImmediately: true }
+    );
+    const signal = yield* Deferred.await(reading);
+    assert.equal(signal.aborted, false);
+    yield* TestClock.adjust("10 seconds");
+    yield* Fiber.join(lookup);
 
-        assert.deepEqual(urls, [
-          "https://example.com:7000/users/example.com/alice",
-        ]);
-        const { config, authCache } = registry.get(authAtom);
-        assert.deepEqual(config.accounts, deleted ? [] : [alice]);
-        assert.equal(config.active_account, deleted ? null : alice);
-        assert.equal("alice@example.com" in authCache.accounts, !deleted);
-      })
-  );
-}
+    assert.equal(signal.aborted, true);
+    assert.deepEqual(registry.get(authAtom).config.active_account, alice);
+  })
+);

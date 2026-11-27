@@ -1,6 +1,11 @@
+import type * as AtomRegistryModule from "../src/lib/atom-registry.ts";
+import type * as AuthStoreModule from "../src/lib/auth-store.ts";
+import type * as RunelinkSessionModule from "../src/lib/runelink-session.ts";
+import type * as SdkModule from "@runelink/sdk";
 import assert from "node:assert/strict";
 import { afterAll, beforeAll, beforeEach, it, vi } from "@effect/vitest";
 import * as Context from "effect/Context";
+import type * as RunelinkUpdatesModule from "../src/lib/runelink-updates.ts";
 import * as Effect from "effect/Effect";
 import * as FiberSet from "effect/FiberSet";
 import type { RequestFailure } from "../src/lib/runelink-session.ts";
@@ -10,16 +15,17 @@ import * as Schema from "effect/Schema";
 import { WsEnvelopeSchema } from "@runelink/sdk";
 import * as Socket from "effect/socket/Socket";
 
-let registry: typeof import("../src/lib/atom-registry.ts").appAtomRegistry;
-let authStore: typeof import("../src/lib/auth-store.ts");
-let session$: typeof import("../src/lib/runelink-session.ts");
+let registry: typeof AtomRegistryModule.appAtomRegistry;
+let authStore: typeof AuthStoreModule;
+let session$: typeof RunelinkSessionModule;
+let handleRunelinkUpdate: typeof RunelinkUpdatesModule.handleRunelinkUpdate;
 let sockets: FakeSocket[];
 // Whether new sockets never open, like a host that stops responding
 let stalled: boolean;
 // Requests written to the sockets, and the auth replies delivered, in order
 type Sent = {
   socket: FakeSocket;
-  request: import("@runelink/sdk").WsRequestEnvelope["data"];
+  request: SdkModule.WsRequestEnvelope["data"];
   answered?: boolean;
 };
 type TraceEntry = Sent | { socket: FakeSocket; replied: string };
@@ -37,6 +43,7 @@ const other = { name: "other", host: "localhost" };
 
 // A host that accepts every offered capability and lets the test answer
 // requests
+const encodeJson = Schema.encodeSync(Schema.fromJsonString(Schema.Unknown));
 const decodeEnvelope = Schema.decodeUnknownSync(
   Schema.fromJsonString(WsEnvelopeSchema)
 );
@@ -89,9 +96,9 @@ class FakeSocket extends EventTarget {
   }
   receive(message: object) {
     const data = JSON.stringify(message);
-    queueMicrotask(() =>
-      this.dispatchEvent(Object.assign(new Event("message"), { data }))
-    );
+    queueMicrotask(() => {
+      this.dispatchEvent(Object.assign(new Event("message"), { data }));
+    });
   }
   close(code = 1000, reason = "") {
     if (this.readyState === 3) return;
@@ -101,13 +108,15 @@ class FakeSocket extends EventTarget {
 }
 
 // Yields to the socket and session fibers without advancing the test clock.
-const waitFor = Effect.fn("SessionTest.waitFor")(function* <A>(find: () => A) {
+const waitFor = Effect.fn("SessionTest.waitFor")(function* <
+  A extends object | boolean | null | undefined,
+>(find: () => A) {
   for (let attempt = 0; attempt < 100; attempt += 1) {
     const found = find();
-    if (found) return found;
+    if (found != null && found !== false) return found;
     yield* Effect.yieldNow;
   }
-  assert.fail(
+  return assert.fail(
     `Expected session work to settle (status: ${registry.get(session$.connectionAtom).status}, requests: ${trace.map((entry) => (isSent(entry) ? entry.request.request.type : undefined)).join(",")})`
   );
 });
@@ -129,11 +138,20 @@ const waitForRequest = (type: string) =>
     )
   );
 
-beforeAll(async () => {
-  ({ appAtomRegistry: registry } = await import("../src/lib/atom-registry.ts"));
-  authStore = await import("../src/lib/auth-store.ts");
-  session$ = await import("../src/lib/runelink-session.ts");
-});
+beforeAll(() =>
+  Effect.gen(function* () {
+    ({ appAtomRegistry: registry } = yield* Effect.promise(
+      () => import("../src/lib/atom-registry.ts")
+    ));
+    authStore = yield* Effect.promise(() => import("../src/lib/auth-store.ts"));
+    session$ = yield* Effect.promise(
+      () => import("../src/lib/runelink-session.ts")
+    );
+    ({ handleRunelinkUpdate } = yield* Effect.promise(
+      () => import("../src/lib/runelink-updates.ts")
+    ));
+  })
+);
 
 afterAll(() => {
   Object.assign(globalThis, originals);
@@ -164,7 +182,7 @@ beforeEach(() => {
     })
   );
   vi.stubGlobal("document", new EventTarget());
-  globalThis.fetch = async () => new Response("", { status: 200 });
+  globalThis.fetch = () => Promise.resolve(new Response("", { status: 200 }));
   registry.set(authStore.authAtom, {
     config: { active_account: account, accounts: [account, other] },
     authCache,
@@ -177,11 +195,11 @@ const options = { timeout: 10_000 };
 
 function withSession<A, E, R>(
   body: (
-    session: (typeof import("../src/lib/runelink-session.ts"))["RunelinkSession"]["Service"]
+    session: (typeof RunelinkSessionModule)["RunelinkSession"]["Service"]
   ) => Effect.Effect<A, E, R>
 ) {
   return Effect.flatMap(
-    Layer.build(session$.layer).pipe(
+    Layer.build(session$.layer(handleRunelinkUpdate)).pipe(
       Effect.provideService(Socket.WebSocketConstructor, () => new FakeSocket())
     ),
     (context) => body(Context.get(context, session$.RunelinkSession))
@@ -247,7 +265,7 @@ it.effect(
         authStore.selectAccount(account);
 
         assert.equal(
-          (yield* Effect.flip(Fiber.join(ping)))._tag,
+          (yield* ping.pipe(Fiber.join, Effect.flip))._tag,
           "SessionChangedError"
         );
         yield* waitFor(() => sockets.at(-1) !== previousSocket);
@@ -273,7 +291,7 @@ it.effect(
         authStore.logoutActive();
 
         assert.equal(
-          (yield* Effect.flip(Fiber.join(ping)))._tag,
+          (yield* ping.pipe(Fiber.join, Effect.flip))._tag,
           "NotConnectedError"
         );
         assert.equal(sentIndex("ping"), -1);
@@ -336,7 +354,7 @@ it.effect(
         authStore.logoutActive();
 
         assert.equal(
-          (yield* Effect.flip(Fiber.join(attempt)))._tag,
+          (yield* attempt.pipe(Fiber.join, Effect.flip))._tag,
           "RunelinkDisconnectedError"
         );
         assert.equal(
@@ -366,7 +384,7 @@ it.effect(
         );
         window.localStorage.setItem(
           "runelink.demo.auth-cache",
-          JSON.stringify({
+          encodeJson({
             accounts: { "test@localhost": { refresh_token: "rotated" } },
           })
         );
@@ -389,7 +407,7 @@ it.effect(
         assert.equal(sockets[1].readyState, 1);
         // The request waited for the account the login replaced.
         assert.equal(
-          (yield* Effect.flip(Fiber.join(ping)))._tag,
+          (yield* ping.pipe(Fiber.join, Effect.flip))._tag,
           "SessionChangedError"
         );
         assert.equal(sentIndex("ping"), -1);
@@ -416,7 +434,7 @@ it.effect(
         const unsubscribe = registry.subscribe(
           session$.connectionAtom,
           (state) => {
-            if (!state.lastError) return;
+            if (state.lastError == null || state.lastError === "") return;
             unsubscribe();
             ping = fork(session.request({ type: "ping" }));
           }
@@ -425,7 +443,7 @@ it.effect(
 
         const pending = yield* waitFor(() => ping);
         assert.equal(
-          (yield* Effect.flip(Fiber.join(pending)))._tag,
+          (yield* pending.pipe(Fiber.join, Effect.flip))._tag,
           "RunelinkDisconnectedError"
         );
         assert.equal(sentIndex("ping"), -1);

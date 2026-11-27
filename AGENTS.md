@@ -4,19 +4,15 @@
 
 - Always run checks in this order after making changes:
   1. `pnpm format` - Format code
-  2. `pnpm lint` - Lint for potential issues
+  2. `pnpm lint` and `pnpm lint:effect` - Check source and Effect diagnostics
   3. `pnpm build` - Verify TypeScript compilation and bundling
+  4. `pnpm test` - Run the tests
 - The current Vite build may emit an existing chunk-size warning; treat it as expected and do not call it out in summaries.
 - Validate unknown types with Effect Schema instead of using `as any` or type assertions. Hoist decoders such as `Schema.decodeUnknownOption(Schema.fromJsonString(...))` to module level, and reuse the SDK's schemas for protocol data.
 
-## Effect and State
+## Effect
 
-- The app uses [Effect](https://effect.website) 4, pinned to the version the SDK uses. Follow the Effect conventions of [T3 Code](https://github.com/pingdotgg/t3code) where they fit.
-- `RunelinkSession` (`src/lib/runelink-session.ts`) is the `Context.Service` that owns the active account's connection: one scope per connection, its stream listeners, reconnects, and authentication. Data modules call its `request` helper, and `src/lib/runtime.ts` provides it through a `ManagedRuntime`.
-- App state lives in keep-alive atoms (`stateAtom`) in `appAtomRegistry`. Components read them with `useAtomValue(atom, selector)` from `@effect/atom-react`, and other code uses `getState` and `setState`. State that belongs to one account resets with `bindStoreToActiveAccount`.
-- Write reusable effects with `Effect.fn("Module.operation")`, and expected failures as `Schema.TaggedError` classes whose `message` is fixed or built from their fields. Catch specific failures with `Effect.catchTags`.
-- Event handlers and React effects run effects with `runPromise` or `runFork` from `src/lib/runtime.ts`, which only accept effects that cannot fail, so the compiler checks that every failure is handled. Components receive actions as effects (`RequestEffect`) and handle their failures: user actions show `toastFailure` (or an inline `requestFailureMessage`), and background loads log a warning or show the failure where their data appears.
-- Tests use Vitest with `@effect/vitest`. Provide a test `RunelinkSession` layer rather than mocking modules.
+Read [the Effect conventions](docs/effect-conventions.md) before changing Effect code. In correctness and simplicity reviews, check the changed lines against that guide.
 
 ## UI Components
 
@@ -31,7 +27,7 @@
 
 ## Runelink SDK
 
-- The app depends on the published `@runelink/sdk` npm package.
+- The app depends on the published `@runelink/sdk` npm package. Keep `effect` pinned to the SDK's Effect version.
 - When a sibling `../runelink-sdk-js` checkout exists, Vite and TypeScript use its source instead, so local SDK changes apply without publishing. Run `pnpm install` in that checkout too, so TypeScript can resolve the SDK's dependencies. Otherwise, the installed package is used, as on Vercel.
 - Local builds with the sibling checkout don't verify against the published package. The Vercel preview build is the authoritative check.
 - Changes that need unreleased SDK features can only merge after that SDK version is published and the dependency is bumped here.
