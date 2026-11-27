@@ -38,7 +38,12 @@ function getFallbackSelection(
   const selectedServer = currentSelection.serverId
     ? servers.find((server) => server.server.id === currentSelection.serverId)
     : null;
-  const nextServer = selectedServer ?? servers[0];
+  // Fall back to a server whose channels loaded, rather than one on an
+  // unreachable host
+  const nextServer =
+    selectedServer ??
+    servers.find((server) => server.channels.length > 0) ??
+    servers[0];
 
   if (!nextServer) {
     return { serverId: null, channelId: null };
