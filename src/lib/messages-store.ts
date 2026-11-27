@@ -76,9 +76,12 @@ export function fetchMessagesByTextChannel(
       if (pending) return restore(Deferred.await(pending));
 
       // Reset replaces this map so an old account's reply cannot fill its
-      // successor's cache.
+      // successor's cache. A channel removed while loading, such as by a
+      // deletion update, has left the cache and must not be restored.
       const requests = pendingFetches;
-      const isReset = () => requests !== pendingFetches;
+      const isStale = () =>
+        requests !== pendingFetches ||
+        !(textChannelId in getState(messagesAtom).messagesByTextChannelId);
       const prefetchedHistory = takeChannelNavigationPrefetch(
         textChannelId,
         targetHost
@@ -102,7 +105,7 @@ export function fetchMessagesByTextChannel(
 
       const load = Effect.gen(function* () {
         const history = prefetchedHistory ? yield* prefetchedHistory : null;
-        if (isReset()) return history ?? [];
+        if (isStale()) return history ?? [];
         const messages =
           history ??
           (yield* request({
@@ -112,7 +115,7 @@ export function fetchMessagesByTextChannel(
               target_host: targetHost,
             },
           })).data;
-        if (isReset()) return messages;
+        if (isStale()) return messages;
 
         setState(messagesAtom, (state) => ({
           hasFetchedByTextChannelId: {
@@ -135,7 +138,7 @@ export function fetchMessagesByTextChannel(
       }).pipe(
         Effect.onError((cause) =>
           Effect.sync(() => {
-            if (isReset()) return;
+            if (isStale()) return;
             setState(messagesAtom, (state) => ({
               isLoadingByTextChannelId: {
                 ...state.isLoadingByTextChannelId,
