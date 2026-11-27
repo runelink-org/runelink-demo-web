@@ -14,6 +14,8 @@ let registry;
 let authStore;
 let session$;
 let sockets;
+// Whether new sockets never open, like a host that stops responding
+let stalled;
 // Requests written to the sockets, and the auth replies delivered, in order
 let trace;
 const originals = {
@@ -31,6 +33,7 @@ class FakeSocket extends EventTarget {
   constructor() {
     super();
     sockets.push(this);
+    if (stalled) return;
     queueMicrotask(() => {
       this.readyState = 1;
       this.dispatchEvent(new Event("open"));
@@ -131,6 +134,7 @@ after(async () => {
 beforeEach(() => {
   sockets = [];
   trace = [];
+  stalled = false;
   const authCache = {
     accounts: {
       "test@localhost": { refresh_token: "test", access_token: "test" },
@@ -171,13 +175,12 @@ async function withSession(body) {
       )
     );
     const session = Context.get(context, session$.RunelinkSession);
-    // Requests are interrupted when the session closes.
-    await body((request) =>
-      Effect.runSync(
-        Effect.forkIn(session.request(request), scope, {
-          startImmediately: true,
-        })
-      )
+    // Requests and logins are interrupted when the session closes.
+    const fork = (effect) =>
+      Effect.runSync(Effect.forkIn(effect, scope, { startImmediately: true }));
+    await body(
+      (request) => fork(session.request(request)),
+      (name) => fork(session.login({ host: "localhost", name, password: "pw" }))
     );
   } finally {
     await Effect.runPromise(Scope.close(scope, Exit.void));
@@ -248,5 +251,49 @@ test("a waiting request fails on logout", options, async () => {
 
     await assert.rejects(resultOf(ping), { _tag: "NotConnectedError" });
     assert.equal(sentIndex("ping"), -1);
+  });
+});
+
+test(
+  "switching accounts replaces a connection that never opens",
+  options,
+  async () => {
+    stalled = true;
+    await withSession(async () => {
+      await waitFor(() => sockets.length === 1);
+      stalled = false;
+      authStore.selectAccount(other);
+
+      const auth = await waitForRequest("auth_token_access");
+      assert.equal(auth.request.request.data.access_token, "other");
+      assert.equal(sockets[0].readyState, 3);
+    });
+  }
+);
+
+test("logging out stops a connection that never opens", options, async () => {
+  stalled = true;
+  await withSession(async () => {
+    await waitFor(() => sockets.length === 1);
+    authStore.logoutActive();
+
+    await waitFor(
+      () => registry.get(session$.connectionAtom).status === "disconnected"
+    );
+    assert.equal(sockets[0].readyState, 3);
+  });
+});
+
+test("logging out cancels a login in progress", options, async () => {
+  await withSession(async (_request, login) => {
+    await authenticate();
+    const attempt = login("new");
+    await waitForRequest("auth_token_password");
+    authStore.logoutActive();
+
+    await assert.rejects(resultOf(attempt), {
+      _tag: "RunelinkDisconnectedError",
+    });
+    assert.equal(registry.get(session$.connectionAtom).status, "disconnected");
   });
 });

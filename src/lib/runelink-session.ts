@@ -371,7 +371,7 @@ const make = Effect.gen(function* () {
   const isCurrent = (connection: Connection) =>
     current?.connection === connection;
 
-  function connectionMatches(userRef: UserRef): boolean {
+  function connectionMatches(userRef: UserRef | null): boolean {
     return sameUserRef(getConnectedAccount(), userRef);
   }
 
@@ -927,6 +927,7 @@ const make = Effect.gen(function* () {
   yield* followStoredAuth;
 
   let lastActiveSessionKey = getActiveSessionKey();
+  let lastActiveAccount = getAuthSnapshot().activeAccount;
   yield* triggerSync;
 
   yield* Effect.acquireRelease(
@@ -977,6 +978,20 @@ const make = Effect.gen(function* () {
 
         lastActiveSessionKey = nextSessionKey;
         authRetryAttempt = 0;
+        const { activeAccount, activeAuth } = getAuthSnapshot();
+        const accountChanged = !sameUserRef(activeAccount, lastActiveAccount);
+        lastActiveAccount = activeAccount;
+        // Switching accounts or logging out replaces the connection attempt
+        // in progress, including a login, and an attempt may never finish if
+        // its host stops responding. A finished login has already connected
+        // the account it switches to.
+        if (
+          !activeAuth ||
+          (accountChanged &&
+            !(currentAuthenticated && connectionMatches(activeAccount)))
+        ) {
+          teardownConnection();
+        }
         run(triggerSync);
       })
     ),
