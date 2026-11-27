@@ -143,11 +143,25 @@ export const upsertMembership = Effect.fn("Memberships.upsert")(function* (
   return reply.data satisfies FullServerMembership;
 });
 
+// Memberships this client is deleting, whose deletion updates can arrive
+// before the reply
+const deletingMemberships = new Set<string>();
+
+export function isDeletingMembership(
+  serverId: string,
+  userRef: UserRef
+): boolean {
+  return deletingMemberships.has(`${serverId}/${userRefKey(userRef)}`);
+}
+
 export const deleteMembership = Effect.fn("Memberships.delete")(function* (
   serverId: ServerId,
   userRef: UserRef,
   targetHost: TargetHost = null
 ) {
+  const userKey = userRefKey(userRef);
+  const key = `${serverId}/${userKey}`;
+  deletingMemberships.add(key);
   yield* request({
     type: "memberships_delete",
     data: {
@@ -157,10 +171,10 @@ export const deleteMembership = Effect.fn("Memberships.delete")(function* (
     },
   }).pipe(
     // Already removed, such as by an admin or another tab
-    Effect.catchTags({ RunelinkNotFoundError: () => Effect.void })
+    Effect.catchTags({ RunelinkNotFoundError: () => Effect.void }),
+    Effect.ensuring(Effect.sync(() => deletingMemberships.delete(key)))
   );
 
-  const userKey = userRefKey(userRef);
   setState(membershipsAtom, (state) => ({
     membershipsByUserRefKey: {
       ...state.membershipsByUserRefKey,

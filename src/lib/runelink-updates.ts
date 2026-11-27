@@ -11,6 +11,7 @@ import type {
   WsUpdate,
 } from "@runelink/sdk";
 import { getState, setState } from "@/lib/atom-registry";
+import { isDeletingAccount } from "@/lib/account-deletion";
 import { authAtom, getActiveAccount } from "@/lib/auth-store";
 import {
   applyChannelUpserts,
@@ -25,7 +26,7 @@ import {
   upsertMember,
   upsertMembership,
 } from "@/lib/membership-utils";
-import { membershipsAtom } from "@/lib/memberships-store";
+import { isDeletingMembership, membershipsAtom } from "@/lib/memberships-store";
 import { closeMessageEdit } from "@/lib/message-composer-store";
 import { isDeletingMessage, messagesAtom } from "@/lib/messages-store";
 import { navigationAtom } from "@/lib/navigation-store";
@@ -212,12 +213,12 @@ function handleMembershipDeleted(serverId: string, userRef: UserRef): void {
   const state = getState(membershipsAtom);
   const activeAccount = getActiveAccount(getState(authAtom));
   const userKey = userRefKey(userRef);
-  const hasMembership = (state.membershipsByUserRefKey[userKey] ?? []).some(
+  const membership = (state.membershipsByUserRefKey[userKey] ?? []).find(
     (membership) => membership.server.id === serverId
   );
   const hasMembers = serverId in state.membersByServerId;
 
-  if (!hasMembership && !hasMembers) {
+  if (!membership && !hasMembers) {
     debugRunelink("skip membership_deleted", { serverId, userRef });
     return;
   }
@@ -227,14 +228,25 @@ function handleMembershipDeleted(serverId: string, userRef: UserRef): void {
       serverId,
       userRef,
     });
+    // The server cache follows renames, unlike the membership
+    const title = getState(serversAtom).serverById[serverId]?.title;
     removeLoadedServerState(serverId);
+    if (
+      membership &&
+      !isDeletingMembership(serverId, userRef) &&
+      !isDeletingAccount(userRef)
+    ) {
+      notify(
+        `You're no longer a member of ${title ?? membership.server.title}.`
+      );
+    }
     return;
   }
 
   debugRunelink("apply membership_deleted", { serverId, userRef });
 
   setState(membershipsAtom, (state) => ({
-    ...(hasMembership && {
+    ...(membership && {
       membershipsByUserRefKey: {
         ...state.membershipsByUserRefKey,
         [userKey]: removeMembership(
