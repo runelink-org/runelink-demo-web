@@ -43,7 +43,7 @@ Builds use TypeScript 7 and Vite, linting uses Oxlint, and formatting uses Prett
 - `pnpm dev`: start the development server.
 - `pnpm format`: format the code.
 - `pnpm lint`: lint the code.
-- `pnpm test`: run the tests.
+- `pnpm test`: run the Vitest suite, including Effect tests with `@effect/vitest`.
 - `pnpm build`: create a production build.
 
 The `main` branch deploys automatically to [app.runelink.chat](https://app.runelink.chat) through Vercel.

@@ -1,11 +1,12 @@
 import assert from "node:assert/strict";
-import { test } from "node:test";
+import { it } from "@effect/vitest";
 import { mergeMessages } from "../src/lib/message-cache.ts";
 
 const active = {
   id: "original",
   text_channel_id: "channel",
   author: null,
+  edited_at: null,
   reply_to: null,
   body: "text to erase",
   deleted_at: null,
@@ -19,14 +20,14 @@ const deleted = {
   updated_at: "2026-10-19T12:01:00Z",
 };
 
-test("delayed creates and history cannot restore deleted text", () => {
+it("delayed creates and history cannot restore deleted text", () => {
   assert.deepEqual(mergeMessages([deleted], [active]), [deleted]);
   assert.deepEqual(mergeMessages([active], [deleted]), [deleted]);
   assert.deepEqual(mergeMessages([], [deleted, active]), [deleted]);
   assert.deepEqual(mergeMessages([deleted], []), [deleted]);
 });
 
-test("history merges preserve newly received replies", () => {
+it("history merges preserve newly received replies", () => {
   const reply = {
     ...active,
     id: "reply",
@@ -36,7 +37,7 @@ test("history merges preserve newly received replies", () => {
   assert.deepEqual(mergeMessages([deleted, reply], [active]), [deleted, reply]);
 });
 
-test("late create replies and stale history cannot overwrite edits within a millisecond", () => {
+it("late create replies and stale history cannot overwrite edits within a millisecond", () => {
   const original = { ...active, updated_at: "2026-10-19T12:00:00.000001Z" };
   const edited = {
     ...original,

@@ -1,11 +1,11 @@
 import assert from "node:assert/strict";
-import { test } from "node:test";
+import { it } from "@effect/vitest";
 import {
   compareResourceVersions,
   newestResource,
 } from "../src/lib/resource-version.ts";
 
-test("stale snapshots retain newer metadata and exact edit versions", () => {
+it("stale snapshots retain newer metadata and exact edit versions", () => {
   const old = {
     id: "resource",
     title: "Old name",
@@ -21,14 +21,14 @@ test("stale snapshots retain newer metadata and exact edit versions", () => {
   assert.equal(newestResource(old, undefined), old);
 });
 
-test("resource ordering handles offsets and different fractional precision", () => {
+it("resource ordering handles offsets and different fractional precision", () => {
   const cases = [
     ["2026-10-28T12:00:00.123Z", "2026-10-28T12:00:00.123000Z", 0],
     ["2026-10-28T12:00:00Z", "2026-10-28T12:00:00.000000001Z", -1],
     ["2026-10-28T12:00:01Z", "2026-10-28T12:00:00.999999999Z", 1],
     ["2026-10-28T14:00:00.123456+02:00", "2026-10-28T12:00:00.123456Z", 0],
     ["2026-10-28T07:00:00.123457-05:00", "2026-10-28T12:00:00.123456Z", 1],
-  ];
+  ] as const;
   for (const [left, right, expected] of cases) {
     assert.equal(
       Math.sign(
