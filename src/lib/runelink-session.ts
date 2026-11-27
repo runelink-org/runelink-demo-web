@@ -736,6 +736,9 @@ const make = Effect.gen(function* () {
 
   const syncConnectionToActiveAccount: Effect.Effect<void> = Effect.gen(
     function* () {
+      // Background syncs don't replace the connection of a login or signup
+      // in progress.
+      if (explicitAuthenticationInProgress) return;
       const { activeAccount, activeAuth, authError } = getAuthSnapshot();
 
       if (!activeAccount || !activeAuth) {

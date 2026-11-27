@@ -297,3 +297,41 @@ test("logging out cancels a login in progress", options, async () => {
     assert.equal(registry.get(session$.connectionAtom).status, "disconnected");
   });
 });
+
+test(
+  "background syncs keep a login's connection until it finishes",
+  options,
+  async () => {
+    await withSession(async (request, login) => {
+      await authenticate();
+      const attempt = login("new");
+      const sent = await waitForRequest("auth_token_password");
+      // A request, and another tab refreshing the active account's tokens
+      const ping = request({ type: "ping" });
+      window.localStorage.setItem(
+        "runelink.demo.auth-cache",
+        JSON.stringify({
+          accounts: { "test@localhost": { refresh_token: "rotated" } },
+        })
+      );
+      window.dispatchEvent(Object.assign(new Event("storage"), { key: null }));
+
+      sent.socket.reply(sent, {
+        type: "auth_token",
+        data: {
+          access_token: "new",
+          token_type: "Bearer",
+          expires_in: 3600,
+          refresh_token: "new",
+          scope: "openid",
+        },
+      });
+      await resultOf(attempt);
+      assert.equal(sockets.length, 2);
+      assert.equal(sockets[1].readyState, 1);
+      // The request waited for the account the login replaced.
+      await assert.rejects(resultOf(ping), { _tag: "SessionChangedError" });
+      assert.equal(sentIndex("ping"), -1);
+    });
+  }
+);
