@@ -151,10 +151,11 @@ function FieldSeparator({
 }: React.ComponentProps<"div"> & {
   children?: React.ReactNode;
 }) {
+  const hasContent = Boolean(children);
   return (
     <div
       data-slot="field-separator"
-      data-content={!!children}
+      data-content={hasContent}
       className={cn(
         "-my-2 h-5 text-sm group-data-[variant=outline]/field-group:-mb-2 relative",
         className
@@ -162,13 +163,15 @@ function FieldSeparator({
       {...props}
     >
       <Separator className="absolute inset-0 top-1/2" />
-      {children && (
+      {hasContent ? (
         <span
           className="text-muted-foreground px-2 bg-background relative mx-auto block w-fit"
           data-slot="field-separator-content"
         >
           {children}
         </span>
+      ) : (
+        children
       )}
     </div>
   );
@@ -183,35 +186,30 @@ function FieldError({
   errors?: ({ message?: string } | undefined)[];
 }) {
   const content = useMemo(() => {
-    if (children) {
-      return children;
-    }
+    const hasChildren = Boolean(children);
+    if (hasChildren) return children;
 
-    if (!errors?.length) {
-      return null;
-    }
+    if (errors == null || errors.length === 0) return null;
 
     const uniqueErrors = [
       ...new Map(errors.map((error) => [error?.message, error])).values(),
     ];
 
-    if (uniqueErrors?.length == 1) {
-      return uniqueErrors[0]?.message;
-    }
+    if (uniqueErrors.length === 1) return uniqueErrors[0]?.message;
 
     return (
       <ul className="ml-4 flex list-disc flex-col gap-1">
-        {uniqueErrors.map(
-          (error, index) =>
-            error?.message && <li key={index}>{error.message}</li>
+        {uniqueErrors.map((error) =>
+          error?.message != null && error.message !== "" ? (
+            <li key={error.message}>{error.message}</li>
+          ) : null
         )}
       </ul>
     );
   }, [children, errors]);
 
-  if (!content) {
-    return null;
-  }
+  const hasContent = Boolean(content);
+  if (!hasContent) return null;
 
   return (
     <div

@@ -72,11 +72,11 @@ export function InlineMessageEditor({
     updateEdit(channelKey, session, null);
     onClose(reason);
   }
-  const [account] = useState(() => getActiveAccount(getState(authAtom)));
+  const [account] = useState(() => authAtom.pipe(getState, getActiveAccount));
 
   async function save() {
     if (!account || !session || isSaving) return;
-    const active = getActiveAccount(getState(authAtom));
+    const active = authAtom.pipe(getState, getActiveAccount);
     if (active?.name !== account.name || active?.host !== account.host) {
       updateEdit(channelKey, session, {
         error:
@@ -100,10 +100,10 @@ export function InlineMessageEditor({
       }).pipe(
         Effect.match({
           onSuccess: (reply) => {
-            const active = getActiveAccount(getState(authAtom));
+            const currentAccount = authAtom.pipe(getState, getActiveAccount);
             if (
-              active?.name === account.name &&
-              active?.host === account.host
+              currentAccount?.name === account.name &&
+              currentAccount?.host === account.host
             ) {
               handleRunelinkUpdate({
                 type: "message_upserted",
@@ -170,7 +170,7 @@ export function InlineMessageEditor({
           }
         }}
       />
-      {error ? (
+      {error != null && error !== "" ? (
         <p role="alert" className="text-xs text-destructive">
           {error} Your draft has been kept. Cancel and reopen the editor to load
           the latest version.

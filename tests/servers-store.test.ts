@@ -1,34 +1,40 @@
+import type * as ServersStoreModule from "../src/lib/servers-store.ts";
+import type * as RunelinkSessionModule from "../src/lib/runelink-session.ts";
 import assert from "node:assert/strict";
 import { afterAll, beforeAll, it, vi } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import * as Fiber from "effect/Fiber";
-import * as Layer from "effect/Layer";
 import { controlledSession } from "./session-fixture.ts";
 import type { PendingRequest } from "./session-fixture.ts";
 
-let servers: typeof import("../src/lib/servers-store.ts");
-let session: Layer.Layer<RunelinkSession>;
-import type { RunelinkSession } from "../src/lib/runelink-session.ts";
+let servers: typeof ServersStoreModule;
+let session: RunelinkSessionModule.RunelinkSession["Service"];
+let sessionTag: typeof RunelinkSessionModule.RunelinkSession;
 
-let NotConnectedError: typeof import("../src/lib/runelink-session.ts").NotConnectedError;
+let NotConnectedError: typeof RunelinkSessionModule.NotConnectedError;
 const requests: PendingRequest[] = [];
-const originalWindow = globalThis.window;
 
-beforeAll(async () => {
-  vi.stubGlobal("window", {
-    location: { protocol: "http:" },
-    localStorage: { getItem: () => null, setItem: () => {} },
-  });
-  const session$ = await import("../src/lib/runelink-session.ts");
-  const { RunelinkSession } = session$;
-  ({ NotConnectedError } = session$);
-  // Requests wait until a test settles them.
-  session = Layer.succeed(RunelinkSession, controlledSession(requests));
-  servers = await import("../src/lib/servers-store.ts");
-});
+beforeAll(() =>
+  Effect.gen(function* () {
+    vi.stubGlobal("window", {
+      location: { protocol: "http:" },
+      localStorage: { getItem: () => null, setItem: () => undefined },
+    });
+    const session$ = yield* Effect.promise(
+      () => import("../src/lib/runelink-session.ts")
+    );
+    sessionTag = session$.RunelinkSession;
+    ({ NotConnectedError } = session$);
+    // Requests wait until a test settles them.
+    session = controlledSession(requests);
+    servers = yield* Effect.promise(
+      () => import("../src/lib/servers-store.ts")
+    );
+  })
+);
 
 afterAll(() => {
-  globalThis.window = originalWindow;
+  vi.unstubAllGlobals();
 });
 
 it.effect("concurrent channel loads of a server share one request", () =>
@@ -47,11 +53,11 @@ it.effect("concurrent channel loads of a server share one request", () =>
     assert.equal(sent.data.target_host, "peer.example");
     requests[0].reject(new NotConnectedError());
     assert.equal(
-      (yield* Effect.flip(Fiber.join(first)))._tag,
+      (yield* first.pipe(Fiber.join, Effect.flip))._tag,
       "NotConnectedError"
     );
     assert.equal(
-      (yield* Effect.flip(Fiber.join(second)))._tag,
+      (yield* second.pipe(Fiber.join, Effect.flip))._tag,
       "NotConnectedError"
     );
 
@@ -73,6 +79,7 @@ it.effect("concurrent channel loads of a server share one request", () =>
       channels: [],
     };
     requests[1].resolve({ type: "servers_get_with_channels", data });
-    assert.deepEqual(yield* Fiber.join(retry), data);
-  }).pipe(Effect.provide(session))
+    const loaded = yield* Fiber.join(retry);
+    assert.deepEqual(loaded, data);
+  }).pipe(Effect.provideService(sessionTag, session))
 );

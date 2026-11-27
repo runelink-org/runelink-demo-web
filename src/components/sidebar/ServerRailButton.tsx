@@ -40,9 +40,7 @@ export function ServerRailButton({
     useState<TooltipPosition | null>(null);
 
   useEffect(() => {
-    if (!isTooltipVisible) {
-      return;
-    }
+    if (!isTooltipVisible) return undefined;
 
     function updateTooltipPosition() {
       const rect = buttonRef.current?.getBoundingClientRect();

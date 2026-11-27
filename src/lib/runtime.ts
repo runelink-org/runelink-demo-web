@@ -8,13 +8,16 @@ import {
   setAccountDeletedNotifier,
 } from "@/lib/account-deletion";
 import * as RunelinkSession from "@/lib/runelink-session";
-import { setUpdateNotifier } from "@/lib/runelink-updates";
+import {
+  handleRunelinkUpdate,
+  setUpdateNotifier,
+} from "@/lib/runelink-updates";
 
 // Saved accounts are checked after startup so the check never delays loading.
 const SAVED_ACCOUNT_CHECK_DELAY_MS = 3000;
 
 const runtime = ManagedRuntime.make(
-  RunelinkSession.layer.pipe(
+  RunelinkSession.layer(handleRunelinkUpdate).pipe(
     Layer.provide(Socket.layerWebSocketConstructorGlobal)
   )
 );

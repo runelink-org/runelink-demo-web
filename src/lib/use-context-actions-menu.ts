@@ -68,7 +68,8 @@ export function useContextActionsMenu(moveThreshold = 10) {
       cancelLongPress();
       didLongPress.current = false;
       if (event.touches.length !== 1) return;
-      const { clientX: x, clientY: y } = event.touches[0];
+      const x = event.touches[0].clientX;
+      const y = event.touches[0].clientY;
       touchStart.current = { x, y };
       longPressTimer.current = setTimeout(() => {
         didLongPress.current = true;
@@ -78,7 +79,7 @@ export function useContextActionsMenu(moveThreshold = 10) {
     onTouchMove: (event) => {
       const start = touchStart.current;
       if (!start) return;
-      const touch = event.touches[0];
+      const { 0: touch } = event.touches;
       if (
         event.touches.length !== 1 ||
         Math.hypot(touch.clientX - start.x, touch.clientY - start.y) >=

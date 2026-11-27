@@ -1,9 +1,10 @@
+import * as Arr from "effect/Array";
 import type { ServerMember, ServerRole } from "@runelink/sdk";
 import { useMemo } from "react";
 import { MemberActionsMenu } from "@/components/members/MemberActionsMenu";
 import {
-  compareMemberNames,
-  MEMBER_STATUS,
+  memberNameOrder,
+  MemberStatus,
   ROLE_LABELS,
   ROLE_TEXT_CLASS_NAMES,
 } from "@/components/members/member-display";
@@ -51,14 +52,14 @@ function ServerMemberListItem({
             render={
               <span
                 role="img"
-                aria-label={MEMBER_STATUS.label}
+                aria-label={MemberStatus.label}
                 className="absolute -right-1 -bottom-1 flex size-4 items-center justify-center rounded-full bg-background text-muted-foreground transition-colors group-hover:bg-muted"
               />
             }
           >
-            <MEMBER_STATUS.Icon className="size-3" />
+            <MemberStatus.Icon className="size-3" />
           </TooltipTrigger>
-          <TooltipContent>{MEMBER_STATUS.label}</TooltipContent>
+          <TooltipContent>{MemberStatus.label}</TooltipContent>
         </Tooltip>
       </div>
       <p
@@ -95,19 +96,22 @@ export function ServerMemberList({
     () =>
       ROLE_ORDER.map((role) => ({
         role,
-        members: members
-          .filter((member) => member.role === role)
-          .sort(compareMemberNames),
+        members: Arr.sort(
+          members.filter((member) => member.role === role),
+          memberNameOrder
+        ),
       })).filter((section) => section.members.length > 0),
     [members]
   );
 
-  if (error || isLoading || members.length === 0) {
+  if ((error != null && error !== "") || isLoading || members.length === 0) {
     return (
       <p
         className={cn(
           "px-2 py-4 text-sm",
-          error ? "text-destructive" : "text-muted-foreground"
+          error != null && error !== ""
+            ? "text-destructive"
+            : "text-muted-foreground"
         )}
       >
         {error ?? (isLoading ? "Loading members..." : "No members yet.")}

@@ -75,7 +75,9 @@ export function LeaveServerDialog({
           </AlertDialogDescription>
         </AlertDialogHeader>
 
-        {error ? <p className="text-sm text-destructive">{error}</p> : null}
+        {error != null && error !== "" ? (
+          <p className="text-sm text-destructive">{error}</p>
+        ) : null}
 
         <AlertDialogFooter>
           <AlertDialogCancel disabled={isLeaving}>Cancel</AlertDialogCancel>

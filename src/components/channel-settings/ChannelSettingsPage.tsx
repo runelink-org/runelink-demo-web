@@ -45,7 +45,7 @@ export function ChannelSettingsPage({
   onDone,
   onDeleteChannel,
 }: ChannelSettingsPageProps) {
-  if (channel && host) {
+  if (channel && host != null && host !== "") {
     return (
       <ChannelSettingsForm
         channel={channel}
@@ -122,7 +122,7 @@ function ChannelSettingsLayout({
 }
 
 function normalizeDescription(value: string | null): string {
-  return (value ?? "").replaceAll(/[^\S\r\n]+$/gm, "").trim();
+  return (value ?? "").replaceAll(/[^\S\r\n]+$/gmu, "").trim();
 }
 
 function ChannelSettingsForm({
@@ -146,7 +146,7 @@ function ChannelSettingsForm({
   const [saved, setSaved] = useState(false);
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
   const [isDiscardOpen, setIsDiscardOpen] = useState(false);
-  const [account] = useState(() => getActiveAccount(getState(authAtom)));
+  const [account] = useState(() => authAtom.pipe(getState, getActiveAccount));
   const mountedRef = useRef(false);
   const noun = channel.kind === "category" ? "category" : "channel";
   const label = channel.kind === "category" ? "Category" : "Channel";
@@ -174,7 +174,7 @@ function ChannelSettingsForm({
   async function save(event: React.SubmitEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!account || !canManage || isSaving || !dirty || !submittedTitle) return;
-    const active = getActiveAccount(getState(authAtom));
+    const active = authAtom.pipe(getState, getActiveAccount);
     if (active?.name !== account.name || active?.host !== account.host) {
       setError("The active account changed. Reopen settings to try again.");
       return;
@@ -197,10 +197,10 @@ function ChannelSettingsForm({
       }).pipe(
         Effect.match({
           onSuccess: (reply) => {
-            const active = getActiveAccount(getState(authAtom));
+            const currentAccount = authAtom.pipe(getState, getActiveAccount);
             if (
-              active?.name !== account.name ||
-              active?.host !== account.host
+              currentAccount?.name !== account.name ||
+              currentAccount?.host !== account.host
             ) {
               return;
             }
@@ -229,14 +229,22 @@ function ChannelSettingsForm({
       channel={channel}
       backDisabled={isSaving}
       onBack={() => {
-        if (dirty) setIsDiscardOpen(true);
-        else onDone();
+        if (dirty) {
+          setIsDiscardOpen(true);
+        } else {
+          onDone();
+        }
       }}
     >
       <div className="mx-auto flex w-full max-w-6xl flex-col gap-6">
         <section>
           <h2 className="text-base font-semibold text-foreground">Overview</h2>
-          <form className="mt-5 space-y-6" onSubmit={save}>
+          <form
+            className="mt-5 space-y-6"
+            onSubmit={(event) => {
+              void save(event);
+            }}
+          >
             <div className="space-y-2">
               <Label htmlFor="channel-title">{label} Title</Label>
               <Input
@@ -269,7 +277,7 @@ function ChannelSettingsForm({
                 Only server admins can edit {noun} settings.
               </p>
             )}
-            {error ? (
+            {error != null && error !== "" ? (
               <p role="alert" className="text-sm text-destructive">
                 {error} Your changes have been kept. Reset to load the latest
                 values.
@@ -282,7 +290,7 @@ function ChannelSettingsForm({
               >
                 {isSaving ? "Saving..." : "Save Changes"}
               </Button>
-              {dirty || error ? (
+              {dirty || (error != null && error !== "") ? (
                 <Button
                   type="button"
                   variant="outline"

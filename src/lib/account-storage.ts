@@ -36,7 +36,7 @@ const BrowserAppConfigSchema = Schema.Struct(BrowserAppConfigFields);
 // `default_account`. Remove once stored configs have been migrated.
 const StoredAppConfigSchema = Schema.Struct({
   ...BrowserAppConfigFields,
-  default_account: Schema.optional(Schema.NullOr(UserRefSchema)),
+  default_account: UserRefSchema.pipe(Schema.NullOr, Schema.optional),
 });
 
 const BrowserAuthCacheSchema = Schema.Struct({
@@ -70,14 +70,12 @@ function loadStoredJson<T>(
   }
 
   const rawValue = window.localStorage.getItem(key);
-  if (!rawValue) {
-    return fallback;
-  }
+  if (rawValue == null || rawValue === "") return fallback;
 
   return Option.getOrElse(decode(rawValue), () => fallback);
 }
 
-function saveStoredJson<T>(key: string, value: T): void {
+function saveStoredJson(key: string, value: unknown): void {
   if (!canUseStorage()) {
     return;
   }
@@ -138,26 +136,27 @@ export function upsertAccount(
   return hasAccount(accounts, userRef) ? accounts : [...accounts, userRef];
 }
 
+const trySaveBrowserAppConfig = Option.liftThrowable(saveBrowserAppConfig);
+
 export function loadBrowserAppConfig(): BrowserAppConfig {
   const config = loadStoredJson(APP_CONFIG_STORAGE_KEY, decodeStoredAppConfig, {
     active_account: null,
     accounts: [],
   });
   const activeAccount = config.active_account ?? config.default_account;
+  // Accounts saved before hosts were canonical may include the default
+  // port, so merge accounts that only differed by it.
+  let accounts: readonly UserRef[] = [];
+  for (const account of config.accounts) {
+    accounts = upsertAccount(accounts, canonicalUserRef(account));
+  }
   const migrated: BrowserAppConfig = {
     active_account: activeAccount ? canonicalUserRef(activeAccount) : null,
-    // Accounts saved before hosts were canonical may include the default
-    // port, so merge accounts that only differed by it.
-    accounts: config.accounts
-      .map(canonicalUserRef)
-      .reduce<readonly UserRef[]>(upsertAccount, []),
+    accounts,
   };
   if (config.default_account !== undefined) {
-    try {
-      saveBrowserAppConfig(migrated);
-    } catch {
-      // Use the migrated config in memory and retry on the next load
-    }
+    // Use the migrated config in memory and retry on the next load if storage is blocked.
+    trySaveBrowserAppConfig(migrated);
   }
   return migrated;
 }

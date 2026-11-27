@@ -1,3 +1,5 @@
+import * as Arr from "effect/Array";
+import * as Order from "effect/Order";
 import type { ServerChannel, ServerChannelMove } from "@runelink/sdk";
 
 export type ChannelRow = {
@@ -13,12 +15,10 @@ export type DropTarget =
   | { channelId: null; placement: "root-end" };
 
 // Siblings are ordered by position, then ID, matching the host
-function compareChannels(left: ServerChannel, right: ServerChannel): number {
-  if (left.position !== right.position) {
-    return left.position - right.position;
-  }
-  return left.id < right.id ? -1 : left.id > right.id ? 1 : 0;
-}
+const channelOrder = Order.combine(
+  Order.mapInput(Order.Number, (channel: ServerChannel) => channel.position),
+  Order.mapInput(Order.String, (channel: ServerChannel) => channel.id)
+);
 
 // Sorted children by parent ID, with null for the server root
 function childrenByParent(
@@ -33,8 +33,8 @@ function childrenByParent(
       children.set(channel.parent_channel_id, [channel]);
     }
   }
-  for (const siblings of children.values()) {
-    siblings.sort(compareChannels);
+  for (const [parent, siblings] of children) {
+    children.set(parent, Arr.sort(siblings, channelOrder));
   }
   return children;
 }
@@ -49,7 +49,9 @@ export function visibleRows(
 ): ChannelRow[] {
   const children = childrenByParent(channels);
   const pinnedPath = new Set(
-    pinnedId ? [pinnedId, ...ancestorIds(channels, pinnedId)] : []
+    pinnedId != null && pinnedId !== ""
+      ? [pinnedId, ...ancestorIds(channels, pinnedId)]
+      : []
   );
   const rows: ChannelRow[] = [];
 
@@ -95,7 +97,7 @@ export function ancestorIds(
   const byId = new Map(channels.map((channel) => [channel.id, channel]));
   const ancestors: string[] = [];
   let parentId = byId.get(channelId)?.parent_channel_id ?? null;
-  while (parentId) {
+  while (parentId != null && parentId !== "") {
     ancestors.push(parentId);
     parentId = byId.get(parentId)?.parent_channel_id ?? null;
   }
@@ -110,9 +112,12 @@ export function planDrop(
   target: DropTarget
 ): ServerChannelMove | null {
   const siblingsOf = (parentId: string | null) =>
-    channels
-      .filter((c) => c.parent_channel_id === parentId && c.id !== draggedId)
-      .sort(compareChannels);
+    Arr.sort(
+      channels.filter(
+        (c) => c.parent_channel_id === parentId && c.id !== draggedId
+      ),
+      channelOrder
+    );
 
   if (target.placement === "root-end") {
     return { parent_channel_id: null, index: siblingsOf(null).length };
@@ -128,7 +133,8 @@ export function planDrop(
       : targetChannel.parent_channel_id;
   if (
     (target.placement === "inside" && targetChannel.kind !== "category") ||
-    (parentId &&
+    (parentId != null &&
+      parentId !== "" &&
       [parentId, ...ancestorIds(channels, parentId)].includes(draggedId))
   ) {
     return null;

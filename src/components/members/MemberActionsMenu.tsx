@@ -2,6 +2,7 @@ import type { ServerRole, UserRef } from "@runelink/sdk";
 import { Ellipsis, Shield, ShieldOff, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
+import { copyToClipboard } from "@/lib/clipboard";
 import { IdIcon } from "@/components/icons/IdIcon";
 import {
   AlertDialog,
@@ -59,20 +60,13 @@ export function MemberActionsMenu({
     useState(false);
   const [isUpdatingRole, setIsUpdatingRole] = useState(false);
 
-  async function handleCopyUserId() {
-    if (typeof navigator === "undefined" || !navigator.clipboard) {
-      toast.error("Clipboard is not available.");
-      return;
-    }
-
+  function handleCopyUserId() {
     const userId = formatUserId(user);
-
-    try {
-      await navigator.clipboard.writeText(userId);
-      toast.success(`Copied user ID: ${userId}`);
-    } catch {
-      toast.error("Failed to copy user ID.");
-    }
+    void copyToClipboard(
+      userId,
+      `Copied user ID: ${userId}`,
+      "Failed to copy user ID."
+    );
   }
 
   async function handleUpdateMemberRole(nextRole: ServerRole) {
@@ -109,6 +103,9 @@ export function MemberActionsMenu({
     });
   }
 
+  const isActiveAccount =
+    activeAccount?.name === user.name && activeAccount.host === user.host;
+
   async function handleKickMember() {
     if (!activeAccount || !canModerateMembers || !role || isActiveAccount) {
       return;
@@ -130,8 +127,6 @@ export function MemberActionsMenu({
     );
   }
 
-  const isActiveAccount =
-    activeAccount?.name === user.name && activeAccount.host === user.host;
   const isSelfDemotion = isActiveAccount && role === "admin";
 
   return (
@@ -160,7 +155,7 @@ export function MemberActionsMenu({
           <DropdownMenuItem
             className="cursor-pointer gap-3 rounded-xl px-3 py-2"
             onClick={() => {
-              void handleCopyUserId();
+              handleCopyUserId();
             }}
           >
             <IdIcon className="size-4" />

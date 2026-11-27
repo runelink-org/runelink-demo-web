@@ -1,12 +1,12 @@
+import { omitRecordKey } from "./record";
 import { sameUserRef } from "./account-storage";
-import { newestResource } from "./resource-version";
 import type {
   NewServerChannel,
   ServerChannel,
   ServerChannelMove,
 } from "@runelink/sdk";
 import * as Effect from "effect/Effect";
-import { getState, setState, stateAtom } from "@/lib/atom-registry";
+import { getState, setState } from "@/lib/atom-registry";
 import { authAtom, getActiveAccount } from "@/lib/auth-store";
 import { NotConnectedError, request } from "@/lib/runelink-session";
 import { bindStoreToActiveAccount } from "@/lib/runelink-store-utils";
@@ -15,19 +15,12 @@ import type {
   ServerId,
   TargetHost,
 } from "@/lib/runelink-store-utils";
-import { serversAtom } from "@/lib/servers-store";
-
-type ChannelsState = {
-  channelsByServerId: Record<string, readonly ServerChannel[]>;
-  channelById: Record<string, ServerChannel>;
-};
-
-const initialState: ChannelsState = {
-  channelsByServerId: {},
-  channelById: {},
-};
-
-export const channelsAtom = stateAtom(initialState);
+import { channelsAtom, initialChannelsState } from "@/lib/channel-state";
+import {
+  newestChannel,
+  newestChannels,
+  serversAtom,
+} from "@/lib/servers-store";
 
 function upsertChannel(
   channels: readonly ServerChannel[],
@@ -43,7 +36,11 @@ function upsertChannels(
   channels: readonly ServerChannel[],
   nextChannels: readonly ServerChannel[]
 ): readonly ServerChannel[] {
-  return nextChannels.reduce(upsertChannel, channels);
+  let updated = channels;
+  for (const channel of nextChannels) {
+    updated = upsertChannel(updated, channel);
+  }
+  return updated;
 }
 
 function removeChannel(
@@ -51,21 +48,6 @@ function removeChannel(
   channelId: ChannelId
 ): readonly ServerChannel[] {
   return channels.filter((channel) => channel.id !== channelId);
-}
-
-export function newestChannels(
-  channels: readonly ServerChannel[]
-): readonly ServerChannel[] {
-  const byId = getState(channelsAtom).channelById;
-  const servers = getState(serversAtom).serverWithChannelsById;
-  return channels.map((channel) =>
-    newestResource(
-      newestResource(channel, byId[channel.id]),
-      servers[channel.server_id]?.channels.find(
-        (cached) => cached.id === channel.id
-      )
-    )
-  );
 }
 
 export const createChannel = Effect.fn("Channels.create")(function* (
@@ -82,7 +64,7 @@ export const createChannel = Effect.fn("Channels.create")(function* (
     },
   });
 
-  const channel = newestChannels([reply.data])[0];
+  const channel = newestChannel(reply.data);
   setState(channelsAtom, (state) => ({
     channelsByServerId: {
       ...state.channelsByServerId,
@@ -105,7 +87,7 @@ export const deleteChannel = Effect.fn("Channels.delete")(function* (
   channelId: ChannelId,
   targetHost: TargetHost = null
 ) {
-  const account = getActiveAccount(getState(authAtom));
+  const account = authAtom.pipe(getState, getActiveAccount);
   if (!account) {
     return yield* new NotConnectedError();
   }
@@ -121,8 +103,10 @@ export const deleteChannel = Effect.fn("Channels.delete")(function* (
     Effect.catchTags({ RunelinkNotFoundError: () => Effect.void })
   );
 
-  if (!sameUserRef(account, getActiveAccount(getState(authAtom)))) return;
-  removeChannelFromCaches(serverId, channelId);
+  if (sameUserRef(account, authAtom.pipe(getState, getActiveAccount))) {
+    removeChannelFromCaches(serverId, channelId);
+  }
+  return undefined;
 });
 
 // Removes a deleted channel from the channel and server stores
@@ -131,8 +115,7 @@ export function removeChannelFromCaches(
   channelId: ChannelId
 ): void {
   setState(channelsAtom, (state) => {
-    const channelById = { ...state.channelById };
-    delete channelById[channelId];
+    const channelById = omitRecordKey(state.channelById, channelId);
     return {
       channelsByServerId: {
         ...state.channelsByServerId,
@@ -147,9 +130,7 @@ export function removeChannelFromCaches(
 
   setState(serversAtom, (state) => {
     const server = state.serverWithChannelsById[serverId];
-    if (!server) {
-      return {};
-    }
+    if (server == null) return {};
 
     return {
       serverWithChannelsById: {
@@ -204,9 +185,7 @@ export function applyChannelUpserts(
 
   setState(serversAtom, (state) => {
     const server = state.serverWithChannelsById[serverId];
-    if (!server) {
-      return {};
-    }
+    if (server == null) return {};
 
     return {
       serverWithChannelsById: {
@@ -221,5 +200,5 @@ export function applyChannelUpserts(
 }
 
 bindStoreToActiveAccount(() => {
-  setState(channelsAtom, initialState);
+  setState(channelsAtom, initialChannelsState);
 });

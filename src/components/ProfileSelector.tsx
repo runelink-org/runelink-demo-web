@@ -85,28 +85,37 @@ export function ProfileSelector({
   const lastError = useAtomValue(connectionAtom, (state) => state.lastError);
   const isLimited =
     connectionStatus === "connected" && capabilityIssues.length > 0;
-  const warning = incompatibleHost
-    ? {
+  function getConnectionWarning() {
+    if (incompatibleHost != null && incompatibleHost !== "") {
+      return {
         label: "Incompatible Host",
         detail: incompatibleHost,
         color: "text-destructive",
-      }
-    : isLimited
-      ? {
-          label: "Connected (Limited)",
-          detail: `${activeAccount?.host}: ${capabilityIssues.map((issue) => issue.message).join("; ")}`,
-          color: "text-amber-500",
-        }
-      : // Why the connection is down, shown once rather than per attempt
-        (connectionStatus === "reconnecting" ||
-            connectionStatus === "disconnected") &&
-          lastError
-        ? {
-            label: statusLabels[connectionStatus],
-            detail: lastError,
-            color: "text-amber-500",
-          }
-        : null;
+      };
+    }
+    if (isLimited) {
+      return {
+        label: "Connected (Limited)",
+        detail: `${activeAccount?.host}: ${capabilityIssues.map((issue) => issue.message).join("; ")}`,
+        color: "text-amber-500",
+      };
+    }
+    if (
+      (connectionStatus === "reconnecting" ||
+        connectionStatus === "disconnected") &&
+      lastError != null &&
+      lastError !== ""
+    ) {
+      return {
+        label: statusLabels[connectionStatus],
+        detail: lastError,
+        color: "text-amber-500",
+      };
+    }
+    return null;
+  }
+
+  const warning = getConnectionWarning();
   const warningIcon = warning ? (
     <TriangleAlert className={warning.color} />
   ) : null;
@@ -116,7 +125,7 @@ export function ProfileSelector({
   // Close the dialog if its account loses its session or is removed.
   if (
     accountPendingDelete &&
-    !accountAuthByKey[accountStorageKey(accountPendingDelete)]
+    accountAuthByKey[accountStorageKey(accountPendingDelete)] == null
   ) {
     setAccountPendingDelete(null);
   }
@@ -142,10 +151,10 @@ export function ProfileSelector({
     }
     // Deleting requires a session, so the confirmation is only shown once
     // the account can be used, and never twice.
-    if (accountAuthByKey[accountStorageKey(account)]) {
-      setAccountPendingDelete(account);
-    } else {
+    if (accountAuthByKey[accountStorageKey(account)] == null) {
       toast("Log in to delete this account.");
+    } else {
+      setAccountPendingDelete(account);
     }
   }
   const triggerLabel = activeAccount?.name.slice(0, 2).toUpperCase() ?? "AC";
@@ -232,35 +241,39 @@ export function ProfileSelector({
                 const storedAuth = accountAuthByKey[key];
                 const isActive = sameUserRef(account, activeAccount);
                 const isLoggedIn =
-                  isActive && connectionStatus === "connected" && !!storedAuth;
+                  isActive &&
+                  connectionStatus === "connected" &&
+                  Boolean(storedAuth);
                 const isChecking =
                   isActive &&
                   (connectionStatus === "connecting" ||
                     connectionStatus === "authenticating" ||
                     connectionStatus === "reconnecting");
 
+                let icon = <CircleDashed />;
+                if (isActive && warning) {
+                  icon = (
+                    <>
+                      {warningIcon}
+                      <span className="sr-only">{warning.label}</span>
+                    </>
+                  );
+                } else if (isLoggedIn) {
+                  icon = <CheckCircle2 />;
+                } else if (isChecking) {
+                  icon = <LoaderCircle className="animate-spin" />;
+                }
                 return (
                   <AccountMenuItem
                     key={key}
                     account={account}
-                    icon={
-                      isActive && warning ? (
-                        <>
-                          {warningIcon}
-                          <span className="sr-only">{warning.label}</span>
-                        </>
-                      ) : isLoggedIn ? (
-                        <CheckCircle2 />
-                      ) : isChecking ? (
-                        <LoaderCircle className="animate-spin" />
-                      ) : (
-                        <CircleDashed />
-                      )
-                    }
+                    icon={icon}
                     onSelect={() => {
                       selectAccount(account);
                     }}
-                    onRemove={() => removeAccount(account)}
+                    onRemove={() => {
+                      removeAccount(account);
+                    }}
                     onDelete={() => {
                       handleDeleteAccount(account);
                     }}

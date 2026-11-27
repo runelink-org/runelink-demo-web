@@ -20,6 +20,11 @@ export class HostTransportError extends Schema.TaggedError<HostTransportError>()
   { message: Schema.String }
 ) {}
 
+class ProbeFetchError extends Schema.TaggedError<ProbeFetchError>()(
+  "ProbeFetchError",
+  { cause: Schema.Defect() }
+) {}
+
 const HostTransportsSchema = Schema.Record(
   Schema.String,
   Schema.Struct({
@@ -38,9 +43,15 @@ function loadHostTransports(): Record<
   (typeof HostTransportsSchema.Type)[string]
 > {
   const raw = window.localStorage.getItem(STORAGE_KEY);
-  return raw
+  return raw != null && raw !== ""
     ? { ...Option.getOrElse(decodeHostTransports(raw), () => ({})) }
     : {};
+}
+
+function saveHostTransports(
+  hosts: ReturnType<typeof loadHostTransports>
+): void {
+  window.localStorage.setItem(STORAGE_KEY, JSON.stringify(hosts));
 }
 
 type TransportPrompt = { host: string; respond: (approved: boolean) => void };
@@ -68,17 +79,19 @@ function confirmInsecureHost(host: string): Effect.Effect<boolean> {
 const probe = Effect.fn("HostTransport.probe")(function* (apiUrl: string) {
   const response = yield* Effect.tryPromise({
     try: (signal) =>
+      // The probe must see the native opaque-redirect response and the original fetch rejection.
+      // @effect-diagnostics-next-line globalFetchInEffect:off
       fetch(`${apiUrl}/ping`, {
         credentials: "omit",
         redirect: "manual",
         signal,
       }),
-    catch: (error) => error,
+    catch: (cause) => new ProbeFetchError({ cause }),
   }).pipe(
     Effect.timeoutOption(PROBE_TIMEOUT_MS),
     // A failed fetch is a transport failure, which may fall back to HTTP.
-    Effect.catch((error) =>
-      error instanceof TypeError ? Effect.succeedNone : Effect.die(error)
+    Effect.catch(({ cause }) =>
+      cause instanceof TypeError ? Effect.succeedNone : Effect.die(cause)
     )
   );
   if (Option.isNone(response)) return false;
@@ -100,7 +113,7 @@ const probe = Effect.fn("HostTransport.probe")(function* (apiUrl: string) {
 
 function transportKey(host: string): string {
   return padHost(host).replace(
-    /:(\d+)$/,
+    /:(\d+)$/u,
     (_, port: string) => `:${Number(port)}`
   );
 }
@@ -144,7 +157,7 @@ export const resolveHostTransport = Effect.fn("HostTransport.resolve")(
     };
     yield* Effect.try({
       try: () => {
-        window.localStorage.setItem(STORAGE_KEY, JSON.stringify(hosts));
+        saveHostTransports(hosts);
       },
       catch: (error) =>
         new HostTransportError({

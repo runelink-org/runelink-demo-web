@@ -1,3 +1,4 @@
+import * as Order from "effect/Order";
 import type { ServerMember, ServerRole } from "@runelink/sdk";
 import { CircleDashed } from "lucide-react";
 
@@ -11,17 +12,17 @@ export const ROLE_TEXT_CLASS_NAMES: Record<ServerRole, string> = {
   member: "text-foreground/80",
 };
 
-export function compareMemberNames(
-  left: ServerMember,
-  right: ServerMember
-): number {
-  return left.user.name.localeCompare(right.user.name, undefined, {
-    sensitivity: "base",
-  });
-}
+export const memberNameOrder = Order.make<ServerMember>((left, right) =>
+  Order.Number(
+    left.user.name.localeCompare(right.user.name, undefined, {
+      sensitivity: "base",
+    }),
+    0
+  )
+);
 
 // TODO: Show each member's synced presence instead of always offline (#14)
-export const MEMBER_STATUS = {
+export const MemberStatus = {
   label: "Offline",
   Icon: CircleDashed,
 };

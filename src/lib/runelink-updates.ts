@@ -1,3 +1,4 @@
+import { omitRecordKey, omitRecordKeys } from "./record";
 import { captureChannelNavigationUpdate } from "@/lib/channel-navigation-hints";
 import { compareResourceVersions } from "./resource-version";
 import { mergeMessages } from "./message-cache";
@@ -12,10 +13,10 @@ import type {
 } from "@runelink/sdk";
 import { getState, setState } from "@/lib/atom-registry";
 import { isDeletingAccount } from "@/lib/account-deletion";
+import { channelsAtom } from "@/lib/channel-state";
 import { authAtom, getActiveAccount } from "@/lib/auth-store";
 import {
   applyChannelUpserts,
-  channelsAtom,
   removeChannelFromCaches,
 } from "@/lib/channels-store";
 import {
@@ -36,28 +37,12 @@ import { serversAtom } from "@/lib/servers-store";
 import { usersAtom } from "@/lib/users-store";
 
 // Set by the app, so the stores that use this module never import UI code.
-let notify: (message: string) => void = () => {};
+let notify: ((message: string) => void) | undefined;
 
-export function setUpdateNotifier(notifier: (message: string) => void): void {
+export function setUpdateNotifier(
+  notifier: ((message: string) => void) | undefined
+): void {
   notify = notifier;
-}
-
-function omitRecordKeys<T>(
-  record: Record<string, T>,
-  keys: Iterable<string>
-): Record<string, T> {
-  const blockedKeys = new Set(keys);
-
-  return Object.fromEntries(
-    Object.entries(record).filter(([entryKey]) => !blockedKeys.has(entryKey))
-  );
-}
-
-function omitRecordKey<T>(
-  record: Record<string, T>,
-  key: string
-): Record<string, T> {
-  return omitRecordKeys(record, [key]);
 }
 
 function isLoadedServer(serverId: string): boolean {
@@ -187,21 +172,21 @@ function handleMembershipUpsert(membership: FullServerMembership): void {
     user: membership.user,
   });
 
-  setState(membershipsAtom, (state) => ({
-    ...(userKey in state.membershipsByUserRefKey && {
+  setState(membershipsAtom, (currentState) => ({
+    ...(userKey in currentState.membershipsByUserRefKey && {
       membershipsByUserRefKey: {
-        ...state.membershipsByUserRefKey,
+        ...currentState.membershipsByUserRefKey,
         [userKey]: upsertMembership(
-          state.membershipsByUserRefKey[userKey] ?? [],
+          currentState.membershipsByUserRefKey[userKey] ?? [],
           toServerMembership(membership)
         ),
       },
     }),
-    ...(serverId in state.membersByServerId && {
+    ...(serverId in currentState.membersByServerId && {
       membersByServerId: {
-        ...state.membersByServerId,
+        ...currentState.membersByServerId,
         [serverId]: upsertMember(
-          state.membersByServerId[serverId] ?? [],
+          currentState.membersByServerId[serverId] ?? [],
           toServerMember(membership)
         ),
       },
@@ -211,10 +196,10 @@ function handleMembershipUpsert(membership: FullServerMembership): void {
 
 function handleMembershipDeleted(serverId: string, userRef: UserRef): void {
   const state = getState(membershipsAtom);
-  const activeAccount = getActiveAccount(getState(authAtom));
+  const activeAccount = authAtom.pipe(getState, getActiveAccount);
   const userKey = userRefKey(userRef);
   const membership = (state.membershipsByUserRefKey[userKey] ?? []).find(
-    (membership) => membership.server.id === serverId
+    (innerMembership) => innerMembership.server.id === serverId
   );
   const hasMembers = serverId in state.membersByServerId;
 
@@ -236,7 +221,7 @@ function handleMembershipDeleted(serverId: string, userRef: UserRef): void {
       !isDeletingMembership(serverId, userRef) &&
       !isDeletingAccount(userRef)
     ) {
-      notify(
+      notify?.(
         `You're no longer a member of ${title ?? membership.server.title}.`
       );
     }
@@ -245,21 +230,21 @@ function handleMembershipDeleted(serverId: string, userRef: UserRef): void {
 
   debugRunelink("apply membership_deleted", { serverId, userRef });
 
-  setState(membershipsAtom, (state) => ({
+  setState(membershipsAtom, (currentState) => ({
     ...(membership && {
       membershipsByUserRefKey: {
-        ...state.membershipsByUserRefKey,
+        ...currentState.membershipsByUserRefKey,
         [userKey]: removeMembership(
-          state.membershipsByUserRefKey[userKey] ?? [],
+          currentState.membershipsByUserRefKey[userKey] ?? [],
           serverId
         ),
       },
     }),
     ...(hasMembers && {
       membersByServerId: {
-        ...state.membersByServerId,
+        ...currentState.membersByServerId,
         [serverId]: removeMember(
-          state.membersByServerId[serverId] ?? [],
+          currentState.membersByServerId[serverId] ?? [],
           userRef
         ),
       },
@@ -271,7 +256,7 @@ function handleServerUpsert(server: Server): void {
   const { serverById, serverWithChannelsById } = getState(serversAtom);
   const previous =
     serverById[server.id] ?? serverWithChannelsById[server.id]?.server;
-  if (previous && compareResourceVersions(previous, server) > 0) return;
+  if (previous != null && compareResourceVersions(previous, server) > 0) return;
   if (!isLoadedServer(server.id)) {
     return;
   }
@@ -280,7 +265,7 @@ function handleServerUpsert(server: Server): void {
     const withChannels = state.serverWithChannelsById[server.id];
     return {
       serverById: { ...state.serverById, [server.id]: server },
-      ...(withChannels && {
+      ...(withChannels != null && {
         serverWithChannelsById: {
           ...state.serverWithChannelsById,
           [server.id]: { ...withChannels, server },
@@ -306,7 +291,7 @@ function handleChannelDeleted(serverId: string, channelId: string): void {
   const channel =
     getState(channelsAtom).channelById[channelId] ??
     getState(serversAtom).serverWithChannelsById[serverId]?.channels.find(
-      (channel) => channel.id === channelId
+      (matchedChannel) => matchedChannel.id === channelId
     );
   if (channel?.kind === "text") {
     removeMessageState([channel.text_channel_id]);
@@ -344,7 +329,7 @@ function handleMessageUpsert(message: Message): void {
     closeMessageEdit(message.id) &&
     !isDeletingMessage(message.id)
   ) {
-    notify("The message you were editing was deleted.");
+    notify?.("The message you were editing was deleted.");
   }
 }
 

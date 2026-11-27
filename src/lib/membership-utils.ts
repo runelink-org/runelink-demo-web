@@ -1,3 +1,5 @@
+import * as Arr from "effect/Array";
+import * as Order from "effect/Order";
 import type {
   FullServerMembership,
   ServerMember,
@@ -6,16 +8,18 @@ import type {
 } from "@runelink/sdk";
 import { userRefKey } from "@/lib/runelink-store-utils";
 
+const membershipOrder = Order.make<ServerMembership>((left, right) => {
+  const byTitle = left.server.title.localeCompare(right.server.title);
+  return Order.Number(
+    byTitle === 0 ? left.server.id.localeCompare(right.server.id) : byTitle,
+    0
+  );
+});
+
 export function sortMemberships(
   memberships: readonly ServerMembership[]
 ): readonly ServerMembership[] {
-  return [...memberships].sort((left, right) => {
-    const titleComparison = left.server.title.localeCompare(right.server.title);
-    if (titleComparison !== 0) {
-      return titleComparison;
-    }
-    return left.server.id.localeCompare(right.server.id);
-  });
+  return Arr.sort(memberships, membershipOrder);
 }
 
 export function upsertMembership(

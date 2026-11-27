@@ -83,19 +83,20 @@ export function fetchMessagesByTextChannel(
         textChannelId,
         targetHost
       );
-      setState(messagesAtom, (state) => ({
+      setState(messagesAtom, (currentState) => ({
         // Register the channel before requesting history so updates received
         // during the first fetch are retained and merged with its response.
         messagesByTextChannelId: {
-          ...state.messagesByTextChannelId,
-          [textChannelId]: state.messagesByTextChannelId[textChannelId] ?? [],
+          ...currentState.messagesByTextChannelId,
+          [textChannelId]:
+            currentState.messagesByTextChannelId[textChannelId] ?? [],
         },
         isLoadingByTextChannelId: {
-          ...state.isLoadingByTextChannelId,
+          ...currentState.isLoadingByTextChannelId,
           [textChannelId]: true,
         },
         errorByTextChannelId: {
-          ...state.errorByTextChannelId,
+          ...currentState.errorByTextChannelId,
           [textChannelId]: null,
         },
       }));
@@ -114,20 +115,20 @@ export function fetchMessagesByTextChannel(
           })).data;
         if (isStale()) return messages;
 
-        setState(messagesAtom, (state) => ({
+        setState(messagesAtom, (currentState) => ({
           hasFetchedByTextChannelId: {
-            ...state.hasFetchedByTextChannelId,
+            ...currentState.hasFetchedByTextChannelId,
             [textChannelId]: true,
           },
           messagesByTextChannelId: {
-            ...state.messagesByTextChannelId,
+            ...currentState.messagesByTextChannelId,
             [textChannelId]: mergeMessages(
-              state.messagesByTextChannelId[textChannelId] ?? [],
+              currentState.messagesByTextChannelId[textChannelId] ?? [],
               messages
             ),
           },
           isLoadingByTextChannelId: {
-            ...state.isLoadingByTextChannelId,
+            ...currentState.isLoadingByTextChannelId,
             [textChannelId]: false,
           },
         }));
@@ -136,13 +137,13 @@ export function fetchMessagesByTextChannel(
         Effect.onError((cause) =>
           Effect.sync(() => {
             if (isStale()) return;
-            setState(messagesAtom, (state) => ({
+            setState(messagesAtom, (currentState) => ({
               isLoadingByTextChannelId: {
-                ...state.isLoadingByTextChannelId,
+                ...currentState.isLoadingByTextChannelId,
                 [textChannelId]: false,
               },
               errorByTextChannelId: {
-                ...state.errorByTextChannelId,
+                ...currentState.errorByTextChannelId,
                 [textChannelId]: Option.match(Cause.findErrorOption(cause), {
                   onNone: () => "Failed to load channel messages",
                   onSome: requestFailureMessage,

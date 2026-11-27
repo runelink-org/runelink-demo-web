@@ -13,6 +13,11 @@ import {
 } from "@/lib/auth-store";
 import { getKnownHostTransport } from "@/lib/host-transport";
 
+class AccountLookupError extends Schema.TaggedError<AccountLookupError>()(
+  "AccountLookupError",
+  {}
+) {}
+
 const LOOKUP_TIMEOUT_MS = 10_000;
 const NOT_FOUND_ERROR = "Resource not found";
 // HTTP requests use the same capability versions as websocket requests.
@@ -22,7 +27,7 @@ const decodeErrorBody = Schema.decodeUnknownOption(
 );
 
 // Set by the app, so the stores that use this module never import UI code.
-let notifyAccountDeleted: (account: string) => void = () => {};
+let notifyAccountDeleted: ((account: string) => void) | undefined;
 
 export function setAccountDeletedNotifier(
   notify: (account: string) => void
@@ -51,7 +56,7 @@ export function trackAccountDeletion<A, E, R>(
 
 export function forgetDeletedAccount(userRef: UserRef): void {
   if (removeAccount(userRef, { selectNext: false })) {
-    notifyAccountDeleted(accountStorageKey(userRef));
+    notifyAccountDeleted?.(accountStorageKey(userRef));
   }
 }
 
@@ -65,23 +70,26 @@ const isDeletedOnHomeHost = Effect.fn("AccountDeletion.isDeletedOnHomeHost")(
     const secure = getKnownHostTransport(userRef.host) ?? true;
     const apiUrl = getApiUrl(userRef.host, secure);
     const path = `/users/${encodeURIComponent(userRef.host)}/${encodeURIComponent(userRef.name)}`;
-    return yield* Effect.tryPromise(async (signal) => {
-      const response = await fetch(`${apiUrl}${path}`, {
-        headers: { "runelink-capability": USERS_READ },
-        credentials: "omit",
-        redirect: "manual",
-        signal,
-      });
-      if (response.status !== 404) {
-        return false;
-      }
-      // Make sure the 404 is the host's "not found" error, not a proxy's.
-      const body = decodeErrorBody(await response.json());
-      return Option.isSome(body) && body.value.error === NOT_FOUND_ERROR;
+    const data = yield* Effect.tryPromise({
+      try: (signal): Promise<unknown> =>
+        // Keep native fetch and its abort signal active through the body read.
+        // @effect-diagnostics-next-line globalFetchInEffect:off
+        fetch(`${apiUrl}${path}`, {
+          headers: { "runelink-capability": USERS_READ },
+          credentials: "omit",
+          redirect: "manual",
+          signal,
+        }).then((response) =>
+          response.status === 404 ? response.json() : undefined
+        ),
+      catch: () => new AccountLookupError(),
     }).pipe(
       Effect.timeout(LOOKUP_TIMEOUT_MS),
-      Effect.orElseSucceed(() => false)
+      Effect.orElseSucceed(() => undefined)
     );
+    // Make sure the 404 is the host's "not found" error, not a proxy's.
+    const body = decodeErrorBody(data);
+    return Option.isSome(body) && body.value.error === NOT_FOUND_ERROR;
   }
 );
 

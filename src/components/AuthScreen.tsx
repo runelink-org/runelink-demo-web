@@ -25,6 +25,7 @@ import { authAtom, getActiveAccount, setAuthError } from "@/lib/auth-store";
 import { requestFailureMessage } from "@/lib/request-failure";
 import { login, signup } from "@/lib/runelink-session";
 import type { AuthFailure } from "@/lib/runelink-session";
+import { reportRunelinkFailure } from "@/lib/runelink-debug";
 import { runPromise } from "@/lib/runtime";
 
 type AuthMode = "login" | "signup";
@@ -39,10 +40,10 @@ type AuthScreenProps = {
 function normalizeUsernameDraft(input: string): string {
   return input
     .toLowerCase()
-    .replaceAll(/[\s_.-]+/g, "-")
-    .replaceAll(/[^a-z0-9-]/g, "")
-    .replaceAll(/^-+/g, "")
-    .replaceAll(/-+/g, "-")
+    .replaceAll(/[\s_.-]+/gu, "-")
+    .replaceAll(/[^a-z0-9-]/gu, "")
+    .replaceAll(/^-+/gu, "")
+    .replaceAll(/-+/gu, "-")
     .slice(0, MAX_USERNAME_LENGTH);
 }
 
@@ -109,7 +110,7 @@ export function AuthScreen({
   // This form's own failures stay local, so a late or stale one can't outlive
   // the screen; `authError` carries why a session ended
   const [formError, setFormError] = useState<string | null>(null);
-  const shouldFocusPassword = !!activeAccount && prefillAccount;
+  const shouldFocusPassword = Boolean(activeAccount) && prefillAccount;
 
   function switchMode(nextMode: AuthMode) {
     setMode(nextMode);
@@ -134,7 +135,11 @@ export function AuthScreen({
         // Such as storage that throws
         Effect.catchDefect((defect) =>
           Effect.sync(() => {
-            console.error("Unexpected sign-in failure", defect);
+            reportRunelinkFailure(
+              "error",
+              "Unexpected sign-in failure",
+              defect
+            );
             setFormError(
               mode === "signup"
                 ? "Unable to create account"
@@ -154,6 +159,15 @@ export function AuthScreen({
 
     setPassword("");
     onDone();
+  }
+
+  function submitLabel() {
+    if (isSubmitting) {
+      if (mode === "signup") return "Creating account...";
+      return "Logging in...";
+    }
+    if (mode === "signup") return "Create and log in";
+    return "Log in";
   }
 
   return (
@@ -213,7 +227,12 @@ export function AuthScreen({
         </CardHeader>
 
         <CardContent>
-          <form className="space-y-5" onSubmit={handleSubmit}>
+          <form
+            className="space-y-5"
+            onSubmit={(event) => {
+              void handleSubmit(event);
+            }}
+          >
             <FieldGroup>
               <Field>
                 <FieldLabel htmlFor="auth-host">Host</FieldLabel>
@@ -288,13 +307,7 @@ export function AuthScreen({
               )}
 
               <Button type="submit" disabled={isSubmitting}>
-                {isSubmitting
-                  ? mode === "signup"
-                    ? "Creating account..."
-                    : "Logging in..."
-                  : mode === "signup"
-                    ? "Create and log in"
-                    : "Log in"}
+                {submitLabel()}
               </Button>
             </div>
           </form>

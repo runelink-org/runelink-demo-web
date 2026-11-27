@@ -1,15 +1,41 @@
+import * as Effect from "effect/Effect";
+import * as Schema from "effect/Schema";
 import { toast } from "sonner";
 
-export async function copyToClipboard(value: string, successLabel: string) {
-  if (typeof navigator === "undefined" || !navigator.clipboard) {
+class ClipboardWriteError extends Schema.TaggedError<ClipboardWriteError>()(
+  "ClipboardWriteError",
+  {}
+) {}
+
+const copy = Effect.fn("Clipboard.copy")(function* (
+  value: string,
+  successLabel: string,
+  failureLabel: string
+) {
+  if (typeof navigator === "undefined" || navigator.clipboard === undefined) {
     toast.error("Clipboard is not available.");
     return;
   }
 
-  try {
-    await navigator.clipboard.writeText(value);
-    toast.success(successLabel);
-  } catch {
-    toast.error("Failed to copy.");
-  }
+  yield* Effect.tryPromise({
+    try: () => navigator.clipboard.writeText(value),
+    catch: () => new ClipboardWriteError(),
+  }).pipe(
+    Effect.match({
+      onSuccess: () => {
+        toast.success(successLabel);
+      },
+      onFailure: () => {
+        toast.error(failureLabel);
+      },
+    })
+  );
+});
+
+export function copyToClipboard(
+  value: string,
+  successLabel: string,
+  failureLabel = "Failed to copy."
+): Promise<void> {
+  return Effect.runPromise(copy(value, successLabel, failureLabel));
 }

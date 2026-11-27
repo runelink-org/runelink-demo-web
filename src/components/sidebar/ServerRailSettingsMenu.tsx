@@ -39,9 +39,7 @@ export function ServerRailSettingsMenu() {
   }, []);
 
   useEffect(() => {
-    if (!isTooltipVisible) {
-      return;
-    }
+    if (!isTooltipVisible) return undefined;
 
     function updateTooltipPosition() {
       const rect = triggerRef.current?.getBoundingClientRect();
@@ -67,9 +65,7 @@ export function ServerRailSettingsMenu() {
   }, [isTooltipVisible]);
 
   function showTooltip() {
-    if (isMenuOpen) {
-      return;
-    }
+    if (isMenuOpen) return;
 
     const rect = triggerRef.current?.getBoundingClientRect();
     if (!rect) {
@@ -92,12 +88,11 @@ export function ServerRailSettingsMenu() {
       <DropdownMenu {...contextMenu.menuProps}>
         <DropdownMenuTrigger
           {...contextMenu.targetProps}
-          render={<button type="button" />}
+          render={<button type="button" aria-label="Settings" />}
         >
           <span
             ref={triggerRef}
             className="flex size-12 shrink-0 cursor-pointer items-center justify-center rounded-2xl border border-sidebar-border bg-sidebar-accent text-sidebar-foreground transition hover:border-sidebar-foreground/35 hover:bg-sidebar-accent/80"
-            aria-label="Settings"
             onMouseEnter={showTooltip}
             onMouseLeave={hideTooltip}
           >

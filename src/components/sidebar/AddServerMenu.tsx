@@ -45,9 +45,7 @@ export function AddServerMenu({
   } | null>(null);
 
   useEffect(() => {
-    if (!isTooltipVisible) {
-      return;
-    }
+    if (!isTooltipVisible) return undefined;
 
     function updateTooltipPosition() {
       const rect = triggerRef.current?.getBoundingClientRect();
@@ -73,9 +71,7 @@ export function AddServerMenu({
   }, [isTooltipVisible]);
 
   function showTooltip() {
-    if (isMenuOpen) {
-      return;
-    }
+    if (isMenuOpen) return;
 
     const rect = triggerRef.current?.getBoundingClientRect();
     if (!rect) {
@@ -98,12 +94,11 @@ export function AddServerMenu({
       <DropdownMenu {...contextMenu.menuProps}>
         <DropdownMenuTrigger
           {...contextMenu.targetProps}
-          render={<button type="button" />}
+          render={<button type="button" aria-label="Add Server" />}
         >
           <span
             ref={triggerRef}
             className="flex size-12 shrink-0 cursor-pointer items-center justify-center rounded-2xl border border-dashed border-sidebar-border bg-sidebar-accent/45 text-sidebar-foreground/70 transition hover:border-primary/40 hover:bg-sidebar-accent hover:text-sidebar-foreground"
-            aria-label="Add Server"
             onMouseEnter={showTooltip}
             onMouseLeave={hideTooltip}
           >
