@@ -335,3 +335,59 @@ test("startup does not refetch a channel already cached or loading on reconnect"
   startPrefetch(account, route, { [textId]: [] });
   assert.equal(requests.length, 0);
 });
+
+test("a deletion closes its edit, with a notice only if another session deleted it", async (t) => {
+  const composer = await server.ssrLoadModule(
+    "/src/lib/message-composer-store.ts"
+  );
+  const notices = [];
+  updates.setUpdateNotifier((notice) => notices.push(notice));
+  t.after(() => {
+    updates.setUpdateNotifier(() => {});
+    registry.set(composer.messageComposerAtom, {});
+  });
+  const other = { ...message, id: "other" };
+  registry.update(messages.messagesAtom, (state) => ({
+    ...state,
+    messagesByTextChannelId: { channel: [message, other] },
+  }));
+  const edit = (message) =>
+    composer.updateComposer("channel-key", (state) => ({
+      ...state,
+      focusedInput: "edit",
+      editing: {
+        session: {},
+        message,
+        body: "draft",
+        selection: null,
+        isSaving: false,
+        error: null,
+      },
+    }));
+  const tombstone = (message) => ({
+    ...message,
+    deleted_at: "2026-11-10T12:01:00Z",
+    updated_at: "2026-11-10T12:01:00Z",
+  });
+
+  // The host sends the deletion update before replying to this client.
+  edit(message);
+  const deleting = run(messages.deleteMessage("channel", message.id));
+  updates.handleRunelinkUpdate({
+    type: "message_upserted",
+    data: tombstone(message),
+  });
+  assert.equal(composer.getComposer("channel-key").editing, null);
+  assert.deepEqual(notices, []);
+  requests[0].resolve({ type: "messages_delete", data: tombstone(message) });
+  await deleting;
+
+  edit(other);
+  updates.handleRunelinkUpdate({
+    type: "message_upserted",
+    data: tombstone(other),
+  });
+  assert.equal(composer.getComposer("channel-key").editing, null);
+  assert.equal(composer.getComposer("channel-key").focusedInput, "draft");
+  assert.deepEqual(notices, ["The message you were editing was deleted."]);
+});

@@ -245,7 +245,7 @@ export function App() {
   }, [activeAccount, isSignedIn, navigate, route]);
 
   useEffect(() => {
-    startApp((account) => toast(`${account} was deleted.`));
+    startApp(toast);
   }, []);
 
   if (

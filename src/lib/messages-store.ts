@@ -187,18 +187,29 @@ export const createMessage = Effect.fn("Messages.create")(function* (
   return reply.data;
 });
 
+// Messages this client is deleting, whose deletion updates can arrive before
+// the reply
+const deletingMessageIds = new Set<string>();
+
+export function isDeletingMessage(messageId: string): boolean {
+  return deletingMessageIds.has(messageId);
+}
+
 export const deleteMessage = Effect.fn("Messages.delete")(function* (
   textChannelId: TextChannelId,
   messageId: MessageId,
   targetHost: TargetHost = null
 ) {
+  deletingMessageIds.add(messageId);
   const reply = yield* request({
     type: "messages_delete",
     data: {
       message_id: messageId,
       target_host: targetHost,
     },
-  });
+  }).pipe(
+    Effect.ensuring(Effect.sync(() => deletingMessageIds.delete(messageId)))
+  );
 
   storeMessages(textChannelId, [reply.data]);
 });
