@@ -41,3 +41,7 @@ Servers, channels, text channels, and messages are identified by their owning ho
 - `serverRef`: a `ServerRef` (`ResourceRef<ServerId>`), the host and ID that name a resource on any host. Use it wherever the host isn't implied.
 
 The same applies to each kind of resource (`channel`, `textChannel`, `message`). A resource has its own host and ID, so it can be passed where a ref of its kind is expected, and the parameter that receives it is still named for a ref. Users have no bare ID, so a `UserRef` is named `userRef`, or for its role, such as `author`. Protocol fields keep their snake_case names, such as `server_id`, `server_ref`, and `user_ref`.
+
+## Hosts
+
+Hosts are the SDK's `Host` values, which only decoding with `HostSchema` creates and which are always canonical: lowercase, without the default port. Compare and store them as `Host`s, and never add or strip ports by hand. Use the SDK's `hostApiUrl` or `hostClientWsUrl` to connect to a host, and `hostAuthority` only where the port must always be spelled out. Parse hosts that people enter with `enteredHost` or `validateHost`, and show an error when that fails.

@@ -6,6 +6,7 @@ import {
 import { ChannelSettingsPage } from "@/components/channel-settings/ChannelSettingsPage";
 import { serverRefOf, resourceKey, textChannelRefOf } from "@runelink/sdk";
 import type {
+  Host,
   Message,
   MessageId,
   ResourceKey,
@@ -85,7 +86,7 @@ function cancelPendingAuthentication() {
   runFork(cancelPendingAuthenticationEffect);
 }
 
-function getTargetHost(serverHost: string, activeHost: string): string | null {
+function getTargetHost(serverHost: Host, activeHost: Host): Host | null {
   return serverHost === activeHost ? null : serverHost;
 }
 
@@ -913,13 +914,13 @@ export function App() {
   });
 
   const handleCreateServer = withCreateServerSpan(function* (
-    host: string,
+    host: Host,
     title: string,
     description: string
   ) {
     if (!activeAccount) return;
 
-    const targetHost = getTargetHost(host.trim(), activeAccount.host);
+    const targetHost = getTargetHost(host, activeAccount.host);
     const server = yield* createServer(
       {
         title,
@@ -935,7 +936,7 @@ export function App() {
     navigate({ screen: "server", serverRef: server }, "push");
   });
 
-  function handleSearchServers(host: string): RequestEffect<readonly Server[]> {
+  function handleSearchServers(host: Host): RequestEffect<readonly Server[]> {
     if (!activeAccount) return Effect.succeed([]);
     return fetchServers(getTargetHost(host, activeAccount.host));
   }

@@ -1,3 +1,4 @@
+import * as fixtures from "./fixtures.ts";
 import type * as AccountStorageModule from "../src/lib/account-storage.ts";
 import type * as AccountDeletionModule from "../src/lib/account-deletion.ts";
 import type * as AuthStoreModule from "../src/lib/auth-store.ts";
@@ -12,7 +13,7 @@ import { afterAll, beforeAll, beforeEach, it, vi } from "@effect/vitest";
 
 const CONFIG_KEY = "runelink.demo.app-config";
 const AUTH_KEY = "runelink.demo.auth-cache";
-const alice = { name: "alice", host: "example.com" };
+const alice = fixtures.userRef({ name: "alice", host: "example.com" });
 
 let storage: Map<string, string>;
 let accountStorage: typeof AccountStorageModule;

@@ -3,10 +3,11 @@ import {
   RunelinkConnection,
   RunelinkIncompatibleHostError,
   RunelinkProtocolError,
-  getWsUrl,
+  hostClientWsUrl,
 } from "@runelink/sdk";
 import type {
   CapabilityIssue,
+  Host,
   ReplyFor,
   RunelinkConnectionIssue,
   RunelinkRequestFailure,
@@ -284,7 +285,7 @@ function getActiveSessionKey(): string | null {
 // Fails before anything is sent, e.g. so signup cannot create an account that
 // cannot then log in.
 const requireCapabilities = Effect.fn("RunelinkSession.requireCapabilities")(
-  function* (connection: Connection, host: string, capabilities: string[]) {
+  function* (connection: Connection, host: Host, capabilities: string[]) {
     const capabilityIssues = yield* connection.capabilityIssues;
     const issues = Option.getOrElse(capabilityIssues, () => []).filter(
       (issue) => capabilities.includes(issue.capability)
@@ -394,8 +395,7 @@ function* make(
   const run = yield* FiberSet.makeRuntime();
 
   let current:
-    | { host: string; connection: Connection; scope: Scope.Closeable }
-    | undefined;
+    { host: Host; connection: Connection; scope: Scope.Closeable } | undefined;
   let currentAuthenticated = false;
   // Cancels the host transport check of the connection being replaced
   let cancelTransport:
@@ -522,7 +522,7 @@ function* make(
   }
 
   const replaceConnection = Effect.fn("RunelinkSession.replaceConnection")(
-    function* (host: string) {
+    function* (host: Host) {
       // Owns the next host check before closing the old connection, since
       // the requests that closing fails can start another attempt, which
       // then supersedes this one.
@@ -556,7 +556,7 @@ function* make(
       // Explicit URL mode prevents the SDK from silently falling back to
       // ws://. Browser WebSockets reject redirects during their handshake.
       const connection = yield* RunelinkConnection.make({
-        url: getWsUrl(host, secure),
+        url: hostClientWsUrl(host, secure),
         autoReconnect: true,
         transportSecurity: "secure-only",
       }).pipe(Scope.provide(scope), Effect.provideContext(context));

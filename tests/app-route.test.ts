@@ -69,7 +69,7 @@ it("routes name the server's host", () => {
 it("IPv6 hosts round-trip through routes", () => {
   const route = {
     screen: "channel" as const,
-    serverRef: { host: "[::1]:7001", id: serverRef.id },
+    serverRef: { host: fixtures.host("[::1]:7001"), id: serverRef.id },
     channelId,
   };
   const url = new URL(getAppRoutePath(route), "https://app.runelink.chat");

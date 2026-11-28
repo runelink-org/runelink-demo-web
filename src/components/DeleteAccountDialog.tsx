@@ -1,5 +1,5 @@
 import { useAtomValue } from "@effect/atom-react";
-import { padHost } from "@runelink/sdk";
+import { hostAuthority } from "@runelink/sdk";
 import type { UserRef } from "@runelink/sdk";
 import { useState } from "react";
 import { TypedConfirmationField } from "@/components/TypedConfirmationField";
@@ -57,7 +57,7 @@ export function DeleteAccountDialog({
   const isConfirmed =
     account !== null &&
     (typed === `delete ${name}` ||
-      typed === `delete ${account.name}@${padHost(account.host)}`);
+      typed === `delete ${account.name}@${hostAuthority(account.host)}`);
 
   async function handleConfirm() {
     if (!account || !isConfirmed || !isConnected || isDeleting) {

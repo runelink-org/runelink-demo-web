@@ -8,6 +8,7 @@ import { afterAll, beforeAll, beforeEach, it, vi } from "@effect/vitest";
 import { RunelinkProtocolError, resourceKey } from "@runelink/sdk";
 import type {
   ActiveMessage,
+  Host,
   Message,
   ResourceKey,
   TextChannelId,
@@ -30,7 +31,7 @@ let sessionTag: typeof RunelinkSessionModule.RunelinkSession;
 let NotConnectedError: typeof RunelinkSessionModule.NotConnectedError;
 const requests: PendingRequest[] = [];
 const storage = new Map<string, string>();
-const peer = "peer.example";
+const peer = fixtures.host("peer.example");
 // The text channel most tests use
 const channel = fixtures.uuid(101);
 const message = fixtures.activeMessage({
@@ -299,7 +300,7 @@ it.effect.each(["history", "failure"])(
     }).pipe(Effect.provideService(sessionTag, session))
 );
 
-const account = { name: "alice", host: "example.com" };
+const account = fixtures.userRef({ name: "alice", host: "example.com" });
 const serverId = "11111111-1111-4111-8111-111111111111";
 const channelId = "22222222-2222-4222-8222-222222222222";
 const textId = "33333333-3333-4333-8333-333333333333";
@@ -315,7 +316,7 @@ const hintedMessage = fixtures.activeMessage({
   text_channel_id: textId,
 });
 function serverSnapshot(
-  host: string,
+  host: Host,
   channels: readonly (
     | { id: string; kind: "text"; text_channel_id: string }
     | { id: string; kind: "category" }
@@ -434,7 +435,9 @@ it.effect.each(["text-channel ID", "host"])(
       remember();
       yield* startPrefetch(account, route);
       const correctId = changedHost ? textId : otherTextId;
-      const correctHost = changedHost ? "new-peer.example" : peer;
+      const correctHost = changedHost
+        ? fixtures.host("new-peer.example")
+        : peer;
       const selected = yield* Effect.forkScoped(
         fetchMessages(correctId, correctHost),
         { startImmediately: true }

@@ -1,4 +1,5 @@
 import { useIsMounted } from "@/lib/use-is-mounted";
+import type { Host } from "@runelink/sdk";
 import { useEffect, useRef, useState } from "react";
 import {
   AlertDialog,
@@ -15,15 +16,17 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import type { RequestEffect } from "@/lib/runelink-session";
 import * as Effect from "effect/Effect";
+import * as Option from "effect/Option";
+import { enteredHost } from "@/lib/account-storage";
 import { requestFailureMessage } from "@/lib/request-failure";
 import { runPromise } from "@/lib/runtime";
 
 type CreateServerDialogProps = {
-  activeHost: string | null;
+  activeHost: Host | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onCreateServer: (
-    host: string,
+    host: Host,
     title: string,
     description: string
   ) => RequestEffect<void>;
@@ -72,10 +75,14 @@ function CreateServerDialogForm({
   async function handleSubmit(event: React.SubmitEvent<HTMLFormElement>) {
     event.preventDefault();
 
-    const nextHost = host.trim();
     const nextTitle = title.trim();
-    if (!nextHost) {
+    if (!host.trim()) {
       setError("Host name is required.");
+      return;
+    }
+    const nextHost = enteredHost(host);
+    if (Option.isNone(nextHost)) {
+      setError("Enter a host name, such as runelink.chat.");
       return;
     }
 
@@ -88,7 +95,7 @@ function CreateServerDialogForm({
     setError(null);
 
     await runPromise(
-      onCreateServer(nextHost, nextTitle, description).pipe(
+      onCreateServer(nextHost.value, nextTitle, description).pipe(
         Effect.match({
           onSuccess: () => {
             if (isMounted()) onOpenChange(false);

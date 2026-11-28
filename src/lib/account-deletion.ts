@@ -1,4 +1,4 @@
-import { CLIENT_WS_SUPPORTED_CAPABILITIES, getApiUrl } from "@runelink/sdk";
+import { CLIENT_WS_SUPPORTED_CAPABILITIES, hostApiUrl } from "@runelink/sdk";
 import type { UserRef } from "@runelink/sdk";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
@@ -68,7 +68,7 @@ const isDeletedOnHomeHost = Effect.fn("AccountDeletion.isDeletedOnHomeHost")(
     // Only HTTPS is tried for hosts this browser has not connected to, since
     // unencrypted connections need the user's approval.
     const secure = getKnownHostTransport(userRef.host) ?? true;
-    const apiUrl = getApiUrl(userRef.host, secure);
+    const apiUrl = hostApiUrl(userRef.host, secure);
     const path = `/users/${encodeURIComponent(userRef.host)}/${encodeURIComponent(userRef.name)}`;
     const data = yield* Effect.tryPromise({
       try: (signal): Promise<unknown> =>

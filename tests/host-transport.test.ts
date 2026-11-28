@@ -1,3 +1,4 @@
+import * as fixtures from "./fixtures.ts";
 import type * as HostTransportModule from "../src/lib/host-transport.ts";
 import type * as AtomRegistryModule from "../src/lib/atom-registry.ts";
 import assert from "node:assert/strict";
@@ -92,16 +93,16 @@ const waitForPrompt = Effect.fn("HostTransportTest.waitForPrompt")(
 );
 
 it.effect(
-  "HTTP requires approval, remembers it across default-port aliases, and separates ports",
+  "HTTP requires approval, remembers it for the host, and separates ports",
   () =>
     Effect.gen(function* () {
       setup();
       const pending = yield* Effect.forkScoped(
-        hostTransport.resolveHostTransport("localhost"),
+        hostTransport.resolveHostTransport(fixtures.host("localhost")),
         { startImmediately: true }
       );
       const prompt = yield* waitForPrompt();
-      assert.equal(prompt.host, "localhost:7000");
+      assert.equal(prompt.host, "localhost");
       assert.deepEqual(
         decodeJson(storage.get("runelink.demo.host-transports") ?? ""),
         {}
@@ -113,15 +114,17 @@ it.effect(
       prompt.respond(true);
       const approved = yield* Fiber.join(pending);
       assert.equal(approved, false);
-      const remembered =
-        yield* hostTransport.resolveHostTransport("localhost:7000");
+      const remembered = yield* hostTransport.resolveHostTransport(
+        fixtures.host("localhost:7000")
+      );
       assert.equal(remembered, false);
-      const alias =
-        yield* hostTransport.resolveHostTransport("localhost:07000");
+      const alias = yield* hostTransport.resolveHostTransport(
+        fixtures.host("localhost:07000")
+      );
       assert.equal(alias, false);
       assert.equal(getPrompt(), null);
       const otherPort = yield* Effect.forkScoped(
-        hostTransport.resolveHostTransport("localhost:7001"),
+        hostTransport.resolveHostTransport(fixtures.host("localhost:7001")),
         { startImmediately: true }
       );
       (yield* waitForPrompt()).respond(false);
@@ -143,7 +146,7 @@ it.effect(
     Effect.gen(function* () {
       setup({ stored: { "localhost:7000": { secure: false } } });
       const pending = yield* Effect.forkScoped(
-        hostTransport.resolveHostTransport("localhost"),
+        hostTransport.resolveHostTransport(fixtures.host("localhost")),
         { startImmediately: true }
       );
       yield* waitForPrompt();
@@ -170,7 +173,9 @@ it.effect(
   () =>
     Effect.gen(function* () {
       setup({ secureResponse: new Response("pong") });
-      const secure = yield* hostTransport.resolveHostTransport("example.com");
+      const secure = yield* hostTransport.resolveHostTransport(
+        fixtures.host("example.com")
+      );
       assert.equal(secure, true);
       assert.equal(calls.length, 1);
       assert.equal(getPrompt(), null);
@@ -179,8 +184,9 @@ it.effect(
         stored: { "localhost:7000": { secure: false, allow_insecure: true } },
       });
       assert.match(
-        (yield* Effect.flip(hostTransport.resolveHostTransport("localhost")))
-          .message,
+        (yield* Effect.flip(
+          hostTransport.resolveHostTransport(fixtures.host("localhost"))
+        )).message,
         /requires a secure connection/u
       );
       assert.equal(calls.length, 1);
@@ -197,8 +203,9 @@ it.effect("redirects and HTTP errors never trigger an HTTP fallback", () =>
     ]) {
       setup({ secureResponse });
       assert.match(
-        (yield* Effect.flip(hostTransport.resolveHostTransport("example.com")))
-          .message,
+        (yield* Effect.flip(
+          hostTransport.resolveHostTransport(fixtures.host("example.com"))
+        )).message,
         /redirects are not allowed|HTTP 503/u
       );
       assert.equal(calls.length, 1);
@@ -233,7 +240,7 @@ it.effect(
       const { handleRunelinkUpdate } = yield* Effect.promise(
         () => import("../src/lib/runelink-updates.ts")
       );
-      const account = { name: "test", host: "localhost" };
+      const account = fixtures.userRef({ name: "test", host: "localhost" });
       const authCache = {
         accounts: { "test@localhost": { refresh_token: "test" } },
       };

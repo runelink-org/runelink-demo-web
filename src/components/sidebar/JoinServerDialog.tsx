@@ -1,6 +1,12 @@
 import { useIsMounted } from "@/lib/use-is-mounted";
 import { resourceKey } from "@runelink/sdk";
-import type { ResourceKey, Server, ServerId, ServerRef } from "@runelink/sdk";
+import type {
+  Host,
+  ResourceKey,
+  Server,
+  ServerId,
+  ServerRef,
+} from "@runelink/sdk";
 import { Globe } from "lucide-react";
 import { useEffect, useEffectEvent, useState } from "react";
 import {
@@ -18,15 +24,17 @@ import { Label } from "@/components/ui/label";
 import { getServerMonogram } from "./server-display";
 import type { RequestEffect } from "@/lib/runelink-session";
 import * as Effect from "effect/Effect";
+import * as Option from "effect/Option";
+import { enteredHost } from "@/lib/account-storage";
 import { requestFailureMessage } from "@/lib/request-failure";
 import { runPromise } from "@/lib/runtime";
 
 type JoinServerDialogProps = {
   open: boolean;
-  activeHost: string | null;
+  activeHost: Host | null;
   joinedServerKeys: ReadonlySet<ResourceKey<ServerId>>;
   onOpenChange: (open: boolean) => void;
-  onSearchServers: (host: string) => RequestEffect<readonly Server[]>;
+  onSearchServers: (host: Host) => RequestEffect<readonly Server[]>;
   onJoinServer: (serverRef: ServerRef) => RequestEffect<void>;
 };
 
@@ -55,25 +63,26 @@ function JoinServerDialogForm({
   const [host, setHost] = useState(activeHost ?? "");
   const [error, setError] = useState<string | null>(null);
   const [results, setResults] = useState<readonly Server[]>([]);
-  const [hasSearched, setHasSearched] = useState(
-    open && Boolean(activeHost?.trim())
-  );
-  const [isSearching, setIsSearching] = useState(
-    open && Boolean(activeHost?.trim())
-  );
+  const [hasSearched, setHasSearched] = useState(open && activeHost !== null);
+  const [isSearching, setIsSearching] = useState(open && activeHost !== null);
   const [joiningServerKey, setJoiningServerKey] =
     useState<ResourceKey<ServerId> | null>(null);
 
-  async function searchServers(nextHost: string) {
-    if (!nextHost) {
+  async function searchServers(input: string) {
+    if (!input.trim()) {
       setError("Host name is required.");
+      return;
+    }
+    const nextHost = enteredHost(input);
+    if (Option.isNone(nextHost)) {
+      setError("Enter a host name, such as runelink.chat.");
       return;
     }
     setIsSearching(true);
     setError(null);
     setHasSearched(true);
     await runPromise(
-      onSearchServers(nextHost).pipe(
+      onSearchServers(nextHost.value).pipe(
         Effect.match({
           onSuccess: (servers) => {
             if (isMounted()) setResults(servers);
@@ -92,11 +101,10 @@ function JoinServerDialogForm({
   const searchInitialServers = useEffectEvent(onSearchServers);
 
   useEffect(() => {
-    const nextHost = activeHost?.trim();
-    if (!open || nextHost == null || nextHost === "") return undefined;
+    if (!open || activeHost === null) return undefined;
     let cancelled = false;
     void runPromise(
-      searchInitialServers(nextHost).pipe(
+      searchInitialServers(activeHost).pipe(
         Effect.match({
           onSuccess: (servers) => {
             if (!cancelled) setResults(servers);

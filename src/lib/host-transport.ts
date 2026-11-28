@@ -1,4 +1,5 @@
-import { getApiUrl, padHost } from "@runelink/sdk";
+import { HostSchema, hostApiUrl } from "@runelink/sdk";
+import type { Host } from "@runelink/sdk";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
@@ -25,8 +26,10 @@ class ProbeFetchError extends Schema.TaggedError<ProbeFetchError>()(
   { cause: Schema.Defect() }
 ) {}
 
+// Saved before hosts were canonical, keys may name the default port, which
+// decoding drops.
 const HostTransportsSchema = Schema.Record(
-  Schema.String,
+  HostSchema,
   Schema.Struct({
     secure: Schema.Boolean,
     allow_insecure: Schema.Boolean.pipe(
@@ -39,8 +42,8 @@ const decodeHostTransports = Schema.decodeUnknownOption(
 );
 
 function loadHostTransports(): Record<
-  string,
-  (typeof HostTransportsSchema.Type)[string]
+  Host,
+  (typeof HostTransportsSchema.Type)[Host]
 > {
   const raw = window.localStorage.getItem(STORAGE_KEY);
   return raw != null && raw !== ""
@@ -54,11 +57,11 @@ function saveHostTransports(
   window.localStorage.setItem(STORAGE_KEY, JSON.stringify(hosts));
 }
 
-type TransportPrompt = { host: string; respond: (approved: boolean) => void };
+type TransportPrompt = { host: Host; respond: (approved: boolean) => void };
 
 export const hostTransportPromptAtom = stateAtom<TransportPrompt | null>(null);
 
-function confirmInsecureHost(host: string): Effect.Effect<boolean> {
+function confirmInsecureHost(host: Host): Effect.Effect<boolean> {
   return Effect.callback<boolean>((resume) => {
     appAtomRegistry.set(hostTransportPromptAtom, {
       host,
@@ -111,32 +114,24 @@ const probe = Effect.fn("HostTransport.probe")(function* (apiUrl: string) {
   return true;
 });
 
-function transportKey(host: string): string {
-  return padHost(host).replace(
-    /:(\d+)$/u,
-    (_, port: string) => `:${Number(port)}`
-  );
-}
-
 // Returns whether a previously connected host uses HTTPS, or null if this
 // browser has not connected to it. Never prompts.
-export function getKnownHostTransport(host: string): boolean | null {
-  return loadHostTransports()[transportKey(host)]?.secure ?? null;
+export function getKnownHostTransport(host: Host): boolean | null {
+  return loadHostTransports()[host]?.secure ?? null;
 }
 
 // Whether to connect to the host securely. Interrupting it closes any
 // approval prompt it opened.
 export const resolveHostTransport = Effect.fn("HostTransport.resolve")(
-  function* (hostInput: string) {
-    const host = transportKey(hostInput);
-    const secure = yield* probe(getApiUrl(host, true));
+  function* (host: Host) {
+    const secure = yield* probe(hostApiUrl(host, true));
     if (!secure) {
       if (window.location.protocol === "https:") {
         return yield* new HostUnreachableError({
           message: `Unable to connect securely to ${host}. This page requires a secure connection.`,
         });
       }
-      if (!(yield* probe(getApiUrl(host, false)))) {
+      if (!(yield* probe(hostApiUrl(host, false)))) {
         return yield* new HostUnreachableError({
           message: `Could not reach host: ${host}`,
         });
