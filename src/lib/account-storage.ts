@@ -20,22 +20,21 @@ const StoredAccountAuthSchema = Schema.Struct({
   scope: Schema.optional(Schema.String),
 });
 
-const BrowserAppConfigFields = {
-  active_account: Schema.NullOr(UserRefSchema).pipe(
-    Schema.withDecodingDefault(Effect.succeed(null))
-  ),
-  accounts: Schema.Array(UserRefSchema).pipe(
+const BrowserAppConfigSchema = Schema.Struct({
+  active_account: Schema.NullOr(UserRefSchema),
+  accounts: Schema.Array(UserRefSchema),
+});
+
+// Accounts are decoded one at a time, so that one that no longer parses, such
+// as one with a host spelling that was accepted before, doesn't hide the
+// others. Configs saved before the rename store the active account as
+// `default_account`. Remove that once stored configs have been migrated.
+const StoredAppConfigSchema = Schema.Struct({
+  active_account: Schema.optional(Schema.Unknown),
+  default_account: Schema.optional(Schema.Unknown),
+  accounts: Schema.Array(Schema.Unknown).pipe(
     Schema.withDecodingDefault(Effect.succeed([]))
   ),
-};
-
-const BrowserAppConfigSchema = Schema.Struct(BrowserAppConfigFields);
-
-// Configs saved before the rename store the active account as
-// `default_account`. Remove once stored configs have been migrated.
-const StoredAppConfigSchema = Schema.Struct({
-  ...BrowserAppConfigFields,
-  default_account: UserRefSchema.pipe(Schema.NullOr, Schema.optional),
 });
 
 const BrowserAuthCacheSchema = Schema.Struct({
@@ -48,6 +47,7 @@ export type StoredAccountAuth = typeof StoredAccountAuthSchema.Type;
 export type BrowserAppConfig = typeof BrowserAppConfigSchema.Type;
 export type BrowserAuthCache = typeof BrowserAuthCacheSchema.Type;
 
+const decodeUserRef = Schema.decodeUnknownOption(UserRefSchema);
 const decodeStoredAppConfig = Schema.decodeUnknownOption(
   Schema.fromJsonString(StoredAppConfigSchema)
 );
@@ -101,9 +101,10 @@ export function enteredHost(input: string): Option.Option<Host> {
 
 /** A host as a person types it, without a URL scheme or trailing slashes. */
 export function normalizeHostDraft(host: string): string {
+  // Only ASCII is lowercased, since the rest is left to IDNA when parsed.
   return host
     .trim()
-    .toLowerCase()
+    .replaceAll(/[A-Z]/gu, (letter) => letter.toLowerCase())
     .replace(/^https?:\/\//u, "")
     .replace(/\/+$/u, "");
 }
@@ -141,18 +142,20 @@ const trySaveBrowserAppConfig = Option.liftThrowable(saveBrowserAppConfig);
 
 export function loadBrowserAppConfig(): BrowserAppConfig {
   const config = loadStoredJson(APP_CONFIG_STORAGE_KEY, decodeStoredAppConfig, {
-    active_account: null,
     accounts: [],
   });
-  const activeAccount = config.active_account ?? config.default_account;
   // Accounts saved before hosts were canonical may include the default
   // port, which decoding drops, so merge accounts that only differed by it.
   let accounts: readonly UserRef[] = [];
-  for (const account of config.accounts) {
+  for (const account of config.accounts.flatMap((stored) =>
+    Option.toArray(decodeUserRef(stored))
+  )) {
     accounts = upsertAccount(accounts, account);
   }
   const migrated: BrowserAppConfig = {
-    active_account: activeAccount ?? null,
+    active_account: Option.getOrNull(
+      decodeUserRef(config.active_account ?? config.default_account)
+    ),
     accounts,
   };
   if (config.default_account !== undefined) {
@@ -188,6 +191,7 @@ const decodeHost = Schema.decodeUnknownOption(HostSchema);
 function canonicalAccountKey(key: string): string {
   // Names have no `@`
   const at = key.indexOf("@");
+  if (at === -1) return key;
   return Option.match(decodeHost(key.slice(at + 1)), {
     onNone: () => key,
     onSome: (host) => `${key.slice(0, at)}@${host}`,
