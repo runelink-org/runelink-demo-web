@@ -19,7 +19,7 @@ import { runPromise } from "@/lib/runtime";
 type LeaveServerDialogProps = {
   server: Server | null;
   onOpenChange: (open: boolean) => void;
-  onLeaveServer: (server: ServerRef) => RequestEffect<void>;
+  onLeaveServer: (serverRef: ServerRef) => RequestEffect<void>;
 };
 
 export function LeaveServerDialog({

@@ -1,7 +1,7 @@
 import { omitRecordKey } from "./record";
 import { newestResource } from "./resource-version";
 import { channelsAtom } from "./channel-state";
-import { channelServerRef, resourceKey } from "@runelink/sdk";
+import { serverRefOf, resourceKey } from "@runelink/sdk";
 import type {
   NewServer,
   ResourceKey,
@@ -38,7 +38,7 @@ export function newestChannel(
 ): ServerChannel {
   return newestResource(
     newestResource(channel, byKey[resourceKey(channel)]),
-    servers[resourceKey(channelServerRef(channel))]?.channels.find(
+    servers[resourceKey(serverRefOf(channel))]?.channels.find(
       (cached) => cached.id === channel.id
     )
   );
@@ -76,17 +76,14 @@ export const fetchServers = Effect.fn("Servers.fetchAll")(function* (
     data: { target_host: targetHost },
   });
 
-  setState(serversAtom, (state) => ({
-    serverByKey: {
-      ...state.serverByKey,
-      ...Object.fromEntries(
-        reply.data.map((server) => {
-          const key = resourceKey(server);
-          return [key, newestResource(server, cachedServer(state, key))];
-        })
-      ),
-    },
-  }));
+  setState(serversAtom, (state) => {
+    const serverByKey = { ...state.serverByKey };
+    for (const server of reply.data) {
+      const key = resourceKey(server);
+      serverByKey[key] = newestResource(server, cachedServer(state, key));
+    }
+    return { serverByKey };
+  });
 
   return reply.data;
 });
@@ -95,7 +92,7 @@ const loadServerWithChannels = Effect.fn("Servers.fetchWithChannels")(
   function* (serverRef: ServerRef) {
     const reply = yield* request({
       type: "servers_get_with_channels",
-      data: { server: serverRef },
+      data: { server_ref: serverRef },
     });
 
     const key = resourceKey(serverRef);
@@ -121,9 +118,9 @@ const loadServerWithChannels = Effect.fn("Servers.fetchWithChannels")(
 // Loads a server with its channels. Concurrent callers, such as the server
 // load and a new membership, share one request.
 export function fetchServerWithChannels(
-  server: ServerRef
+  serverRef: ServerRef
 ): Effect.Effect<ServerWithChannels, RequestFailure, RunelinkSession> {
-  const key = resourceKey(server);
+  const key = resourceKey(serverRef);
   // Uninterruptible until the shared load is running, so it is never
   // registered without starting
   return Effect.uninterruptibleMask((restore) =>
@@ -139,7 +136,7 @@ export function fetchServerWithChannels(
       // the others
       return Effect.forkDetach(
         Deferred.into(
-          loadServerWithChannels(server).pipe(
+          loadServerWithChannels(serverRef).pipe(
             Effect.ensuring(Effect.sync(() => loads.delete(key)))
           ),
           load
@@ -173,14 +170,14 @@ export const createServer = Effect.fn("Servers.create")(function* (
 });
 
 export const deleteServer = Effect.fn("Servers.delete")(function* (
-  server: ServerRef
+  serverRef: ServerRef
 ) {
   yield* request({
     type: "servers_delete",
-    data: { server },
+    data: { server_ref: serverRef },
   });
 
-  const key = resourceKey(server);
+  const key = resourceKey(serverRef);
   setState(serversAtom, (state) => ({
     serverByKey: omitRecordKey(state.serverByKey, key),
     serverWithChannelsByKey: omitRecordKey(state.serverWithChannelsByKey, key),

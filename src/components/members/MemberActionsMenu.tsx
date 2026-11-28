@@ -31,8 +31,8 @@ import { toastFailure } from "@/lib/toast-failure";
 type MemberActionsMenuProps = {
   contextMenu?: ReturnType<typeof useContextActionsMenu>;
   contextOnly?: boolean;
-  server: ServerRef;
-  user: UserRef;
+  serverRef: ServerRef;
+  userRef: UserRef;
   role?: ServerRole;
   canModerateMembers: boolean;
 };
@@ -44,8 +44,8 @@ function formatUserId(user: { name: string; host: string }): string {
 export function MemberActionsMenu({
   contextMenu,
   contextOnly = false,
-  server,
-  user,
+  serverRef,
+  userRef,
   role,
   canModerateMembers,
 }: MemberActionsMenuProps) {
@@ -55,7 +55,7 @@ export function MemberActionsMenu({
   const [isUpdatingRole, setIsUpdatingRole] = useState(false);
 
   function handleCopyUserId() {
-    const userId = formatUserId(user);
+    const userId = formatUserId(userRef);
     void copyToClipboard(
       userId,
       `Copied user ID: ${userId}`,
@@ -69,24 +69,24 @@ export function MemberActionsMenu({
 
     await runPromise(
       upsertMembership({
-        user_ref: user,
-        server: { host: server.host, id: server.id },
+        user_ref: userRef,
+        server_ref: { host: serverRef.host, id: serverRef.id },
         role: nextRole,
       }).pipe(
         Effect.match({
           onSuccess: () => {
             toast.success(
               nextRole === "admin"
-                ? `Promoted ${user.name} to admin.`
-                : `Removed admin from ${user.name}.`
+                ? `Promoted ${userRef.name} to admin.`
+                : `Removed admin from ${userRef.name}.`
             );
             setIsConfirmingSelfDemotion(false);
           },
           onFailure: (failure) =>
             toastFailure(
               nextRole === "admin"
-                ? `Couldn't promote ${user.name} to admin`
-                : `Couldn't remove admin from ${user.name}`,
+                ? `Couldn't promote ${userRef.name} to admin`
+                : `Couldn't remove admin from ${userRef.name}`,
               failure
             ),
         })
@@ -97,7 +97,7 @@ export function MemberActionsMenu({
   }
 
   const isActiveAccount =
-    activeAccount?.name === user.name && activeAccount.host === user.host;
+    activeAccount?.name === userRef.name && activeAccount.host === userRef.host;
 
   async function handleKickMember() {
     if (!activeAccount || !canModerateMembers || !role || isActiveAccount) {
@@ -105,12 +105,12 @@ export function MemberActionsMenu({
     }
 
     await runPromise(
-      deleteMembership(server, user).pipe(
+      deleteMembership(serverRef, userRef).pipe(
         Effect.match({
           onSuccess: () =>
-            toast.success(`Kicked ${user.name} from the server.`),
+            toast.success(`Kicked ${userRef.name} from the server.`),
           onFailure: (failure) =>
-            toastFailure(`Couldn't kick ${user.name}`, failure),
+            toastFailure(`Couldn't kick ${userRef.name}`, failure),
         })
       )
     );
@@ -127,7 +127,7 @@ export function MemberActionsMenu({
               <button
                 type="button"
                 className="flex size-8 shrink-0 cursor-pointer items-center justify-center rounded-xl text-muted-foreground/55 transition hover:bg-background hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
-                aria-label={`Open ${user.name} menu`}
+                aria-label={`Open ${userRef.name} menu`}
               />
             }
           >

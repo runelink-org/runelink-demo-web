@@ -23,7 +23,7 @@ type AddServerMenuProps = {
     description: string
   ) => RequestEffect<void>;
   onSearchServers: (host: string) => RequestEffect<readonly Server[]>;
-  onJoinServer: (server: ServerRef) => RequestEffect<void>;
+  onJoinServer: (serverRef: ServerRef) => RequestEffect<void>;
 };
 
 export function AddServerMenu({

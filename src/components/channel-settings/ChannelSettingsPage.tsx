@@ -181,7 +181,7 @@ function ChannelSettingsForm({
       request({
         type: "channels_update",
         data: {
-          channel: { host: channel.host, id: channel.id },
+          channel_ref: { host: channel.host, id: channel.id },
           channel_update: {
             title: submittedTitle,
             description: submittedDescription || null,

@@ -31,3 +31,13 @@ Read [the Effect conventions](docs/effect-conventions.md) before changing Effect
 - When a sibling `../runelink-sdk-js` checkout exists, Vite and TypeScript use its source instead, so local SDK changes apply without publishing. Run `pnpm install` in that checkout too, so TypeScript can resolve the SDK's dependencies. Otherwise, the installed package is used, as on Vercel.
 - Local builds with the sibling checkout don't verify against the published package. The Vercel preview build is the authoritative check.
 - Changes that need unreleased SDK features can only merge after that SDK version is published and the dependency is bumped here.
+
+## Resource naming
+
+Servers, channels, text channels, and messages are identified by their owning host together with an ID that is only unique on that host. Name values by what they hold:
+
+- `server`: the resource itself, such as a `Server`.
+- `serverId`: a bare `ServerId`. Use it only where the host is implied, such as for a resource on the same host as the resource that holds it (`ServerChannel.server_id`).
+- `serverRef`: a `ServerRef` (`ResourceRef<ServerId>`), the host and ID that name a resource on any host. Use it wherever the host isn't implied.
+
+The same applies to each kind of resource (`channel`, `textChannel`, `message`). A resource has its own host and ID, so it can be passed where a ref of its kind is expected, and the parameter that receives it is still named for a ref. Users have no bare ID, so a `UserRef` is named `userRef`, or for its role, such as `author`. Protocol fields keep their snake_case names, such as `server_id`, `server_ref`, and `user_ref`.

@@ -38,9 +38,9 @@ export function upsertMembership(
 
 export function removeMembership(
   memberships: readonly ServerMembership[],
-  server: ServerRef
+  serverRef: ServerRef
 ): readonly ServerMembership[] {
-  const key = resourceKey(server);
+  const key = resourceKey(serverRef);
   return memberships.filter(
     (membership) => resourceKey(membership.server) !== key
   );

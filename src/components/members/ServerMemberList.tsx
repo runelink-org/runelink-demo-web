@@ -17,7 +17,7 @@ import { cn } from "@/lib/utils";
 import { useContextActionsMenu } from "@/lib/use-context-actions-menu";
 
 type ServerMemberListProps = {
-  server: ServerRef;
+  serverRef: ServerRef;
   members: readonly ServerMember[];
   isLoading: boolean;
   error: string | null;
@@ -27,10 +27,10 @@ type ServerMemberListProps = {
 const ROLE_ORDER: ServerRole[] = ["admin", "member"];
 
 function ServerMemberListItem({
-  server,
+  serverRef,
   member,
   canModerateMembers,
-}: Pick<ServerMemberListProps, "server" | "canModerateMembers"> & {
+}: Pick<ServerMemberListProps, "serverRef" | "canModerateMembers"> & {
   member: ServerMember;
 }) {
   const contextMenu = useContextActionsMenu();
@@ -69,8 +69,8 @@ function ServerMemberListItem({
       </p>
       <MemberActionsMenu
         contextMenu={contextMenu}
-        server={server}
-        user={member.user}
+        serverRef={serverRef}
+        userRef={member.user}
         role={member.role}
         canModerateMembers={canModerateMembers}
       />
@@ -79,7 +79,7 @@ function ServerMemberListItem({
 }
 
 export function ServerMemberList({
-  server,
+  serverRef,
   members,
   isLoading,
   error,
@@ -125,7 +125,7 @@ export function ServerMemberList({
             {section.members.map((member) => (
               <ServerMemberListItem
                 key={`${member.user.name}@${member.user.host}`}
-                server={server}
+                serverRef={serverRef}
                 member={member}
                 canModerateMembers={canModerateMembers}
               />

@@ -5,7 +5,7 @@ import { ChannelActionsMenu } from "@/components/sidebar/ChannelActionsMenu";
 import { NavigationLink } from "@/components/NavigationLink";
 import { buttonVariants } from "@/components/ui/button-variants";
 import { getAppRoutePath } from "@/lib/app-route";
-import { channelServerRef, textChannelRef } from "@runelink/sdk";
+import { serverRefOf, textChannelRefOf } from "@runelink/sdk";
 import type { TextServerChannel } from "@/lib/runelink-store-utils";
 import { useContextActionsMenu } from "@/lib/use-context-actions-menu";
 import { cn } from "@/lib/utils";
@@ -61,7 +61,7 @@ export function ChannelListItem({
     }
 
     void runPromise(
-      fetchMessagesByTextChannel(textChannelRef(channel)).pipe(
+      fetchMessagesByTextChannel(textChannelRefOf(channel)).pipe(
         // Opening the channel retries a failed background fetch.
         Effect.ignore
       )
@@ -80,7 +80,7 @@ export function ChannelListItem({
       <NavigationLink
         href={getAppRoutePath({
           screen: "channel",
-          server: channelServerRef(channel),
+          serverRef: serverRefOf(channel),
           channelId: channel.id,
         })}
         aria-current={isSelected ? "page" : undefined}

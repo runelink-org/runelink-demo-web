@@ -62,7 +62,7 @@ export function MessageListItem({
   const authorContextMenu = useContextActionsMenu();
   const authorRole = useAtomValue(membershipsAtom, (state) =>
     message.author
-      ? state.membersByServerKey[resourceKey(channelRoute.server)]?.find(
+      ? state.membersByServerKey[resourceKey(channelRoute.serverRef)]?.find(
           (member) => sameUserRef(member.user, message.author)
         )?.role
       : undefined
@@ -220,8 +220,8 @@ export function MessageListItem({
         <MemberActionsMenu
           contextMenu={authorContextMenu}
           contextOnly
-          server={channelRoute.server}
-          user={message.author}
+          serverRef={channelRoute.serverRef}
+          userRef={message.author}
           role={authorRole}
           canModerateMembers={canModerateMembers}
         />

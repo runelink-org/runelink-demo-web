@@ -1,4 +1,4 @@
-import { channelServerRef, resourceKey } from "@runelink/sdk";
+import { serverRefOf, resourceKey } from "@runelink/sdk";
 import type {
   ResourceKey,
   Server,
@@ -46,7 +46,7 @@ type SidebarProps = {
   accountRailOnly?: boolean;
   onManageAccounts: () => void;
   onSelectAccount: () => void;
-  onSelectServer: (server: ServerRef) => void;
+  onSelectServer: (serverRef: ServerRef) => void;
   onSelectChannel: (channel: ServerChannel) => void;
   onCreateServer: (
     host: string,
@@ -54,10 +54,10 @@ type SidebarProps = {
     description: string
   ) => RequestEffect<void>;
   onSearchServers: (host: string) => RequestEffect<readonly Server[]>;
-  onJoinServer: (server: ServerRef) => RequestEffect<void>;
+  onJoinServer: (serverRef: ServerRef) => RequestEffect<void>;
   onOpenServerSettings: (server: Server) => void;
-  onLeaveServer: (server: ServerRef) => RequestEffect<void>;
-  onDeleteServer: (server: ServerRef) => RequestEffect<void>;
+  onLeaveServer: (serverRef: ServerRef) => RequestEffect<void>;
+  onDeleteServer: (serverRef: ServerRef) => RequestEffect<void>;
   canDeleteSelectedServer: boolean;
   canManageServer: (server: Server) => boolean;
   onCreateChannel: (
@@ -479,7 +479,7 @@ export function Sidebar({
             onSelectChannel={(channel) => {
               scheduleSelectionCommit(
                 {
-                  serverKey: resourceKey(channelServerRef(channel)),
+                  serverKey: resourceKey(serverRefOf(channel)),
                   channelId: channel.id,
                 },
                 () => {

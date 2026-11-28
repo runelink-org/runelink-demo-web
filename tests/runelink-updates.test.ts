@@ -166,7 +166,7 @@ it("updates about a server affect it and not another host's with the same ID", (
 
   updates.handleRunelinkUpdate({
     type: "membership_deleted",
-    data: { server: { host: a, id: serverId }, user_ref: bob },
+    data: { server_ref: { host: a, id: serverId }, user_ref: bob },
   });
   const members = registry.get(memberships.membershipsAtom).membersByServerKey;
   assert.deepEqual(members[serverKey(a)], []);
@@ -174,7 +174,7 @@ it("updates about a server affect it and not another host's with the same ID", (
 
   updates.handleRunelinkUpdate({
     type: "channel_deleted",
-    data: { server: { host: a, id: serverId }, channel_id: channelId },
+    data: { server_ref: { host: a, id: serverId }, channel_id: channelId },
   });
   const channelState = registry.get(channels.channelsAtom);
   assert.deepEqual(channelState.channelsByServerKey[serverKey(a)], []);
@@ -187,7 +187,7 @@ it("updates about a server affect it and not another host's with the same ID", (
 
   updates.handleRunelinkUpdate({
     type: "server_deleted",
-    data: { server: { host: a, id: serverId } },
+    data: { server_ref: { host: a, id: serverId } },
   });
   const serverState = registry.get(servers.serversAtom);
   assert.deepEqual(Object.keys(serverState.serverByKey), [serverKey(b)]);

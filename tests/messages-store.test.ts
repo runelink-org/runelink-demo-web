@@ -139,7 +139,7 @@ it.effect(
       assert.equal(requests.length, 1);
       const [{ request }] = requests;
       assert.equal(request.type, "messages_get_by_text_channel");
-      assert.deepEqual(request.data.text_channel, {
+      assert.deepEqual(request.data.text_channel_ref, {
         host: peer,
         id: channel,
       });
@@ -307,7 +307,7 @@ const otherChannelId = "44444444-4444-4444-8444-444444444444";
 const otherTextId = "55555555-5555-4555-8555-555555555555";
 const route = {
   screen: "channel",
-  server: fixtures.serverRef({ host: peer, id: serverId }),
+  serverRef: fixtures.serverRef({ host: peer, id: serverId }),
   channelId: fixtures.serverChannelId(channelId),
 } as const;
 const hintedMessage = fixtures.activeMessage({
@@ -373,7 +373,7 @@ it.effect(
       assert.equal(requests.length, 1);
       const [{ request }] = requests;
       assert.equal(request.type, "messages_get_by_text_channel");
-      assert.deepEqual(request.data.text_channel, {
+      assert.deepEqual(request.data.text_channel_ref, {
         host: peer,
         id: otherTextId,
       });

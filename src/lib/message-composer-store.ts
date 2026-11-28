@@ -80,9 +80,9 @@ export function updateEdit(
 }
 
 // Closes the edit of a message, and returns whether one was open.
-export function closeMessageEdit(message: MessageRef): boolean {
+export function closeMessageEdit(messageRef: MessageRef): boolean {
   const byChannelKey = appAtomRegistry.get(messageComposerAtom);
-  const key = resourceKey(message);
+  const key = resourceKey(messageRef);
   for (const [channelKey, { editing }] of Rec.toEntries(byChannelKey)) {
     if (editing != null && resourceKey(editing.message) === key) {
       updateEdit(channelKey, editing.session, null);

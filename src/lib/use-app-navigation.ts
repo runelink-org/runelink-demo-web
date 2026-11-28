@@ -31,36 +31,36 @@ import {
 } from "@/lib/navigation-store";
 
 type NavigationSelection = {
-  server: ServerRef | null;
+  serverRef: ServerRef | null;
   channelId: ServerChannelId | null;
 };
 
 // The selected server, or another one if it is gone, with its saved channel.
-// A channel ID only means something on its own server.
+// Saved channel IDs are per server, and are on the host of their server.
 export function getFallbackSelection(
   servers: readonly ServerWithChannels[],
-  selectedServer: ServerRef | null,
+  selectedServerRef: ServerRef | null,
   savedChannelIds: Record<ResourceKey<ServerId>, ServerChannelId | null>
 ): NavigationSelection {
   // Fall back to a server whose channels loaded, rather than one on an
   // unreachable host
   const nextServer =
-    servers.find(({ server }) => sameResource(server, selectedServer)) ??
+    servers.find(({ server }) => sameResource(server, selectedServerRef)) ??
     servers.find((server) => server.channels.length > 0) ??
     servers[0];
-  if (nextServer == null) return { server: null, channelId: null };
+  if (nextServer == null) return { serverRef: null, channelId: null };
 
-  const server = { host: nextServer.server.host, id: nextServer.server.id };
-  const channelId = savedChannelIds[resourceKey(server)] ?? null;
+  const serverRef = { host: nextServer.server.host, id: nextServer.server.id };
+  const channelId = savedChannelIds[resourceKey(serverRef)] ?? null;
   if (channelId == null) {
-    return { server, channelId: null };
+    return { serverRef, channelId: null };
   }
 
   const selectedChannel = nextServer.channels.find(
     (channel) => channel.id === channelId && channel.kind === "text"
   );
   const nextChannel = selectedChannel ?? firstTextChannel(nextServer.channels);
-  return { server, channelId: nextChannel?.id ?? null };
+  return { serverRef, channelId: nextChannel?.id ?? null };
 }
 
 export function useAppNavigation() {
@@ -109,45 +109,45 @@ export function useAppNavigation() {
   const reconcileServers = useCallback(
     (servers: readonly ServerWithChannels[]) => {
       const navigationState = getState(navigationAtom);
-      const selected = navigationState.selectedServer;
+      const { selectedServerRef } = navigationState;
       const savedChannelIds = navigationState.selectedChannelIdByServerKey;
       const nextSelection = getFallbackSelection(
         servers,
-        selected,
+        selectedServerRef,
         savedChannelIds
       );
 
-      if (!sameResource(nextSelection.server, selected)) {
-        selectServer(nextSelection.server);
+      if (!sameResource(nextSelection.serverRef, selectedServerRef)) {
+        selectServer(nextSelection.serverRef);
       }
       if (
-        nextSelection.server != null &&
+        nextSelection.serverRef != null &&
         (navigationState.selectedChannelIdByServerKey[
-          resourceKey(nextSelection.server)
+          resourceKey(nextSelection.serverRef)
         ] ?? null) !== nextSelection.channelId
       ) {
-        selectChannel(nextSelection.server, nextSelection.channelId);
+        selectChannel(nextSelection.serverRef, nextSelection.channelId);
       }
 
       const currentRoute = routeRef.current;
       const isValidChannelRoute =
         currentRoute.screen === "channel" &&
-        sameResource(currentRoute.server, nextSelection.server) &&
+        sameResource(currentRoute.serverRef, nextSelection.serverRef) &&
         currentRoute.channelId === nextSelection.channelId;
       const isValidSettingsRoute =
         (currentRoute.screen === "server-settings" &&
           servers.some(({ server }) =>
-            sameResource(server, currentRoute.server)
+            sameResource(server, currentRoute.serverRef)
           )) ||
         (currentRoute.screen === "channel-settings" &&
           servers.some(
             ({ server, channels }) =>
-              sameResource(server, currentRoute.server) &&
+              sameResource(server, currentRoute.serverRef) &&
               channels.some((channel) => channel.id === currentRoute.channelId)
           ));
       const isValidMembersRoute =
         currentRoute.screen === "channel-members" &&
-        sameResource(currentRoute.server, nextSelection.server) &&
+        sameResource(currentRoute.serverRef, nextSelection.serverRef) &&
         currentRoute.channelId === nextSelection.channelId;
       if (
         currentRoute.screen !== "auth" &&
@@ -156,7 +156,7 @@ export function useAppNavigation() {
         !isValidMembersRoute
       ) {
         navigate(
-          getContentRoute(nextSelection.server, nextSelection.channelId),
+          getContentRoute(nextSelection.serverRef, nextSelection.channelId),
           "replace"
         );
       }
@@ -195,17 +195,17 @@ export function useAppNavigation() {
         break;
       }
       case "server": {
-        selectChannel(route.server, null);
+        selectChannel(route.serverRef, null);
         break;
       }
       case "channel":
       case "channel-members": {
-        selectChannel(route.server, route.channelId);
+        selectChannel(route.serverRef, route.channelId);
         break;
       }
       case "channel-settings":
       case "server-settings": {
-        selectServer(route.server);
+        selectServer(route.serverRef);
         break;
       }
       case "auth": {

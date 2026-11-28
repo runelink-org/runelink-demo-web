@@ -17,7 +17,7 @@ import {
 } from "@/components/ui/table";
 
 type ServerMembersTableProps = {
-  server: ServerRef;
+  serverRef: ServerRef;
   members: readonly ServerMember[];
   isLoadingMembers: boolean;
   membersError: string | null;
@@ -36,13 +36,13 @@ function formatServerTimestamp(value: string): string {
 }
 
 function ServerMemberTableRow({
-  server,
+  serverRef,
   member,
   activeAccount,
   canModerateMembers,
 }: Pick<
   ServerMembersTableProps,
-  "server" | "activeAccount" | "canModerateMembers"
+  "serverRef" | "activeAccount" | "canModerateMembers"
 > & { member: ServerMember }) {
   const contextMenu = useContextActionsMenu();
 
@@ -95,8 +95,8 @@ function ServerMemberTableRow({
       <TableCell className="w-0 pr-3 text-right">
         <MemberActionsMenu
           contextMenu={contextMenu}
-          server={server}
-          user={member.user}
+          serverRef={serverRef}
+          userRef={member.user}
           role={member.role}
           canModerateMembers={canModerateMembers}
         />
@@ -106,7 +106,7 @@ function ServerMemberTableRow({
 }
 
 export function ServerMembersTable({
-  server,
+  serverRef,
   members,
   isLoadingMembers,
   membersError,
@@ -153,7 +153,7 @@ export function ServerMembersTable({
           {members.map((member) => (
             <ServerMemberTableRow
               key={`${member.user.name}@${member.user.host}`}
-              server={server}
+              serverRef={serverRef}
               member={member}
               activeAccount={activeAccount}
               canModerateMembers={canModerateMembers}

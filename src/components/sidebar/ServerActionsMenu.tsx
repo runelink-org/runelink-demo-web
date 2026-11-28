@@ -98,7 +98,7 @@ export function ServerActionsMenu({
             {
               label: "Server Link",
               value: new URL(
-                getAppRoutePath({ screen: "server", server }),
+                getAppRoutePath({ screen: "server", serverRef: server }),
                 window.location.origin
               ).href,
               successLabel: "Copied server link.",

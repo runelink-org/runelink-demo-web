@@ -13,7 +13,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { copyToClipboard } from "@/lib/clipboard";
 import { getAppRoutePath } from "@/lib/app-route";
-import { channelServerRef, textChannelRef } from "@runelink/sdk";
+import { serverRefOf, textChannelRefOf } from "@runelink/sdk";
 import { formatChannelCliPath, formatTextChannelCliPath } from "@/lib/cli-path";
 import type { useContextActionsMenu } from "@/lib/use-context-actions-menu";
 import { cn } from "@/lib/utils";
@@ -40,7 +40,7 @@ function getCopyOptions(channel: ServerChannel): CopyOption[] {
           value: new URL(
             getAppRoutePath({
               screen: "channel",
-              server: channelServerRef(channel),
+              serverRef: serverRefOf(channel),
               channelId: channel.id,
             }),
             window.location.origin
@@ -59,7 +59,7 @@ function getCopyOptions(channel: ServerChannel): CopyOption[] {
         },
         {
           label: "Path for CLI (Text Channel)",
-          value: formatTextChannelCliPath(textChannelRef(channel)),
+          value: formatTextChannelCliPath(textChannelRefOf(channel)),
           successLabel: "Copied CLI path (text channel).",
         },
       ];
