@@ -1,8 +1,15 @@
-import { ResourceRefSchema, resourceKey, textChannelRef } from "@runelink/sdk";
+import {
+  ServerChannelIdSchema,
+  TextChannelIdSchema,
+  resourceKey,
+  textChannelRef,
+} from "@runelink/sdk";
 import type {
   Message,
   ResourceKey,
-  ResourceRef,
+  ServerId,
+  TextChannelId,
+  TextChannelRef,
   ServerWithChannels,
   UserRef,
 } from "@runelink/sdk";
@@ -18,9 +25,11 @@ import { request } from "@/lib/runelink-session";
 // Hints are by account, then by server key. Earlier versions keyed servers by
 // ID alone, under a key without the version.
 const STORAGE_KEY = "runelink.demo.channel-navigation-hints.v2";
-const Uuid = ResourceRefSchema.fields.id;
 // Text channel IDs by server channel ID, both on the server's host
-const ServerHintsSchema = Schema.Record(Uuid, Uuid);
+const ServerHintsSchema = Schema.Record(
+  ServerChannelIdSchema,
+  TextChannelIdSchema
+);
 const HintsSchema = Schema.Record(
   Schema.String,
   Schema.Record(Schema.String, ServerHintsSchema)
@@ -49,7 +58,7 @@ function readHints(): Hints {
 // including removal of channels that were deleted or are no longer text channels.
 export function rememberChannelNavigationHints(
   account: UserRef,
-  servers: Record<ResourceKey, ServerWithChannels>
+  servers: Record<ResourceKey<ServerId>, ServerWithChannels>
 ): void {
   if (Object.keys(servers).length === 0) return;
   const hints = readHints();
@@ -70,7 +79,7 @@ export function rememberChannelNavigationHints(
 }
 
 type NavigationPrefetch = {
-  textChannelKey: ResourceKey;
+  textChannelKey: ResourceKey<TextChannelId>;
   history: Fiber.Fiber<readonly Message[] | null>;
   updates: Message[];
 };
@@ -89,7 +98,7 @@ export const startChannelNavigationPrefetch = Effect.fn(
 )(function* (
   account: UserRef,
   route: AppRoute,
-  cachedMessages: Record<ResourceKey, readonly Message[]> = {}
+  cachedMessages: Record<ResourceKey<TextChannelId>, readonly Message[]> = {}
 ) {
   cancelChannelNavigationPrefetch();
   if (route.screen !== "channel" && route.screen !== "channel-members") return;
@@ -97,7 +106,7 @@ export const startChannelNavigationPrefetch = Effect.fn(
     readHints()[accountStorageKey(account)]?.[resourceKey(route.server)]?.[
       route.channelId
     ];
-  if (!textChannelId) return;
+  if (textChannelId == null) return;
   const textChannel = { host: route.server.host, id: textChannelId };
   const textChannelKey = resourceKey(textChannel);
   // Reconnects can rerun startup while a channel is already cached or loading.
@@ -117,7 +126,7 @@ export const startChannelNavigationPrefetch = Effect.fn(
 // History and live updates stay outside the message cache until a normal fetch
 // supplies a text channel confirmed by fresh channel metadata.
 export function takeChannelNavigationPrefetch(
-  textChannel: ResourceRef
+  textChannel: TextChannelRef
 ): Effect.Effect<readonly Message[] | null> | null {
   const prefetch = pending;
   if (!prefetch) return null;

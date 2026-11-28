@@ -1,4 +1,4 @@
-import type { ResourceRef, ServerMember } from "@runelink/sdk";
+import type { ServerMember, ServerRef } from "@runelink/sdk";
 import { Badge } from "@/components/ui/badge";
 import { MemberActionsMenu } from "@/components/members/MemberActionsMenu";
 import { useContextActionsMenu } from "@/lib/use-context-actions-menu";
@@ -17,7 +17,7 @@ import {
 } from "@/components/ui/table";
 
 type ServerMembersTableProps = {
-  server: ResourceRef;
+  server: ServerRef;
   members: readonly ServerMember[];
   isLoadingMembers: boolean;
   membersError: string | null;

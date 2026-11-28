@@ -1,11 +1,13 @@
 import { channelServerRef, resourceKey } from "@runelink/sdk";
 import type {
   ResourceKey,
-  ResourceRef,
   Server,
   ServerChannel,
+  ServerChannelId,
   ServerChannelKind,
   ServerChannelMove,
+  ServerId,
+  ServerRef,
   ServerWithChannels,
 } from "@runelink/sdk";
 import { Layers3, LoaderCircle } from "lucide-react";
@@ -31,9 +33,12 @@ import * as Effect from "effect/Effect";
 
 type SidebarProps = {
   servers: readonly ServerWithChannels[];
-  selectedServerKey: ResourceKey | null;
-  selectedChannelId: string | null;
-  selectedChannelIdByServerKey: Record<ResourceKey, string | null>;
+  selectedServerKey: ResourceKey<ServerId> | null;
+  selectedChannelId: ServerChannelId | null;
+  selectedChannelIdByServerKey: Record<
+    ResourceKey<ServerId>,
+    ServerChannelId | null
+  >;
   isLoading: boolean;
   error: string | null;
   isSelectedServerHydrating: boolean;
@@ -41,7 +46,7 @@ type SidebarProps = {
   accountRailOnly?: boolean;
   onManageAccounts: () => void;
   onSelectAccount: () => void;
-  onSelectServer: (server: ResourceRef) => void;
+  onSelectServer: (server: ServerRef) => void;
   onSelectChannel: (channel: ServerChannel) => void;
   onCreateServer: (
     host: string,
@@ -49,17 +54,17 @@ type SidebarProps = {
     description: string
   ) => RequestEffect<void>;
   onSearchServers: (host: string) => RequestEffect<readonly Server[]>;
-  onJoinServer: (server: ResourceRef) => RequestEffect<void>;
+  onJoinServer: (server: ServerRef) => RequestEffect<void>;
   onOpenServerSettings: (server: Server) => void;
-  onLeaveServer: (server: ResourceRef) => RequestEffect<void>;
-  onDeleteServer: (server: ResourceRef) => RequestEffect<void>;
+  onLeaveServer: (server: ServerRef) => RequestEffect<void>;
+  onDeleteServer: (server: ServerRef) => RequestEffect<void>;
   canDeleteSelectedServer: boolean;
   canManageServer: (server: Server) => boolean;
   onCreateChannel: (
     server: Server,
     kind: ServerChannelKind,
     title: string,
-    parentChannelId: string | null
+    parentChannelId: ServerChannelId | null
   ) => RequestEffect<void>;
   onDeleteChannel: (channel: ServerChannel) => RequestEffect<void>;
   onEditChannel: (channel: ServerChannel) => void;
@@ -69,7 +74,7 @@ type SidebarProps = {
   ) => RequestEffect<void>;
 };
 
-const NO_COLLAPSED_IDS: ReadonlySet<string> = new Set();
+const NO_COLLAPSED_IDS: ReadonlySet<ServerChannelId> = new Set();
 
 const CHANNEL_PANEL_WIDTH_KEY = "runelink.demo.channels-sidebar-width";
 const DEFAULT_CHANNEL_PANEL_WIDTH = 280;
@@ -77,8 +82,8 @@ const MIN_CHANNEL_PANEL_WIDTH = 160;
 const MAX_CHANNEL_PANEL_WIDTH = 420;
 
 type PendingSelection = {
-  serverKey: ResourceKey;
-  channelId: string | null;
+  serverKey: ResourceKey<ServerId>;
+  channelId: ServerChannelId | null;
 };
 
 function clampChannelPanelWidth(value: number): number {
@@ -148,7 +153,7 @@ export function Sidebar({
     null
   );
   const [collapsedIdsByServerKey, setCollapsedIdsByServerKey] = useState<
-    Record<ResourceKey, ReadonlySet<string>>
+    Record<ResourceKey<ServerId>, ReadonlySet<ServerChannelId>>
   >({});
   const [pendingSelection, setPendingSelection] =
     useState<PendingSelection | null>(null);
@@ -244,7 +249,7 @@ export function Sidebar({
   function openCreateChannel(
     server: Server,
     kind: ServerChannelKind,
-    parentChannelId: string | null = null
+    parentChannelId: ServerChannelId | null = null
   ) {
     setCreateChannelRequest({ server, kind, parentChannelId });
   }

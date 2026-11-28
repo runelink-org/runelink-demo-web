@@ -3,9 +3,9 @@ import * as Order from "effect/Order";
 import { resourceKey } from "@runelink/sdk";
 import type {
   FullServerMembership,
-  ResourceRef,
   ServerMember,
   ServerMembership,
+  ServerRef,
   UserRef,
 } from "@runelink/sdk";
 import { userRefKey } from "@/lib/runelink-store-utils";
@@ -38,7 +38,7 @@ export function upsertMembership(
 
 export function removeMembership(
   memberships: readonly ServerMembership[],
-  server: ResourceRef
+  server: ServerRef
 ): readonly ServerMembership[] {
   const key = resourceKey(server);
   return memberships.filter(

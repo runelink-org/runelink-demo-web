@@ -3,9 +3,10 @@ import type {
   FullServerMembership,
   NewServerMembership,
   ResourceKey,
-  ResourceRef,
+  ServerId,
   ServerMember,
   ServerMembership,
+  ServerRef,
   UserRef,
 } from "@runelink/sdk";
 import * as Effect from "effect/Effect";
@@ -28,9 +29,9 @@ import {
 
 type MembershipsState = {
   membershipsByUserRefKey: Record<string, readonly ServerMembership[]>;
-  membersByServerKey: Record<ResourceKey, readonly ServerMember[]>;
-  hasFetchedMembersByServerKey: Record<ResourceKey, boolean>;
-  isLoadingByServerKey: Record<ResourceKey, boolean>;
+  membersByServerKey: Record<ResourceKey<ServerId>, readonly ServerMember[]>;
+  hasFetchedMembersByServerKey: Record<ResourceKey<ServerId>, boolean>;
+  isLoadingByServerKey: Record<ResourceKey<ServerId>, boolean>;
 };
 
 const initialState: MembershipsState = {
@@ -42,7 +43,10 @@ const initialState: MembershipsState = {
 
 export const membershipsAtom = stateAtom(initialState);
 
-function setServerLoading(serverKey: ResourceKey, isLoading: boolean): void {
+function setServerLoading(
+  serverKey: ResourceKey<ServerId>,
+  isLoading: boolean
+): void {
   setState(membershipsAtom, (state) => ({
     isLoadingByServerKey: {
       ...state.isLoadingByServerKey,
@@ -75,7 +79,7 @@ export const fetchMembershipsByUser = Effect.fn("Memberships.fetchByUser")(
 );
 
 export const fetchMembersByServer = Effect.fn("Memberships.fetchMembers")(
-  function* (server: ResourceRef) {
+  function* (server: ServerRef) {
     const serverKey = resourceKey(server);
     setServerLoading(serverKey, true);
     const reply = yield* request({
@@ -147,19 +151,19 @@ export const upsertMembership = Effect.fn("Memberships.upsert")(function* (
 // before the reply
 const deletingMemberships = new Set<string>();
 
-function deletingMembershipKey(server: ResourceRef, userRef: UserRef): string {
+function deletingMembershipKey(server: ServerRef, userRef: UserRef): string {
   return `${resourceKey(server)}/${userRefKey(userRef)}`;
 }
 
 export function isDeletingMembership(
-  server: ResourceRef,
+  server: ServerRef,
   userRef: UserRef
 ): boolean {
   return deletingMemberships.has(deletingMembershipKey(server, userRef));
 }
 
 export const deleteMembership = Effect.fn("Memberships.delete")(function* (
-  server: ResourceRef,
+  server: ServerRef,
   userRef: UserRef
 ) {
   const userKey = userRefKey(userRef);

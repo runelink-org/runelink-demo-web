@@ -3,9 +3,10 @@ import { sameUserRef } from "./account-storage";
 import { channelServerRef, resourceKey } from "@runelink/sdk";
 import type {
   NewServerChannel,
-  ResourceRef,
   ServerChannel,
+  ServerChannelId,
   ServerChannelMove,
+  ServerRef,
 } from "@runelink/sdk";
 import * as Effect from "effect/Effect";
 import { getState, setState } from "@/lib/atom-registry";
@@ -47,13 +48,13 @@ function upsertChannels(
 
 function removeChannel(
   channels: readonly ServerChannel[],
-  channelId: string
+  channelId: ServerChannelId
 ): readonly ServerChannel[] {
   return channels.filter((channel) => channel.id !== channelId);
 }
 
 export const createChannel = Effect.fn("Channels.create")(function* (
-  server: ResourceRef,
+  server: ServerRef,
   newChannel: NewServerChannel
 ) {
   const reply = yield* request({
@@ -110,8 +111,8 @@ export const deleteChannel = Effect.fn("Channels.delete")(function* (
 
 // Removes a deleted channel from the channel and server stores
 export function removeChannelFromCaches(
-  server: ResourceRef,
-  channelId: string
+  server: ServerRef,
+  channelId: ServerChannelId
 ): void {
   const serverKey = resourceKey(server);
   setState(channelsAtom, (state) => ({
@@ -162,7 +163,7 @@ export const moveChannel = Effect.fn("Channels.move")(function* (
 
 // Apply upserted channels of a server to the channel and server stores
 export function applyChannelUpserts(
-  server: ResourceRef,
+  server: ServerRef,
   upserted: readonly ServerChannel[]
 ): void {
   const channels = newestChannels(upserted);

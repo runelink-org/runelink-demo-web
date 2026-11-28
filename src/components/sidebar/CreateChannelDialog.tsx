@@ -1,5 +1,9 @@
 import { useIsMounted } from "@/lib/use-is-mounted";
-import type { ServerChannel, ServerChannelKind } from "@runelink/sdk";
+import type {
+  ServerChannel,
+  ServerChannelId,
+  ServerChannelKind,
+} from "@runelink/sdk";
 import { FolderPlus, Hash } from "lucide-react";
 import { useState } from "react";
 import {
@@ -34,7 +38,7 @@ const ROOT_VALUE = "root";
 
 export type CreateChannelRequest = {
   kind: ServerChannelKind;
-  parentChannelId: string | null;
+  parentChannelId: ServerChannelId | null;
 };
 
 type CreateChannelDialogProps = {
@@ -45,7 +49,7 @@ type CreateChannelDialogProps = {
   onCreateChannel: (
     kind: ServerChannelKind,
     title: string,
-    parentChannelId: string | null
+    parentChannelId: ServerChannelId | null
   ) => RequestEffect<void>;
 };
 
@@ -78,7 +82,7 @@ function CreateChannelDialogForm({
 }: CreateChannelDialogProps) {
   const isMounted = useIsMounted();
   const [kind, setKind] = useState<ServerChannelKind>(request?.kind ?? "text");
-  const [parentValue, setParentValue] = useState(
+  const [parentValue, setParentValue] = useState<string>(
     request?.parentChannelId ?? ROOT_VALUE
   );
   const [title, setTitle] = useState("");
@@ -93,9 +97,10 @@ function CreateChannelDialogForm({
     })),
   ];
   // The chosen parent may have been deleted while the dialog was open
-  const parent = parentItems.some((item) => item.value === parentValue)
-    ? parentValue
-    : ROOT_VALUE;
+  const parentChannel =
+    categories.find(({ channel }) => channel.id === parentValue)?.channel ??
+    null;
+  const parent = parentChannel?.id ?? ROOT_VALUE;
   const noun = kind === "category" ? "category" : "channel";
   const nounLabel = kind === "category" ? "Category" : "Channel";
 
@@ -114,11 +119,7 @@ function CreateChannelDialogForm({
     setError(null);
 
     await runPromise(
-      onCreateChannel(
-        kind,
-        nextTitle,
-        parent === ROOT_VALUE ? null : parent
-      ).pipe(
+      onCreateChannel(kind, nextTitle, parentChannel?.id ?? null).pipe(
         Effect.match({
           onSuccess: () => {
             if (isMounted()) onOpenChange(false);

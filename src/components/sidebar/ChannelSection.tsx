@@ -1,5 +1,6 @@
 import type {
   ServerChannel,
+  ServerChannelId,
   ServerChannelKind,
   ServerChannelMove,
   ServerWithChannels,
@@ -29,11 +30,13 @@ const DRAG_THRESHOLD_PX = 5;
 
 type ChannelSectionProps = {
   selectedServer: ServerWithChannels | null;
-  selectedChannelId: string | null;
+  selectedChannelId: ServerChannelId | null;
   // Collapsed categories of the selected server
-  collapsedIds: ReadonlySet<string>;
+  collapsedIds: ReadonlySet<ServerChannelId>;
   onCollapsedIdsChange: (
-    update: (current: ReadonlySet<string>) => ReadonlySet<string>
+    update: (
+      current: ReadonlySet<ServerChannelId>
+    ) => ReadonlySet<ServerChannelId>
   ) => void;
   isLoading: boolean;
   error: string | null;
@@ -41,7 +44,7 @@ type ChannelSectionProps = {
   canManageChannels: boolean;
   onOpenCreateChannel: (
     kind: ServerChannelKind,
-    parentChannelId: string | null
+    parentChannelId: ServerChannelId | null
   ) => void;
   onSelectChannel: (channel: ServerChannel) => void;
   onDeleteChannel: (channel: ServerChannel) => void;
@@ -53,12 +56,12 @@ type ChannelSectionProps = {
 };
 
 type DragState = {
-  channelId: string;
+  channelId: ServerChannelId;
   target: DropTarget | null;
 };
 
 type PressState = {
-  channelId: string;
+  channelId: ServerChannelId;
   pointerId: number;
   startX: number;
   startY: number;
@@ -74,7 +77,7 @@ function getCategoryPlacement(fraction: number, hasVisibleChildren: boolean) {
 function dropTargetAt(
   channels: readonly ServerChannel[],
   rows: ChannelRow[],
-  draggedId: string,
+  draggedId: ServerChannelId,
   clientX: number,
   clientY: number
 ): DropTarget | null {

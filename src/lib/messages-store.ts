@@ -6,9 +6,12 @@ import { mergeMessages } from "./message-cache";
 import { resourceKey, textChannelRef } from "@runelink/sdk";
 import type {
   Message,
+  MessageId,
+  MessageRef,
   NewMessage,
   ResourceKey,
-  ResourceRef,
+  TextChannelId,
+  TextChannelRef,
 } from "@runelink/sdk";
 import * as Cause from "effect/Cause";
 import * as Effect from "effect/Effect";
@@ -21,10 +24,13 @@ import type { RequestFailure, RunelinkSession } from "@/lib/runelink-session";
 import { bindStoreToActiveAccount } from "@/lib/runelink-store-utils";
 
 type MessagesState = {
-  messagesByTextChannelKey: Record<ResourceKey, readonly Message[]>;
-  hasFetchedByTextChannelKey: Record<ResourceKey, boolean>;
-  isLoadingByTextChannelKey: Record<ResourceKey, boolean>;
-  errorByTextChannelKey: Record<ResourceKey, string | null>;
+  messagesByTextChannelKey: Record<
+    ResourceKey<TextChannelId>,
+    readonly Message[]
+  >;
+  hasFetchedByTextChannelKey: Record<ResourceKey<TextChannelId>, boolean>;
+  isLoadingByTextChannelKey: Record<ResourceKey<TextChannelId>, boolean>;
+  errorByTextChannelKey: Record<ResourceKey<TextChannelId>, string | null>;
 };
 
 const initialState: MessagesState = {
@@ -37,10 +43,10 @@ const initialState: MessagesState = {
 export const messagesAtom = stateAtom(initialState);
 
 type History = Deferred.Deferred<readonly Message[], RequestFailure>;
-let pendingFetches = new Map<ResourceKey, History>();
+let pendingFetches = new Map<ResourceKey<TextChannelId>, History>();
 
 function storeMessages(
-  textChannelKey: ResourceKey,
+  textChannelKey: ResourceKey<TextChannelId>,
   messages: readonly Message[]
 ): void {
   setState(messagesAtom, (state) => ({
@@ -57,7 +63,7 @@ function storeMessages(
 // Loads a channel's history once. Concurrent callers, such as a hover prefetch
 // and opening the channel, share one request.
 export function fetchMessagesByTextChannel(
-  textChannel: ResourceRef
+  textChannel: TextChannelRef
 ): Effect.Effect<readonly Message[], RequestFailure, RunelinkSession> {
   const textChannelKey = resourceKey(textChannel);
   // Uninterruptible until the shared load is running, so it is never
@@ -163,7 +169,7 @@ export function fetchMessagesByTextChannel(
 }
 
 export const createMessage = Effect.fn("Messages.create")(function* (
-  textChannel: ResourceRef,
+  textChannel: TextChannelRef,
   newMessage: NewMessage
 ) {
   const reply = yield* request({
@@ -180,9 +186,9 @@ export const createMessage = Effect.fn("Messages.create")(function* (
 
 // Messages this client is deleting, whose deletion updates can arrive before
 // the reply
-const deletingMessages = new Set<ResourceKey>();
+const deletingMessages = new Set<ResourceKey<MessageId>>();
 
-export function isDeletingMessage(message: ResourceRef): boolean {
+export function isDeletingMessage(message: MessageRef): boolean {
   return deletingMessages.has(resourceKey(message));
 }
 

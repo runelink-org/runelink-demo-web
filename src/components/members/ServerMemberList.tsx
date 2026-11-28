@@ -1,5 +1,5 @@
 import * as Arr from "effect/Array";
-import type { ResourceRef, ServerMember, ServerRole } from "@runelink/sdk";
+import type { ServerMember, ServerRef, ServerRole } from "@runelink/sdk";
 import { useMemo } from "react";
 import { MemberActionsMenu } from "@/components/members/MemberActionsMenu";
 import {
@@ -17,7 +17,7 @@ import { cn } from "@/lib/utils";
 import { useContextActionsMenu } from "@/lib/use-context-actions-menu";
 
 type ServerMemberListProps = {
-  server: ResourceRef;
+  server: ServerRef;
   members: readonly ServerMember[];
   isLoading: boolean;
   error: string | null;

@@ -3,7 +3,11 @@ import {
   restoreTextareaSelection,
   sameTextareaSelection,
 } from "@/lib/textarea-selection";
-import type { ActiveMessage, ResourceKey } from "@runelink/sdk";
+import type {
+  ActiveMessage,
+  ResourceKey,
+  ServerChannelId,
+} from "@runelink/sdk";
 import { useCallback, useState } from "react";
 import { useAtomValue } from "@effect/atom-react";
 import {
@@ -29,7 +33,7 @@ export function InlineMessageEditor({
   onDelete,
 }: {
   message: ActiveMessage;
-  channelKey: ResourceKey;
+  channelKey: ResourceKey<ServerChannelId>;
   onClose: (reason: "cancel" | "saved") => void;
   onDelete: () => void;
 }) {

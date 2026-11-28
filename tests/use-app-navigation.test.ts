@@ -4,16 +4,17 @@ import { afterAll, beforeAll, it, vi } from "@effect/vitest";
 import { resourceKey } from "@runelink/sdk";
 import type { ServerChannel, ServerWithChannels } from "@runelink/sdk";
 import * as Effect from "effect/Effect";
+import * as fixtures from "./fixtures.ts";
 
 let navigation: typeof AppNavigationModule;
 
-const serverId = "11111111-1111-4111-8111-111111111111";
-const channelId = "22222222-2222-4222-8222-222222222222";
-const otherChannelId = "33333333-3333-4333-8333-333333333333";
+const serverId = fixtures.serverId(fixtures.uuid(1));
+const channelId = fixtures.serverChannelId(fixtures.uuid(2));
+const otherChannelId = fixtures.serverChannelId(fixtures.uuid(3));
 const at = "2026-11-27T12:00:00Z";
 
 function textChannel(host: string, id: string): ServerChannel {
-  return {
+  return fixtures.serverChannel({
     id,
     host,
     server_id: serverId,
@@ -25,19 +26,19 @@ function textChannel(host: string, id: string): ServerChannel {
     position: id === channelId ? 1 : 0,
     created_at: at,
     updated_at: at,
-  };
+  });
 }
 
 function server(host: string): ServerWithChannels {
   return {
-    server: {
+    server: fixtures.server({
       id: serverId,
       host,
       title: host,
       description: null,
       created_at: at,
       updated_at: at,
-    },
+    }),
     channels: [textChannel(host, otherChannelId), textChannel(host, channelId)],
   };
 }
@@ -45,8 +46,8 @@ function server(host: string): ServerWithChannels {
 // Same-UUID servers on two hosts, and a selected one on a third that the
 // account is not in
 const servers = [server("a.example"), server("b.example")];
-const missing = { host: "c.example", id: serverId };
-const destination = { host: "a.example", id: serverId };
+const missing = fixtures.serverRef({ host: "c.example", id: serverId });
+const destination = fixtures.serverRef({ host: "a.example", id: serverId });
 
 beforeAll(() =>
   Effect.gen(function* () {
@@ -91,7 +92,7 @@ it("a fallback server never opens the rejected route's channel ID", () => {
 });
 
 it("the selected server keeps its saved channel", () => {
-  const selected = { host: "b.example", id: serverId };
+  const selected = fixtures.serverRef({ host: "b.example", id: serverId });
   assert.deepEqual(
     navigation.getFallbackSelection(servers, selected, {
       [resourceKey(selected)]: channelId,

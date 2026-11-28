@@ -7,12 +7,15 @@ import { ChannelSettingsPage } from "@/components/channel-settings/ChannelSettin
 import { channelServerRef, resourceKey, textChannelRef } from "@runelink/sdk";
 import type {
   Message,
+  MessageId,
   ResourceKey,
-  ResourceRef,
   Server,
   ServerChannel,
+  ServerChannelId,
   ServerChannelKind,
   ServerChannelMove,
+  ServerId,
+  ServerRef,
   ServerWithChannels,
 } from "@runelink/sdk";
 import { useAtomValue } from "@effect/atom-react";
@@ -89,8 +92,10 @@ function getTargetHost(serverHost: string, activeHost: string): string | null {
 // Loads a server's channels. A failure, such as on an unreachable peer host,
 // is recorded for the channel list rather than returned.
 function loadServerDetails(
-  server: ResourceRef,
-  setServerErrorByKey: Dispatch<SetStateAction<Record<ResourceKey, string>>>
+  server: ServerRef,
+  setServerErrorByKey: Dispatch<
+    SetStateAction<Record<ResourceKey<ServerId>, string>>
+  >
 ) {
   return fetchServerWithChannels(server).pipe(
     Effect.catch((error) =>
@@ -124,8 +129,10 @@ const withCreateServerSpan = Effect.fn("App.createServer");
 const withJoinServerSpan = Effect.fn("App.joinServer");
 
 export function App() {
-  const pendingServerDetailsRef = useRef<Set<ResourceKey>>(new Set());
-  const pendingMembersServerKeysRef = useRef<Set<ResourceKey>>(new Set());
+  const pendingServerDetailsRef = useRef<Set<ResourceKey<ServerId>>>(new Set());
+  const pendingMembersServerKeysRef = useRef<Set<ResourceKey<ServerId>>>(
+    new Set()
+  );
   const { route, navigate, getCurrentRoute, backOrReplace, reconcileServers } =
     useAppNavigation();
   const previousRouteRef = useRef(route);
@@ -138,7 +145,7 @@ export function App() {
     string | null
   >(null);
   const [membersErrorByServerKey, setMembersErrorByServerKey] = useState<
-    Record<ResourceKey, string>
+    Record<ResourceKey<ServerId>, string>
   >({});
   const [isSidebarLoading, setIsSidebarLoading] = useState(false);
   const [resolvedSidebarAccountKey, setResolvedSidebarAccountKey] = useState<
@@ -146,7 +153,7 @@ export function App() {
   >(null);
   const [sidebarError, setSidebarError] = useState<string | null>(null);
   const [serverErrorByKey, setServerErrorByKey] = useState<
-    Record<ResourceKey, string>
+    Record<ResourceKey<ServerId>, string>
   >({});
 
   const isWideLayout = useIsWideLayout();
@@ -378,7 +385,10 @@ export function App() {
     [activeMemberships, serverWithChannelsByKey]
   );
 
-  const hydratedServerByKey: Record<ResourceKey, ServerWithChannels> = useMemo(
+  const hydratedServerByKey: Record<
+    ResourceKey<ServerId>,
+    ServerWithChannels
+  > = useMemo(
     () =>
       Object.fromEntries(
         hydratedServers.map((serverWithChannels) => [
@@ -770,7 +780,7 @@ export function App() {
     navigate({ screen: "auth" }, "push");
   }
 
-  function handleSelectServer(server: ResourceRef) {
+  function handleSelectServer(server: ServerRef) {
     const channelId = selectedChannelIdByServerKey[resourceKey(server)] ?? null;
     navigate(getContentRoute(server, channelId), "push");
   }
@@ -824,7 +834,7 @@ export function App() {
     );
   }
 
-  function handleOpenServerSettings(server: ResourceRef) {
+  function handleOpenServerSettings(server: ServerRef) {
     navigate({ screen: "server-settings", server }, "push");
   }
 
@@ -841,7 +851,7 @@ export function App() {
 
   function handleSendMessage(
     body: string,
-    replyTo: string | null
+    replyTo: MessageId | null
   ): RequestEffect<void> {
     if (!activeAccount || selectedTextChannel === null) {
       return Effect.void;
@@ -857,7 +867,7 @@ export function App() {
     server: Server,
     kind: ServerChannelKind,
     title: string,
-    parentChannelId: string | null
+    parentChannelId: ServerChannelId | null
   ) {
     const channel = yield* createChannel(server, {
       kind,
@@ -933,7 +943,7 @@ export function App() {
     return fetchServers(getTargetHost(host, activeAccount.host));
   }
 
-  const handleJoinServer = withJoinServerSpan(function* (server: ResourceRef) {
+  const handleJoinServer = withJoinServerSpan(function* (server: ServerRef) {
     if (!activeAccount) return;
 
     debugRunelink("join server start", {
@@ -956,7 +966,7 @@ export function App() {
     navigate({ screen: "server", server }, "push");
   });
 
-  function handleLeaveServer(server: ResourceRef): RequestEffect<void> {
+  function handleLeaveServer(server: ServerRef): RequestEffect<void> {
     if (!activeAccount) return Effect.void;
     return deleteMembership(server, activeAccount);
   }

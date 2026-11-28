@@ -4,7 +4,13 @@ import { cn } from "@/lib/utils";
 import { useContextActionsMenu } from "@/lib/use-context-actions-menu";
 import { DropdownMenu } from "@/components/ui/dropdown-menu";
 import { formatMessagePreview } from "@/lib/message-preview";
-import type { ActiveMessage, Message, ResourceKey } from "@runelink/sdk";
+import type {
+  ActiveMessage,
+  Message,
+  MessageId,
+  ResourceKey,
+  ServerChannelId,
+} from "@runelink/sdk";
 import { MessageActionsMenu } from "./MessageActionsMenu";
 import type { AppRoute } from "@/lib/app-route";
 import { MemberActionsMenu } from "@/components/members/MemberActionsMenu";
@@ -14,7 +20,7 @@ import { sameUserRef } from "@/lib/account-storage";
 import type { MouseEvent } from "react";
 
 type MessageListItemProps = {
-  channelKey: ResourceKey;
+  channelKey: ResourceKey<ServerChannelId>;
   channelRoute: Extract<AppRoute, { screen: "channel" }>;
   message: ActiveMessage;
   authorName: string;
@@ -29,7 +35,7 @@ type MessageListItemProps = {
   onCancelEdit: () => void;
   replyTarget: Message | undefined;
   onReply: (message: ActiveMessage) => void;
-  onJumpToMessage: (id: string) => void;
+  onJumpToMessage: (id: MessageId) => void;
   onDeleteMessage: (message: ActiveMessage) => void;
 };
 

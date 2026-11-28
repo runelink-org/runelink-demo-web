@@ -1,5 +1,13 @@
 import { textChannelRef } from "@runelink/sdk";
-import type { ResourceRef, ServerChannel, UserRef } from "@runelink/sdk";
+import type {
+  ResourceRef,
+  ServerChannel,
+  ServerChannelId,
+  ServerChannelRef,
+  ServerRef,
+  TextChannelRef,
+  UserRef,
+} from "@runelink/sdk";
 import { accountStorageKey, sameUserRef } from "@/lib/account-storage";
 import { appAtomRegistry, getState } from "@/lib/atom-registry";
 import {
@@ -16,16 +24,17 @@ export function userRefKey(userRef: UserRef): string {
   return accountStorageKey(userRef);
 }
 
+// Channels are on the host of their server
 export function channelRef(
-  server: ResourceRef,
-  channelId: string
-): ResourceRef {
+  server: ServerRef,
+  channelId: ServerChannelId
+): ServerChannelRef {
   return { host: server.host, id: channelId };
 }
 
-export function sameResource(
-  a: ResourceRef | null,
-  b: ResourceRef | null
+export function sameResource<Id extends string>(
+  a: ResourceRef<Id> | null,
+  b: ResourceRef<Id> | null
 ): boolean {
   if (a == null || b == null) return a === b;
   return a.host === b.host && a.id === b.id;
@@ -34,7 +43,7 @@ export function sameResource(
 /** The text channel a channel owns, if it is a text channel. */
 export function ownedTextChannelRef(
   channel: ServerChannel
-): ResourceRef | null {
+): TextChannelRef | null {
   return channel.kind === "text" ? textChannelRef(channel) : null;
 }
 

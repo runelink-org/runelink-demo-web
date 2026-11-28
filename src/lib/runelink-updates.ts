@@ -7,7 +7,10 @@ import type {
   FullServerMembership,
   Message,
   ResourceKey,
-  ResourceRef,
+  ServerChannelId,
+  ServerId,
+  ServerRef,
+  TextChannelId,
   Server,
   ServerChannel,
   User,
@@ -53,15 +56,15 @@ export function setUpdateNotifier(
   notify = notifier;
 }
 
-function isLoadedServer(server: ResourceRef): boolean {
+function isLoadedServer(server: ServerRef): boolean {
   const state = getState(serversAtom);
   const key = resourceKey(server);
   return key in state.serverByKey || key in state.serverWithChannelsByKey;
 }
 
 function getKnownTextChannelKeysForServer(
-  serverKey: ResourceKey
-): ResourceKey[] {
+  serverKey: ResourceKey<ServerId>
+): ResourceKey<TextChannelId>[] {
   return [
     ...new Set(
       [
@@ -76,7 +79,9 @@ function getKnownTextChannelKeysForServer(
   ];
 }
 
-function removeMessageState(deletedTextChannelKeys: ResourceKey[]): void {
+function removeMessageState(
+  deletedTextChannelKeys: ResourceKey<TextChannelId>[]
+): void {
   setState(messagesAtom, (state) => ({
     hasFetchedByTextChannelKey: omitRecordKeys(
       state.hasFetchedByTextChannelKey,
@@ -97,7 +102,7 @@ function removeMessageState(deletedTextChannelKeys: ResourceKey[]): void {
   }));
 }
 
-function removeLoadedServerState(server: ResourceRef): void {
+function removeLoadedServerState(server: ServerRef): void {
   const serverKey = resourceKey(server);
   const deletedTextChannelKeys = getKnownTextChannelKeysForServer(serverKey);
 
@@ -206,7 +211,7 @@ function handleMembershipUpsert(membership: FullServerMembership): void {
   }));
 }
 
-function handleMembershipDeleted(server: ResourceRef, userRef: UserRef): void {
+function handleMembershipDeleted(server: ServerRef, userRef: UserRef): void {
   const state = getState(membershipsAtom);
   const activeAccount = authAtom.pipe(getState, getActiveAccount);
   const userKey = userRefKey(userRef);
@@ -297,7 +302,10 @@ function handleChannelUpsert(channel: ServerChannel): void {
   applyChannelUpserts(server, [channel]);
 }
 
-function handleChannelDeleted(server: ResourceRef, channelId: string): void {
+function handleChannelDeleted(
+  server: ServerRef,
+  channelId: ServerChannelId
+): void {
   if (!isLoadedServer(server)) {
     return;
   }

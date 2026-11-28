@@ -1,32 +1,41 @@
-import { ResourceRefSchema } from "@runelink/sdk";
-import type { ResourceRef } from "@runelink/sdk";
+import {
+  MessageIdSchema,
+  ServerChannelIdSchema,
+  ServerRefSchema,
+} from "@runelink/sdk";
+import type { MessageId, ServerChannelId, ServerRef } from "@runelink/sdk";
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
 
-const decodeId = Schema.decodeUnknownOption(ResourceRefSchema.fields.id);
-const decodeRef = Schema.decodeUnknownOption(ResourceRefSchema);
+const decodeServer = Schema.decodeUnknownOption(ServerRefSchema);
+const decodeChannelId = Schema.decodeUnknownOption(ServerChannelIdSchema);
+const decodeMessageId = Schema.decodeUnknownOption(MessageIdSchema);
 
 // Channels and messages are on the server's host.
 export type AppRoute =
   | { screen: "home" }
   | { screen: "auth" }
-  | { screen: "server"; server: ResourceRef }
+  | { screen: "server"; server: ServerRef }
   | {
       screen: "channel";
-      server: ResourceRef;
-      channelId: string;
-      messageId?: string;
+      server: ServerRef;
+      channelId: ServerChannelId;
+      messageId?: MessageId;
     }
-  | { screen: "channel-settings"; server: ResourceRef; channelId: string }
-  | { screen: "channel-members"; server: ResourceRef; channelId: string }
-  | { screen: "server-settings"; server: ResourceRef };
+  | {
+      screen: "channel-settings";
+      server: ServerRef;
+      channelId: ServerChannelId;
+    }
+  | { screen: "channel-members"; server: ServerRef; channelId: ServerChannelId }
+  | { screen: "server-settings"; server: ServerRef };
 
 export function getContentRoute(
-  server: ResourceRef | null,
-  channelId: string | null
+  server: ServerRef | null,
+  channelId: ServerChannelId | null
 ): AppRoute {
   if (server == null) return { screen: "home" };
-  if (channelId == null || channelId === "") {
+  if (channelId == null) {
     return { screen: "server", server };
   }
   return { screen: "channel", server, channelId };
@@ -38,22 +47,22 @@ const isAppHistoryState = Schema.is(
 
 const decodePathSegment = Option.liftThrowable(decodeURIComponent);
 
-function parseId(value: string): string | null {
+function parseChannelId(value: string): ServerChannelId | null {
   return decodePathSegment(value).pipe(
-    Option.flatMap(decodeId),
+    Option.flatMap(decodeChannelId),
     Option.getOrNull
   );
 }
 
 // Path segments are never empty, so neither is the host.
-function parseServer(host: string, id: string): ResourceRef | null {
+function parseServer(host: string, id: string): ServerRef | null {
   return Option.all({
     host: decodePathSegment(host),
     id: decodePathSegment(id),
-  }).pipe(Option.flatMap(decodeRef), Option.getOrNull);
+  }).pipe(Option.flatMap(decodeServer), Option.getOrNull);
 }
 
-function serverPath(server: ResourceRef): string {
+function serverPath(server: ServerRef): string {
   return `/servers/${encodeURIComponent(server.host)}/${server.id}`;
 }
 
@@ -78,10 +87,12 @@ export function parseAppRoute(pathname: string, search = ""): AppRoute | null {
     );
   if (channelMatch) {
     const server = parseServer(channelMatch[1] ?? "", channelMatch[2] ?? "");
-    const channelId = parseId(channelMatch[3] ?? "");
+    const channelId = parseChannelId(channelMatch[3] ?? "");
     const screen = getChannelScreen(channelMatch[4]);
     if (server === null || channelId === null) return null;
-    const messageId = decodeId(new URLSearchParams(search).get("message"));
+    const messageId = decodeMessageId(
+      new URLSearchParams(search).get("message")
+    );
     return screen === "channel" && Option.isSome(messageId)
       ? { screen, server, channelId, messageId: messageId.value }
       : { screen, server, channelId };
@@ -104,7 +115,10 @@ export function parseAppRoute(pathname: string, search = ""): AppRoute | null {
   return null;
 }
 
-export function getAppRoutePath(route: AppRoute, messageId?: string): string {
+export function getAppRoutePath(
+  route: AppRoute,
+  messageId?: MessageId
+): string {
   switch (route.screen) {
     case "home": {
       return "/";

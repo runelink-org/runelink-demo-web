@@ -5,9 +5,10 @@ import { channelServerRef, resourceKey } from "@runelink/sdk";
 import type {
   NewServer,
   ResourceKey,
-  ResourceRef,
   Server,
   ServerChannel,
+  ServerId,
+  ServerRef,
   ServerWithChannels,
 } from "@runelink/sdk";
 import * as Deferred from "effect/Deferred";
@@ -19,8 +20,8 @@ import { bindStoreToActiveAccount } from "@/lib/runelink-store-utils";
 import type { TargetHost } from "@/lib/runelink-store-utils";
 
 type ServersState = {
-  serverByKey: Record<ResourceKey, Server>;
-  serverWithChannelsByKey: Record<ResourceKey, ServerWithChannels>;
+  serverByKey: Record<ResourceKey<ServerId>, Server>;
+  serverWithChannelsByKey: Record<ResourceKey<ServerId>, ServerWithChannels>;
 };
 
 const initialState: ServersState = {
@@ -56,13 +57,13 @@ type ServerWithChannelsLoad = Deferred.Deferred<
   RequestFailure
 >;
 let pendingServerWithChannelsLoads = new Map<
-  ResourceKey,
+  ResourceKey<ServerId>,
   ServerWithChannelsLoad
 >();
 
 function cachedServer(
   state: ServersState,
-  key: ResourceKey
+  key: ResourceKey<ServerId>
 ): Server | undefined {
   return state.serverByKey[key] ?? state.serverWithChannelsByKey[key]?.server;
 }
@@ -91,7 +92,7 @@ export const fetchServers = Effect.fn("Servers.fetchAll")(function* (
 });
 
 const loadServerWithChannels = Effect.fn("Servers.fetchWithChannels")(
-  function* (serverRef: ResourceRef) {
+  function* (serverRef: ServerRef) {
     const reply = yield* request({
       type: "servers_get_with_channels",
       data: { server: serverRef },
@@ -120,7 +121,7 @@ const loadServerWithChannels = Effect.fn("Servers.fetchWithChannels")(
 // Loads a server with its channels. Concurrent callers, such as the server
 // load and a new membership, share one request.
 export function fetchServerWithChannels(
-  server: ResourceRef
+  server: ServerRef
 ): Effect.Effect<ServerWithChannels, RequestFailure, RunelinkSession> {
   const key = resourceKey(server);
   // Uninterruptible until the shared load is running, so it is never
@@ -172,7 +173,7 @@ export const createServer = Effect.fn("Servers.create")(function* (
 });
 
 export const deleteServer = Effect.fn("Servers.delete")(function* (
-  server: ResourceRef
+  server: ServerRef
 ) {
   yield* request({
     type: "servers_delete",

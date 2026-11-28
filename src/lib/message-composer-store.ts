@@ -1,5 +1,11 @@
 import { resourceKey } from "@runelink/sdk";
-import type { ActiveMessage, ResourceKey, ResourceRef } from "@runelink/sdk";
+import type {
+  ActiveMessage,
+  MessageId,
+  MessageRef,
+  ResourceKey,
+  ServerChannelId,
+} from "@runelink/sdk";
 import * as Rec from "effect/Record";
 import type { TextareaSelection } from "@/lib/textarea-selection";
 import { appAtomRegistry, stateAtom } from "@/lib/atom-registry";
@@ -18,7 +24,7 @@ type ChannelComposerState = {
   focusedInput: "draft" | "edit";
   draft: string;
   selection: TextareaSelection | null;
-  replyTo: string | null;
+  replyTo: MessageId | null;
   editing: MessageEditState | null;
   sending: object | null;
   sendError: string | null;
@@ -36,15 +42,17 @@ export const EMPTY_COMPOSER: ChannelComposerState = {
 
 // Composer state by channel key
 export const messageComposerAtom = stateAtom<
-  Record<ResourceKey, ChannelComposerState>
+  Record<ResourceKey<ServerChannelId>, ChannelComposerState>
 >({});
 
-export function getComposer(channelKey: ResourceKey): ChannelComposerState {
+export function getComposer(
+  channelKey: ResourceKey<ServerChannelId>
+): ChannelComposerState {
   return appAtomRegistry.get(messageComposerAtom)[channelKey] ?? EMPTY_COMPOSER;
 }
 
 export function updateComposer(
-  channelKey: ResourceKey,
+  channelKey: ResourceKey<ServerChannelId>,
   update: (state: ChannelComposerState) => ChannelComposerState
 ): void {
   appAtomRegistry.update(messageComposerAtom, (byChannelKey) => {
@@ -56,7 +64,7 @@ export function updateComposer(
 }
 
 export function updateEdit(
-  channelKey: ResourceKey,
+  channelKey: ResourceKey<ServerChannelId>,
   session: object,
   patch: Partial<MessageEditState> | null
 ): void {
@@ -72,7 +80,7 @@ export function updateEdit(
 }
 
 // Closes the edit of a message, and returns whether one was open.
-export function closeMessageEdit(message: ResourceRef): boolean {
+export function closeMessageEdit(message: MessageRef): boolean {
   const byChannelKey = appAtomRegistry.get(messageComposerAtom);
   const key = resourceKey(message);
   for (const [channelKey, { editing }] of Rec.toEntries(byChannelKey)) {

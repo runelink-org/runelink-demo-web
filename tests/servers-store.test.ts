@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import { afterAll, beforeAll, it, vi } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import * as Fiber from "effect/Fiber";
+import * as fixtures from "./fixtures.ts";
 import { controlledSession } from "./session-fixture.ts";
 import type { PendingRequest } from "./session-fixture.ts";
 
@@ -13,7 +14,10 @@ let sessionTag: typeof RunelinkSessionModule.RunelinkSession;
 
 let NotConnectedError: typeof RunelinkSessionModule.NotConnectedError;
 const requests: PendingRequest[] = [];
-const server = { host: "peer.example", id: "server" };
+const server = fixtures.serverRef({
+  host: "peer.example",
+  id: fixtures.uuid(1),
+});
 
 beforeAll(() =>
   Effect.gen(function* () {
@@ -70,7 +74,7 @@ it.effect("concurrent channel loads of a server share one request", () =>
     assert.equal(requests.length, 2);
     const data = {
       server: {
-        id: "server",
+        id: server.id,
         host: "peer.example",
         title: "Test",
         description: null,

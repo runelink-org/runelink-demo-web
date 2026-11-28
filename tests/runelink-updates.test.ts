@@ -10,6 +10,7 @@ import { afterAll, beforeAll, beforeEach, it, vi } from "@effect/vitest";
 import { resourceKey } from "@runelink/sdk";
 import type { ActiveMessage, Message, ServerChannel } from "@runelink/sdk";
 import * as Effect from "effect/Effect";
+import * as fixtures from "./fixtures.ts";
 
 let registry: typeof AtomRegistryModule.appAtomRegistry;
 let channels: typeof ChannelStateModule;
@@ -20,10 +21,10 @@ let updates: typeof RunelinkUpdatesModule;
 let servers: typeof ServersStoreModule;
 
 // Two servers on different hosts with the same IDs throughout
-const serverId = "11111111-1111-4111-8111-111111111111";
-const channelId = "22222222-2222-4222-8222-222222222222";
-const textChannelId = "33333333-3333-4333-8333-333333333333";
-const messageId = "44444444-4444-4444-8444-444444444444";
+const serverId = fixtures.serverId(fixtures.uuid(1));
+const channelId = fixtures.serverChannelId(fixtures.uuid(2));
+const textChannelId = fixtures.textChannelId(fixtures.uuid(3));
+const messageId = fixtures.messageId(fixtures.uuid(4));
 const hosts = ["a.example", "b.example"] as const;
 const at = "2026-11-27T12:00:00Z";
 const bob = {
