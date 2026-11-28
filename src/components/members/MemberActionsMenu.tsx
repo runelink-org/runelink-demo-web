@@ -1,4 +1,4 @@
-import type { ResourceRef, ServerRole, UserRef } from "@runelink/sdk";
+import type { ServerRef, ServerRole, UserRef } from "@runelink/sdk";
 import { Ellipsis, Shield, ShieldOff, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -31,7 +31,7 @@ import { toastFailure } from "@/lib/toast-failure";
 type MemberActionsMenuProps = {
   contextMenu?: ReturnType<typeof useContextActionsMenu>;
   contextOnly?: boolean;
-  server: ResourceRef;
+  server: ServerRef;
   user: UserRef;
   role?: ServerRole;
   canModerateMembers: boolean;

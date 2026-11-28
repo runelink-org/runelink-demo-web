@@ -10,11 +10,13 @@ import type {
   ActiveMessage,
   Message,
   ResourceKey,
+  TextChannelId,
   UserRef,
 } from "@runelink/sdk";
 import type { AppRoute } from "../src/lib/app-route.ts";
 import * as Effect from "effect/Effect";
 import * as Fiber from "effect/Fiber";
+import * as fixtures from "./fixtures.ts";
 import { controlledSession } from "./session-fixture.ts";
 import type { PendingRequest } from "./session-fixture.ts";
 
@@ -29,10 +31,12 @@ let NotConnectedError: typeof RunelinkSessionModule.NotConnectedError;
 const requests: PendingRequest[] = [];
 const storage = new Map<string, string>();
 const peer = "peer.example";
-const message = {
-  id: "message",
+// The text channel most tests use
+const channel = fixtures.uuid(101);
+const message = fixtures.activeMessage({
+  id: fixtures.uuid(102),
   host: peer,
-  text_channel_id: "channel",
+  text_channel_id: channel,
   author: null,
   edited_at: null,
   reply_to: null,
@@ -40,7 +44,7 @@ const message = {
   deleted_at: null,
   created_at: "2026-11-10T12:00:00Z",
   updated_at: "2026-11-10T12:00:00Z",
-};
+});
 
 beforeAll(() =>
   Effect.gen(function* () {
@@ -78,18 +82,21 @@ function getMessageState() {
 }
 
 // The key of a text channel, on the peer host unless given
-function textChannelKey(id: string, host = peer): ResourceKey {
-  return resourceKey({ host, id });
+function textChannelKey(id: string, host = peer): ResourceKey<TextChannelId> {
+  return resourceKey({ host, id: fixtures.textChannelId(id) });
 }
 
 function fetchMessages(id: string, host = peer) {
-  return messages.fetchMessagesByTextChannel({ host, id });
+  return messages.fetchMessagesByTextChannel({
+    host,
+    id: fixtures.textChannelId(id),
+  });
 }
 
 function startPrefetch(
   account: UserRef,
   route: AppRoute,
-  cachedMessages?: Record<ResourceKey, readonly Message[]>
+  cachedMessages?: Record<ResourceKey<TextChannelId>, readonly Message[]>
 ) {
   return hints.startChannelNavigationPrefetch(account, route, cachedMessages);
 }
@@ -111,21 +118,22 @@ function reply(
   request.resolve({ type: "messages_get_by_text_channel", data: history });
 }
 
-const tombstone = (target: ActiveMessage) => ({
-  ...target,
-  body: null,
-  deleted_at: "2026-11-10T12:01:00Z",
-  updated_at: "2026-11-10T12:01:00Z",
-});
+const tombstone = (target: ActiveMessage) =>
+  fixtures.message({
+    ...target,
+    body: null,
+    deleted_at: "2026-11-10T12:01:00Z",
+    updated_at: "2026-11-10T12:01:00Z",
+  });
 
 it.effect(
   "prefetch and selection share an in-flight request and retain cached history",
   () =>
     Effect.gen(function* () {
-      const prefetch = yield* Effect.forkScoped(fetchMessages("channel"), {
+      const prefetch = yield* Effect.forkScoped(fetchMessages(channel), {
         startImmediately: true,
       });
-      const selection = yield* Effect.forkScoped(fetchMessages("channel"), {
+      const selection = yield* Effect.forkScoped(fetchMessages(channel), {
         startImmediately: true,
       });
       assert.equal(requests.length, 1);
@@ -133,18 +141,18 @@ it.effect(
       assert.equal(request.type, "messages_get_by_text_channel");
       assert.deepEqual(request.data.text_channel, {
         host: peer,
-        id: "channel",
+        id: channel,
       });
       reply(requests[0]);
       const prefetched = yield* Fiber.join(prefetch);
       assert.deepEqual(prefetched, [message]);
       const selected = yield* Fiber.join(selection);
       assert.deepEqual(selected, [message]);
-      const cached = yield* fetchMessages("channel");
+      const cached = yield* fetchMessages(channel);
       assert.deepEqual(cached, [message]);
       assert.equal(requests.length, 1);
       assert.equal(
-        getMessageState().isLoadingByTextChannelKey[textChannelKey("channel")],
+        getMessageState().isLoadingByTextChannelKey[textChannelKey(channel)],
         false
       );
     }).pipe(Effect.provideService(sessionTag, session))
@@ -152,11 +160,11 @@ it.effect(
 
 it.effect("history preserves live edits received during a prefetch", () =>
   Effect.gen(function* () {
-    const pending = yield* Effect.forkScoped(fetchMessages("channel"), {
+    const pending = yield* Effect.forkScoped(fetchMessages(channel), {
       startImmediately: true,
     });
     assert.deepEqual(
-      getMessageState().messagesByTextChannelKey[textChannelKey("channel")],
+      getMessageState().messagesByTextChannelKey[textChannelKey(channel)],
       []
     );
     const edited = {
@@ -166,12 +174,12 @@ it.effect("history preserves live edits received during a prefetch", () =>
     };
     registry.update(messages.messagesAtom, (state) => ({
       ...state,
-      messagesByTextChannelKey: { [textChannelKey("channel")]: [edited] },
+      messagesByTextChannelKey: { [textChannelKey(channel)]: [edited] },
     }));
     reply(requests[0]);
     yield* Fiber.join(pending);
     assert.deepEqual(
-      getMessageState().messagesByTextChannelKey[textChannelKey("channel")],
+      getMessageState().messagesByTextChannelKey[textChannelKey(channel)],
       [edited]
     );
   }).pipe(Effect.provideService(sessionTag, session))
@@ -179,7 +187,7 @@ it.effect("history preserves live edits received during a prefetch", () =>
 
 it.effect("a failed prefetch can retry when the channel opens", () =>
   Effect.gen(function* () {
-    const pending = yield* Effect.forkScoped(fetchMessages("channel"), {
+    const pending = yield* Effect.forkScoped(fetchMessages(channel), {
       startImmediately: true,
     });
     requests[0].reject(new NotConnectedError());
@@ -188,25 +196,25 @@ it.effect("a failed prefetch can retry when the channel opens", () =>
       "NotConnectedError"
     );
     assert.equal(
-      getMessageState().isLoadingByTextChannelKey[textChannelKey("channel")],
+      getMessageState().isLoadingByTextChannelKey[textChannelKey(channel)],
       false
     );
     assert.equal(
-      getMessageState().errorByTextChannelKey[textChannelKey("channel")],
+      getMessageState().errorByTextChannelKey[textChannelKey(channel)],
       "You're not connected. Try again once you're connected."
     );
-    const retry = yield* Effect.forkScoped(fetchMessages("channel"), {
+    const retry = yield* Effect.forkScoped(fetchMessages(channel), {
       startImmediately: true,
     });
     assert.equal(
-      getMessageState().errorByTextChannelKey[textChannelKey("channel")],
+      getMessageState().errorByTextChannelKey[textChannelKey(channel)],
       null
     );
     assert.equal(requests.length, 2);
     reply(requests[1]);
     yield* Fiber.join(retry);
     assert.equal(
-      getMessageState().hasFetchedByTextChannelKey[textChannelKey("channel")],
+      getMessageState().hasFetchedByTextChannelKey[textChannelKey(channel)],
       true
     );
   }).pipe(Effect.provideService(sessionTag, session))
@@ -217,11 +225,11 @@ it.effect.each(["history", "failure"])(
   (caseName) =>
     Effect.gen(function* () {
       const fails = caseName === "failure";
-      const old = yield* Effect.forkScoped(fetchMessages("channel"), {
+      const old = yield* Effect.forkScoped(fetchMessages(channel), {
         startImmediately: true,
       });
       messages.resetMessages();
-      const current = yield* Effect.forkScoped(fetchMessages("channel"), {
+      const current = yield* Effect.forkScoped(fetchMessages(channel), {
         startImmediately: true,
       });
       if (fails) {
@@ -237,18 +245,18 @@ it.effect.each(["history", "failure"])(
         yield* Fiber.join(old);
       }
       assert.deepEqual(
-        getMessageState().messagesByTextChannelKey[textChannelKey("channel")],
+        getMessageState().messagesByTextChannelKey[textChannelKey(channel)],
         []
       );
       assert.equal(
-        getMessageState().errorByTextChannelKey[textChannelKey("channel")],
+        getMessageState().errorByTextChannelKey[textChannelKey(channel)],
         null
       );
       assert.equal(
-        getMessageState().isLoadingByTextChannelKey[textChannelKey("channel")],
+        getMessageState().isLoadingByTextChannelKey[textChannelKey(channel)],
         true
       );
-      const again = yield* Effect.forkScoped(fetchMessages("channel"), {
+      const again = yield* Effect.forkScoped(fetchMessages(channel), {
         startImmediately: true,
       });
       assert.equal(requests.length, 2);
@@ -256,11 +264,11 @@ it.effect.each(["history", "failure"])(
       yield* Fiber.join(current);
       yield* Fiber.join(again);
       assert.deepEqual(
-        getMessageState().messagesByTextChannelKey[textChannelKey("channel")],
+        getMessageState().messagesByTextChannelKey[textChannelKey(channel)],
         []
       );
       assert.equal(
-        getMessageState().hasFetchedByTextChannelKey[textChannelKey("channel")],
+        getMessageState().hasFetchedByTextChannelKey[textChannelKey(channel)],
         true
       );
     }).pipe(Effect.provideService(sessionTag, session))
@@ -272,7 +280,7 @@ it.effect.each(["history", "failure"])(
     Effect.gen(function* () {
       const fails = caseName === "failure";
       const empty = getMessageState();
-      const pending = yield* Effect.forkScoped(fetchMessages("channel"), {
+      const pending = yield* Effect.forkScoped(fetchMessages(channel), {
         startImmediately: true,
       });
       // Removed, such as by a deletion update
@@ -299,10 +307,13 @@ const otherChannelId = "44444444-4444-4444-8444-444444444444";
 const otherTextId = "55555555-5555-4555-8555-555555555555";
 const route = {
   screen: "channel",
-  server: { host: peer, id: serverId },
-  channelId,
+  server: fixtures.serverRef({ host: peer, id: serverId }),
+  channelId: fixtures.serverChannelId(channelId),
 } as const;
-const hintedMessage = { ...message, text_channel_id: textId };
+const hintedMessage = fixtures.activeMessage({
+  ...message,
+  text_channel_id: textId,
+});
 function serverSnapshot(
   host: string,
   channels: readonly (
@@ -317,15 +328,17 @@ function serverSnapshot(
     updated_at: message.updated_at,
   };
   return {
-    server: { ...fields, id: serverId, host },
-    channels: channels.map((channel) => ({
-      ...fields,
-      ...channel,
-      host,
-      server_id: serverId,
-      position: 0,
-      parent_channel_id: null,
-    })),
+    server: fixtures.server({ ...fields, id: serverId, host }),
+    channels: channels.map((snapshotChannel) =>
+      fixtures.serverChannel({
+        ...fields,
+        ...snapshotChannel,
+        host,
+        server_id: serverId,
+        position: 0,
+        parent_channel_id: null,
+      })
+    ),
   };
 }
 function remember(
@@ -339,7 +352,10 @@ function remember(
   ]
 ) {
   hints.rememberChannelNavigationHints(account, {
-    [resourceKey({ host, id: serverId })]: serverSnapshot(host, channels),
+    [resourceKey({ host, id: fixtures.serverId(serverId) })]: serverSnapshot(
+      host,
+      channels
+    ),
   });
 }
 
@@ -352,7 +368,7 @@ it.effect(
       assert.equal(requests.length, 0);
       yield* startPrefetch(account, {
         ...route,
-        channelId: otherChannelId,
+        channelId: fixtures.serverChannelId(otherChannelId),
       });
       assert.equal(requests.length, 1);
       const [{ request }] = requests;
@@ -483,16 +499,17 @@ it.effect(
       hints.rememberChannelNavigationHints(
         { ...account, name: "bob" },
         {
-          [resourceKey({ host: peer, id: serverId })]: serverSnapshot(peer, [
-            { id: channelId, kind: "text", text_channel_id: textId },
-          ]),
+          [resourceKey({ host: peer, id: fixtures.serverId(serverId) })]:
+            serverSnapshot(peer, [
+              { id: channelId, kind: "text", text_channel_id: textId },
+            ]),
         }
       );
       remember(peer, [{ id: channelId, kind: "category" }]);
       yield* startPrefetch(account, route);
       yield* startPrefetch(account, {
         ...route,
-        channelId: otherChannelId,
+        channelId: fixtures.serverChannelId(otherChannelId),
       });
       assert.equal(requests.length, 0);
       yield* startPrefetch({ ...account, name: "bob" }, route);
@@ -554,14 +571,20 @@ it.effect(
         updates.setUpdateNotifier(undefined);
         registry.set(composer.messageComposerAtom, {});
       });
-      const other = { ...message, id: "other" };
+      const other = fixtures.activeMessage({
+        ...message,
+        id: fixtures.uuid(103),
+      });
       registry.update(messages.messagesAtom, (state) => ({
         ...state,
         messagesByTextChannelKey: {
-          [textChannelKey("channel")]: [message, other],
+          [textChannelKey(channel)]: [message, other],
         },
       }));
-      const channelKey = textChannelKey("server-channel");
+      const channelKey = resourceKey({
+        host: peer,
+        id: fixtures.serverChannelId(fixtures.uuid(104)),
+      });
       const edit = (target: ActiveMessage) => {
         composer.updateComposer(channelKey, (currentComposer) => ({
           ...currentComposer,

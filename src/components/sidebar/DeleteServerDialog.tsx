@@ -1,5 +1,5 @@
 import { resourceKey } from "@runelink/sdk";
-import type { ResourceRef, Server } from "@runelink/sdk";
+import type { Server, ServerRef } from "@runelink/sdk";
 import { useState } from "react";
 import { toast } from "sonner";
 import { TypedConfirmationField } from "@/components/TypedConfirmationField";
@@ -21,7 +21,7 @@ import { runPromise } from "@/lib/runtime";
 type DeleteServerDialogProps = {
   server: Server | null;
   onOpenChange: (open: boolean) => void;
-  onDeleteServer: (server: ResourceRef) => RequestEffect<void>;
+  onDeleteServer: (server: ServerRef) => RequestEffect<void>;
 };
 
 function normalizeWhitespace(value: string): string {

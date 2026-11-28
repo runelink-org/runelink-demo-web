@@ -1,7 +1,9 @@
 import { resourceKey } from "@runelink/sdk";
 import type {
   ResourceKey,
-  ResourceRef,
+  ServerChannelId,
+  ServerId,
+  ServerRef,
   ServerWithChannels,
 } from "@runelink/sdk";
 import {
@@ -29,16 +31,16 @@ import {
 } from "@/lib/navigation-store";
 
 type NavigationSelection = {
-  server: ResourceRef | null;
-  channelId: string | null;
+  server: ServerRef | null;
+  channelId: ServerChannelId | null;
 };
 
 // The selected server, or another one if it is gone, with its saved channel.
 // A channel ID only means something on its own server.
 export function getFallbackSelection(
   servers: readonly ServerWithChannels[],
-  selectedServer: ResourceRef | null,
-  savedChannelIds: Record<ResourceKey, string | null>
+  selectedServer: ServerRef | null,
+  savedChannelIds: Record<ResourceKey<ServerId>, ServerChannelId | null>
 ): NavigationSelection {
   // Fall back to a server whose channels loaded, rather than one on an
   // unreachable host

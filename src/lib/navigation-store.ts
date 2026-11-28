@@ -1,5 +1,10 @@
 import { resourceKey } from "@runelink/sdk";
-import type { ResourceKey, ResourceRef } from "@runelink/sdk";
+import type {
+  ResourceKey,
+  ServerChannelId,
+  ServerId,
+  ServerRef,
+} from "@runelink/sdk";
 import { appAtomRegistry, stateAtom } from "@/lib/atom-registry";
 import {
   bindStoreToActiveAccount,
@@ -7,9 +12,12 @@ import {
 } from "@/lib/runelink-store-utils";
 
 type NavigationState = {
-  selectedServer: ResourceRef | null;
+  selectedServer: ServerRef | null;
   // Channel IDs are on their server's host
-  selectedChannelIdByServerKey: Record<ResourceKey, string | null>;
+  selectedChannelIdByServerKey: Record<
+    ResourceKey<ServerId>,
+    ServerChannelId | null
+  >;
 };
 
 const initialState: NavigationState = {
@@ -19,7 +27,7 @@ const initialState: NavigationState = {
 
 export const navigationAtom = stateAtom(initialState);
 
-export function selectServer(server: ResourceRef | null): void {
+export function selectServer(server: ServerRef | null): void {
   appAtomRegistry.update(navigationAtom, (state) =>
     sameResource(state.selectedServer, server)
       ? state
@@ -28,8 +36,8 @@ export function selectServer(server: ResourceRef | null): void {
 }
 
 export function selectChannel(
-  server: ResourceRef,
-  channelId: string | null
+  server: ServerRef,
+  channelId: ServerChannelId | null
 ): void {
   appAtomRegistry.update(navigationAtom, (state) => {
     const serverKey = resourceKey(server);

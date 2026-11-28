@@ -1,6 +1,6 @@
 import { useIsMounted } from "@/lib/use-is-mounted";
 import { resourceKey } from "@runelink/sdk";
-import type { ResourceKey, ResourceRef, Server } from "@runelink/sdk";
+import type { ResourceKey, Server, ServerId, ServerRef } from "@runelink/sdk";
 import { Globe } from "lucide-react";
 import { useEffect, useEffectEvent, useState } from "react";
 import {
@@ -24,10 +24,10 @@ import { runPromise } from "@/lib/runtime";
 type JoinServerDialogProps = {
   open: boolean;
   activeHost: string | null;
-  joinedServerKeys: ReadonlySet<ResourceKey>;
+  joinedServerKeys: ReadonlySet<ResourceKey<ServerId>>;
   onOpenChange: (open: boolean) => void;
   onSearchServers: (host: string) => RequestEffect<readonly Server[]>;
-  onJoinServer: (server: ResourceRef) => RequestEffect<void>;
+  onJoinServer: (server: ServerRef) => RequestEffect<void>;
 };
 
 export function JoinServerDialog(props: JoinServerDialogProps) {
@@ -61,9 +61,8 @@ function JoinServerDialogForm({
   const [isSearching, setIsSearching] = useState(
     open && Boolean(activeHost?.trim())
   );
-  const [joiningServerKey, setJoiningServerKey] = useState<ResourceKey | null>(
-    null
-  );
+  const [joiningServerKey, setJoiningServerKey] =
+    useState<ResourceKey<ServerId> | null>(null);
 
   async function searchServers(nextHost: string) {
     if (!nextHost) {

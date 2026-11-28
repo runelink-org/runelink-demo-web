@@ -1,13 +1,14 @@
 import assert from "node:assert/strict";
 import { it } from "@effect/vitest";
 import { getAppRoutePath, parseAppRoute } from "../src/lib/app-route.ts";
+import * as fixtures from "./fixtures.ts";
 
-const server = {
+const server = fixtures.serverRef({
   host: "localhost:7001",
-  id: "00000000-0000-4000-8000-000000000001",
-};
-const channelId = "00000000-0000-4000-8000-000000000002";
-const messageId = "00000000-0000-4000-8000-000000000003";
+  id: fixtures.uuid(1),
+});
+const channelId = fixtures.serverChannelId(fixtures.uuid(2));
+const messageId = fixtures.messageId(fixtures.uuid(3));
 const serverPath = `/servers/${encodeURIComponent(server.host)}/${server.id}`;
 
 it("message links round-trip through the channel URL", () => {

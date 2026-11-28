@@ -20,8 +20,8 @@ import { runPromise } from "@/lib/runtime";
 import { handleRunelinkUpdate } from "@/lib/runelink-updates";
 import { resourceKey } from "@runelink/sdk";
 import type {
-  ResourceRef,
   ServerMember,
+  ServerRef,
   ServerWithChannels,
 } from "@runelink/sdk";
 import { ArrowLeft, LogOut, Trash2, Users } from "lucide-react";
@@ -203,16 +203,14 @@ function ServerSettingsContent({
     });
   }
 
-  const handleLeaveServer = withLeaveServerSpan(function* (
-    target: ResourceRef
-  ) {
+  const handleLeaveServer = withLeaveServerSpan(function* (target: ServerRef) {
     if (!activeAccount) return;
     yield* deleteMembership(target, activeAccount);
     onDone();
   });
 
   const handleDeleteServer = withDeleteServerSpan(function* (
-    target: ResourceRef
+    target: ServerRef
   ) {
     yield* deleteServer(target);
     onDone();

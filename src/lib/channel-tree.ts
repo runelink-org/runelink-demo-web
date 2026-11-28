@@ -1,6 +1,10 @@
 import * as Arr from "effect/Array";
 import * as Order from "effect/Order";
-import type { ServerChannel, ServerChannelMove } from "@runelink/sdk";
+import type {
+  ServerChannel,
+  ServerChannelId,
+  ServerChannelMove,
+} from "@runelink/sdk";
 
 export type ChannelRow = {
   channel: ServerChannel;
@@ -11,7 +15,7 @@ export type ChannelRow = {
 
 // Drops relative to a channel row, or after everything at the server root
 export type DropTarget =
-  | { channelId: string; placement: "before" | "after" | "inside" }
+  | { channelId: ServerChannelId; placement: "before" | "after" | "inside" }
   | { channelId: null; placement: "root-end" };
 
 // Siblings are ordered by position, then ID, matching the host
@@ -23,8 +27,8 @@ const channelOrder = Order.combine(
 // Sorted children by parent ID, with null for the server root
 function childrenByParent(
   channels: readonly ServerChannel[]
-): Map<string | null, ServerChannel[]> {
-  const children = new Map<string | null, ServerChannel[]>();
+): Map<ServerChannelId | null, ServerChannel[]> {
+  const children = new Map<ServerChannelId | null, ServerChannel[]>();
   for (const channel of channels) {
     const siblings = children.get(channel.parent_channel_id);
     if (siblings) {
@@ -44,8 +48,8 @@ function childrenByParent(
 // collapsed categories, so the selected channel can't be hidden.
 export function visibleRows(
   channels: readonly ServerChannel[],
-  collapsedIds: ReadonlySet<string>,
-  pinnedId: string | null = null
+  collapsedIds: ReadonlySet<ServerChannelId>,
+  pinnedId: ServerChannelId | null = null
 ): ChannelRow[] {
   const children = childrenByParent(channels);
   const pinnedPath = new Set(
@@ -55,7 +59,11 @@ export function visibleRows(
   );
   const rows: ChannelRow[] = [];
 
-  function visit(parentId: string | null, depth: number, hidden: boolean) {
+  function visit(
+    parentId: ServerChannelId | null,
+    depth: number,
+    hidden: boolean
+  ) {
     for (const channel of children.get(parentId) ?? []) {
       if (hidden && !pinnedPath.has(channel.id)) {
         continue;
@@ -92,10 +100,10 @@ export function firstTextChannel(
 // IDs of a channel's ancestors, nearest first
 export function ancestorIds(
   channels: readonly ServerChannel[],
-  channelId: string
-): string[] {
+  channelId: ServerChannelId
+): ServerChannelId[] {
   const byId = new Map(channels.map((channel) => [channel.id, channel]));
-  const ancestors: string[] = [];
+  const ancestors: ServerChannelId[] = [];
   let parentId = byId.get(channelId)?.parent_channel_id ?? null;
   while (parentId != null && parentId !== "") {
     ancestors.push(parentId);
@@ -108,10 +116,10 @@ export function ancestorIds(
 // invalid, such as a category into its own subtree
 export function planDrop(
   channels: readonly ServerChannel[],
-  draggedId: string,
+  draggedId: ServerChannelId,
   target: DropTarget
 ): ServerChannelMove | null {
-  const siblingsOf = (parentId: string | null) =>
+  const siblingsOf = (parentId: ServerChannelId | null) =>
     Arr.sort(
       channels.filter(
         (c) => c.parent_channel_id === parentId && c.id !== draggedId

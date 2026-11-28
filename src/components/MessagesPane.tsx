@@ -9,10 +9,12 @@ import { formatMessagePreview } from "@/lib/message-preview";
 import type {
   ActiveMessage,
   Message,
-  ServerWithChannels,
-  ServerChannel,
-  UserRef,
+  MessageId,
   ResourceKey,
+  ServerChannel,
+  ServerChannelId,
+  ServerWithChannels,
+  UserRef,
 } from "@runelink/sdk";
 import {
   useCallback,
@@ -66,7 +68,7 @@ type MessagesPaneProps = {
   selectedServer: ServerWithChannels | null;
   selectedChannel: ServerWithChannels["channels"][number] | undefined;
   selectedMessages: readonly Message[];
-  targetMessageId: string | null;
+  targetMessageId: MessageId | null;
   hasLoadedMessages: boolean;
   isSidebarLoading: boolean;
   sidebarError: string | null;
@@ -78,7 +80,10 @@ type MessagesPaneProps = {
   canModerateMembers: boolean;
   canDeleteChannel: boolean;
   onDeselectChannel: () => void;
-  onSendMessage: (body: string, replyTo: string | null) => RequestEffect<void>;
+  onSendMessage: (
+    body: string,
+    replyTo: MessageId | null
+  ) => RequestEffect<void>;
   onDeleteChannel: (
     channel: ServerWithChannels["channels"][number]
   ) => RequestEffect<void>;
@@ -255,7 +260,7 @@ function highlightMessage(element: HTMLElement) {
   );
 }
 
-function jumpToMessage(id: string) {
+function jumpToMessage(id: MessageId) {
   const element = document.querySelector<HTMLElement>(
     `#${CSS.escape(`message-${id}`)}`
   );
@@ -281,7 +286,7 @@ function MessageList({
   onDeleteMessage,
   onReply,
 }: {
-  channelKey: ResourceKey;
+  channelKey: ResourceKey<ServerChannelId>;
   channelRoute: Extract<AppRoute, { screen: "channel" }>;
   messages: readonly Message[];
   scrollContainerRef: RefObject<HTMLDivElement | null>;
@@ -539,7 +544,7 @@ export function MessagesPane({
     }
   }
 
-  function setReplyTo(replyTo: string | null) {
+  function setReplyTo(replyTo: MessageId | null) {
     if (selectedChannelKey !== null) {
       updateChannel(selectedChannelKey, (state) => ({ ...state, replyTo }));
     }
@@ -560,7 +565,9 @@ export function MessagesPane({
   const scrollToBottomOnEditRef = useRef(false);
   const hasRestoredScrollRef = useRef(false);
   const previousTargetMessageIdRef = useRef(targetMessageId);
-  const previousChannelKeyRef = useRef<ResourceKey | null>(null);
+  const previousChannelKeyRef = useRef<ResourceKey<ServerChannelId> | null>(
+    null
+  );
   const previousMessageCountRef = useRef(0);
   const wasAtBottomRef = useRef(true);
   const lastKnownScrollTopRef = useRef(0);
@@ -644,7 +651,7 @@ export function MessagesPane({
   }, [editingMessage, scrollToBottom]);
 
   const saveScrollPosition = useCallback(
-    (channelKey: ResourceKey | null, scrollTop?: number) => {
+    (channelKey: ResourceKey<ServerChannelId> | null, scrollTop?: number) => {
       if (channelKey == null) return;
 
       const nextScrollTop = scrollTop ?? scrollContainerRef.current?.scrollTop;
