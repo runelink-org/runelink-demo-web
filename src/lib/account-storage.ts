@@ -46,8 +46,26 @@ function canUseStorage(): boolean {
   return typeof window !== "undefined" && window.localStorage !== undefined;
 }
 
+// Moves a value to the first unused backup key, without replacing an earlier
+// backup.
+function backUp(key: string, value: string): string {
+  let backupKey = `${key}.bak`;
+  for (
+    let index = 1;
+    window.localStorage.getItem(backupKey) !== null;
+    index++
+  ) {
+    backupKey = `${key}.bak.${index}`;
+  }
+  window.localStorage.setItem(backupKey, value);
+  window.localStorage.removeItem(key);
+  return backupKey;
+}
+
+const tryBackUp = Option.liftThrowable(backUp);
+
 // Data that doesn't decode, such as data saved by an older version, isn't
-// migrated. It is kept under a `.bak` key and replaced with the fallback.
+// migrated. It is moved to a `.bak` key and replaced with the fallback.
 export function loadStoredJson<T>(
   key: string,
   decode: (input: unknown) => Option.Option<T>,
@@ -61,14 +79,18 @@ export function loadStoredJson<T>(
   if (rawValue == null || rawValue === "") return fallback;
 
   return Option.getOrElse(decode(rawValue), () => {
+    // Left in place if it can't be backed up, such as when storage is full
+    const backedUp = tryBackUp(key, rawValue);
     // Not the stored value itself, which may hold tokens
     reportRunelinkFailure(
       "warn",
-      `Couldn't read ${key}, so it was moved to ${key}.bak`,
+      Option.match(backedUp, {
+        onNone: () => `Couldn't read or back up ${key}`,
+        onSome: (backupKey) =>
+          `Couldn't read ${key}, so it was moved to ${backupKey}`,
+      }),
       undefined
     );
-    window.localStorage.setItem(`${key}.bak`, rawValue);
-    window.localStorage.removeItem(key);
     return fallback;
   });
 }

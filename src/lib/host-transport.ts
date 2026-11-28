@@ -35,9 +35,19 @@ const HostTransportSchema = Schema.Struct({
 });
 type HostTransport = typeof HostTransportSchema.Type;
 
-// Keys saved with the default port decode to the canonical host.
+// Keys must already be canonical, so that spellings of one host can't merge
+// their HTTP approvals. Other spellings fail to decode and are backed up.
+const isCanonicalHost = Schema.is(Schema.toType(HostSchema));
 const decodeHostTransports = Schema.decodeUnknownOption(
-  Schema.fromJsonString(Schema.Record(HostSchema, HostTransportSchema))
+  Schema.fromJsonString(
+    Schema.Record(Schema.String, HostTransportSchema).check(
+      Schema.makeFilter(
+        (transports) =>
+          Object.keys(transports).every(isCanonicalHost) ||
+          "Expected canonical hosts"
+      )
+    )
+  )
 );
 
 // A map, since a host such as `constructor` would find an object's prototype.

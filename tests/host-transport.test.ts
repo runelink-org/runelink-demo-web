@@ -57,6 +57,7 @@ function setup({
       localStorage: {
         getItem: (key: string) => storage.get(key) ?? null,
         setItem: (key: string, value: string) => storage.set(key, value),
+        removeItem: (key: string) => storage.delete(key),
       },
     })
   );
@@ -161,11 +162,26 @@ it("only approved HTTP counts as a host's known transport", () => {
   );
 });
 
+it.effect("approvals saved under another spelling of a host don't apply", () =>
+  Effect.gen(function* () {
+    setup({
+      stored: { "localhost:7000": { secure: false, allow_insecure: true } },
+    });
+    const pending = yield* Effect.forkScoped(
+      hostTransport.resolveHostTransport(fixtures.host("localhost")),
+      { startImmediately: true }
+    );
+    (yield* waitForPrompt()).respond(false);
+    yield* pending.pipe(Fiber.join, Effect.flip);
+    assert.ok(storage.has("runelink.demo.host-transports.bak"));
+  })
+);
+
 it.effect(
   "legacy HTTP preference requires approval and cancellation saves nothing",
   () =>
     Effect.gen(function* () {
-      setup({ stored: { "localhost:7000": { secure: false } } });
+      setup({ stored: { localhost: { secure: false } } });
       const pending = yield* Effect.forkScoped(
         hostTransport.resolveHostTransport(fixtures.host("localhost")),
         { startImmediately: true }
@@ -181,9 +197,9 @@ it.effect(
       assert.ok(
         typeof persisted === "object" &&
           persisted !== null &&
-          "localhost:7000" in persisted
+          "localhost" in persisted
       );
-      const legacy = persisted["localhost:7000"];
+      const legacy = persisted.localhost;
       assert.ok(typeof legacy === "object" && legacy !== null);
       assert.ok(!("allow_insecure" in legacy));
     })
@@ -202,7 +218,7 @@ it.effect(
       assert.equal(getPrompt(), null);
       setup({
         protocol: "https:",
-        stored: { "localhost:7000": { secure: false, allow_insecure: true } },
+        stored: { localhost: { secure: false, allow_insecure: true } },
       });
       assert.match(
         (yield* Effect.flip(
