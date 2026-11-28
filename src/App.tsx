@@ -1108,7 +1108,7 @@ export function App() {
           onJoinServer={handleJoinServer}
           onOpenServerSettings={handleOpenServerSettings}
           onLeaveServer={handleLeaveServer}
-          canDeleteSelectedServer={canDeleteSelectedServer}
+          canManageChannels={canDeleteSelectedServer}
           canManageServer={canManageServer}
           onCreateChannel={handleCreateChannel}
           onDeleteChannel={handleDeleteChannel}
