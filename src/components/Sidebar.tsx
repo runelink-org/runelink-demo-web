@@ -20,7 +20,6 @@ import { CreateChannelDialog } from "@/components/sidebar/CreateChannelDialog";
 import type { CreateChannelRequest } from "@/components/sidebar/CreateChannelDialog";
 import { ChannelSection } from "@/components/sidebar/ChannelSection";
 import { DeleteChannelDialog } from "@/components/sidebar/DeleteChannelDialog";
-import { DeleteServerDialog } from "@/components/sidebar/DeleteServerDialog";
 import { LeaveServerDialog } from "@/components/sidebar/LeaveServerDialog";
 import { ServerRailSettingsMenu } from "@/components/sidebar/ServerRailSettingsMenu";
 import { ServerActionsMenu } from "@/components/sidebar/ServerActionsMenu";
@@ -58,7 +57,6 @@ type SidebarProps = {
   onJoinServer: (serverRef: ServerRef) => RequestEffect<void>;
   onOpenServerSettings: (server: Server) => void;
   onLeaveServer: (serverRef: ServerRef) => RequestEffect<void>;
-  onDeleteServer: (serverRef: ServerRef) => RequestEffect<void>;
   canDeleteSelectedServer: boolean;
   canManageServer: (server: Server) => boolean;
   onCreateChannel: (
@@ -129,7 +127,6 @@ export function Sidebar({
   onJoinServer,
   onOpenServerSettings,
   onLeaveServer,
-  onDeleteServer,
   canDeleteSelectedServer,
   canManageServer,
   onCreateChannel,
@@ -148,9 +145,6 @@ export function Sidebar({
   const [channelPendingDelete, setChannelPendingDelete] =
     useState<ServerChannel | null>(null);
   const [serverPendingLeave, setServerPendingLeave] = useState<Server | null>(
-    null
-  );
-  const [serverPendingDelete, setServerPendingDelete] = useState<Server | null>(
     null
   );
   const [collapsedIdsByServerKey, setCollapsedIdsByServerKey] = useState<
@@ -550,16 +544,6 @@ export function Sidebar({
           }
         }}
         onLeaveServer={onLeaveServer}
-      />
-
-      <DeleteServerDialog
-        server={serverPendingDelete}
-        onOpenChange={(open) => {
-          if (!open) {
-            setServerPendingDelete(null);
-          }
-        }}
-        onDeleteServer={onDeleteServer}
       />
     </aside>
   );
