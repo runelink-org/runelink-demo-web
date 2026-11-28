@@ -45,3 +45,7 @@ The same applies to each kind of resource (`channel`, `textChannel`, `message`).
 ## Hosts
 
 Hosts are the SDK's `Host` values, which only decoding with `HostSchema` creates and which are always canonical: lowercase, without the default port. Compare and store them as `Host`s, and never add or strip ports by hand. Use the SDK's `hostApiUrl` or `hostClientWsUrl` to connect to a host, and `hostAuthority` only where the port must always be spelled out. Parse hosts that people enter with `enteredHost` or `validateHost`, and show an error when that fails.
+
+## Tests
+
+Add unit tests where code defines a contract, such as parsing and canonicalization, wire shapes, ownership and security rules, or a public guarantee. Don't add tests that only restate a simple rule or helper, mirror constants, or cover one-off migrations of stored data.
