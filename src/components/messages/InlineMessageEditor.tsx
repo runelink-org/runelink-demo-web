@@ -95,7 +95,7 @@ export function InlineMessageEditor({
       request({
         type: "messages_update",
         data: {
-          message: { host: message.host, id: message.id },
+          message_ref: { host: message.host, id: message.id },
           message_update: { body, expected_updated_at: message.updated_at },
         },
       }).pipe(

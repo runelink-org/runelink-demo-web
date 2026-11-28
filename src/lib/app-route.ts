@@ -7,7 +7,7 @@ import type { MessageId, ServerChannelId, ServerRef } from "@runelink/sdk";
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
 
-const decodeServer = Schema.decodeUnknownOption(ServerRefSchema);
+const decodeServerRef = Schema.decodeUnknownOption(ServerRefSchema);
 const decodeChannelId = Schema.decodeUnknownOption(ServerChannelIdSchema);
 const decodeMessageId = Schema.decodeUnknownOption(MessageIdSchema);
 
@@ -15,30 +15,34 @@ const decodeMessageId = Schema.decodeUnknownOption(MessageIdSchema);
 export type AppRoute =
   | { screen: "home" }
   | { screen: "auth" }
-  | { screen: "server"; server: ServerRef }
+  | { screen: "server"; serverRef: ServerRef }
   | {
       screen: "channel";
-      server: ServerRef;
+      serverRef: ServerRef;
       channelId: ServerChannelId;
       messageId?: MessageId;
     }
   | {
       screen: "channel-settings";
-      server: ServerRef;
+      serverRef: ServerRef;
       channelId: ServerChannelId;
     }
-  | { screen: "channel-members"; server: ServerRef; channelId: ServerChannelId }
-  | { screen: "server-settings"; server: ServerRef };
+  | {
+      screen: "channel-members";
+      serverRef: ServerRef;
+      channelId: ServerChannelId;
+    }
+  | { screen: "server-settings"; serverRef: ServerRef };
 
 export function getContentRoute(
-  server: ServerRef | null,
+  serverRef: ServerRef | null,
   channelId: ServerChannelId | null
 ): AppRoute {
-  if (server == null) return { screen: "home" };
+  if (serverRef == null) return { screen: "home" };
   if (channelId == null) {
-    return { screen: "server", server };
+    return { screen: "server", serverRef };
   }
-  return { screen: "channel", server, channelId };
+  return { screen: "channel", serverRef, channelId };
 }
 
 const isAppHistoryState = Schema.is(
@@ -55,15 +59,15 @@ function parseChannelId(value: string): ServerChannelId | null {
 }
 
 // Path segments are never empty, so neither is the host.
-function parseServer(host: string, id: string): ServerRef | null {
+function parseServerRef(host: string, id: string): ServerRef | null {
   return Option.all({
     host: decodePathSegment(host),
     id: decodePathSegment(id),
-  }).pipe(Option.flatMap(decodeServer), Option.getOrNull);
+  }).pipe(Option.flatMap(decodeServerRef), Option.getOrNull);
 }
 
-function serverPath(server: ServerRef): string {
-  return `/servers/${encodeURIComponent(server.host)}/${server.id}`;
+function serverPath(serverRef: ServerRef): string {
+  return `/servers/${encodeURIComponent(serverRef.host)}/${serverRef.id}`;
 }
 
 function getChannelScreen(suffix: string | undefined) {
@@ -86,30 +90,39 @@ export function parseAppRoute(pathname: string, search = ""): AppRoute | null {
       pathname
     );
   if (channelMatch) {
-    const server = parseServer(channelMatch[1] ?? "", channelMatch[2] ?? "");
+    const serverRef = parseServerRef(
+      channelMatch[1] ?? "",
+      channelMatch[2] ?? ""
+    );
     const channelId = parseChannelId(channelMatch[3] ?? "");
     const screen = getChannelScreen(channelMatch[4]);
-    if (server === null || channelId === null) return null;
+    if (serverRef === null || channelId === null) return null;
     const messageId = decodeMessageId(
       new URLSearchParams(search).get("message")
     );
     return screen === "channel" && Option.isSome(messageId)
-      ? { screen, server, channelId, messageId: messageId.value }
-      : { screen, server, channelId };
+      ? { screen, serverRef, channelId, messageId: messageId.value }
+      : { screen, serverRef, channelId };
   }
 
   const settingsMatch = /^\/servers\/([^/]+)\/([^/]+)\/settings\/?$/u.exec(
     pathname
   );
   if (settingsMatch) {
-    const server = parseServer(settingsMatch[1] ?? "", settingsMatch[2] ?? "");
-    return server === null ? null : { screen: "server-settings", server };
+    const serverRef = parseServerRef(
+      settingsMatch[1] ?? "",
+      settingsMatch[2] ?? ""
+    );
+    return serverRef === null ? null : { screen: "server-settings", serverRef };
   }
 
   const serverMatch = /^\/servers\/([^/]+)\/([^/]+)\/?$/u.exec(pathname);
   if (serverMatch) {
-    const server = parseServer(serverMatch[1] ?? "", serverMatch[2] ?? "");
-    return server === null ? null : { screen: "server", server };
+    const serverRef = parseServerRef(
+      serverMatch[1] ?? "",
+      serverMatch[2] ?? ""
+    );
+    return serverRef === null ? null : { screen: "server", serverRef };
   }
 
   return null;
@@ -127,24 +140,24 @@ export function getAppRoutePath(
       return "/auth";
     }
     case "server": {
-      return serverPath(route.server);
+      return serverPath(route.serverRef);
     }
     case "channel": {
       const targetMessageId = messageId ?? route.messageId;
-      return `${serverPath(route.server)}/channels/${route.channelId}${
+      return `${serverPath(route.serverRef)}/channels/${route.channelId}${
         targetMessageId != null && targetMessageId !== ""
           ? `?${new URLSearchParams({ message: targetMessageId })}`
           : ""
       }`;
     }
     case "channel-settings": {
-      return `${serverPath(route.server)}/channels/${route.channelId}/settings`;
+      return `${serverPath(route.serverRef)}/channels/${route.channelId}/settings`;
     }
     case "channel-members": {
-      return `${serverPath(route.server)}/channels/${route.channelId}/members`;
+      return `${serverPath(route.serverRef)}/channels/${route.channelId}/members`;
     }
     case "server-settings": {
-      return `${serverPath(route.server)}/settings`;
+      return `${serverPath(route.serverRef)}/settings`;
     }
   }
 }

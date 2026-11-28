@@ -46,8 +46,14 @@ function server(host: string): ServerWithChannels {
 // Same-UUID servers on two hosts, and a selected one on a third that the
 // account is not in
 const servers = [server("a.example"), server("b.example")];
-const missing = fixtures.serverRef({ host: "c.example", id: serverId });
-const destination = fixtures.serverRef({ host: "a.example", id: serverId });
+const missingServerRef = fixtures.serverRef({
+  host: "c.example",
+  id: serverId,
+});
+const destinationServerRef = fixtures.serverRef({
+  host: "a.example",
+  id: serverId,
+});
 
 beforeAll(() =>
   Effect.gen(function* () {
@@ -66,38 +72,44 @@ afterAll(() => {
 });
 
 it("a fallback server opens its landing page without a saved channel", () => {
-  assert.deepEqual(navigation.getFallbackSelection(servers, missing, {}), {
-    server: destination,
-    channelId: null,
-  });
+  assert.deepEqual(
+    navigation.getFallbackSelection(servers, missingServerRef, {}),
+    {
+      serverRef: destinationServerRef,
+      channelId: null,
+    }
+  );
 });
 
 it("a fallback server opens its own saved channel", () => {
   assert.deepEqual(
-    navigation.getFallbackSelection(servers, missing, {
-      [resourceKey(destination)]: channelId,
+    navigation.getFallbackSelection(servers, missingServerRef, {
+      [resourceKey(destinationServerRef)]: channelId,
     }),
-    { server: destination, channelId }
+    { serverRef: destinationServerRef, channelId }
   );
 });
 
 it("a fallback server never opens the rejected route's channel ID", () => {
   // The destination has a channel with this ID, but it is another channel
   assert.deepEqual(
-    navigation.getFallbackSelection(servers, missing, {
-      [resourceKey(missing)]: channelId,
+    navigation.getFallbackSelection(servers, missingServerRef, {
+      [resourceKey(missingServerRef)]: channelId,
     }),
-    { server: destination, channelId: null }
+    { serverRef: destinationServerRef, channelId: null }
   );
 });
 
 it("the selected server keeps its saved channel", () => {
-  const selected = fixtures.serverRef({ host: "b.example", id: serverId });
+  const selectedServerRef = fixtures.serverRef({
+    host: "b.example",
+    id: serverId,
+  });
   assert.deepEqual(
-    navigation.getFallbackSelection(servers, selected, {
-      [resourceKey(selected)]: channelId,
-      [resourceKey(destination)]: otherChannelId,
+    navigation.getFallbackSelection(servers, selectedServerRef, {
+      [resourceKey(selectedServerRef)]: channelId,
+      [resourceKey(destinationServerRef)]: otherChannelId,
     }),
-    { server: selected, channelId }
+    { serverRef: selectedServerRef, channelId }
   );
 });

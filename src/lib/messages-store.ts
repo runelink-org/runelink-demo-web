@@ -3,7 +3,7 @@ import {
   takeChannelNavigationPrefetch,
 } from "@/lib/channel-navigation-hints";
 import { mergeMessages } from "./message-cache";
-import { resourceKey, textChannelRef } from "@runelink/sdk";
+import { resourceKey, textChannelRefOf } from "@runelink/sdk";
 import type {
   Message,
   MessageId,
@@ -63,9 +63,9 @@ function storeMessages(
 // Loads a channel's history once. Concurrent callers, such as a hover prefetch
 // and opening the channel, share one request.
 export function fetchMessagesByTextChannel(
-  textChannel: TextChannelRef
+  textChannelRef: TextChannelRef
 ): Effect.Effect<readonly Message[], RequestFailure, RunelinkSession> {
-  const textChannelKey = resourceKey(textChannel);
+  const textChannelKey = resourceKey(textChannelRef);
   // Uninterruptible until the shared load is running, so it is never
   // registered without starting
   return Effect.uninterruptibleMask((restore) =>
@@ -86,7 +86,7 @@ export function fetchMessagesByTextChannel(
       const isStale = () =>
         requests !== pendingFetches ||
         !(textChannelKey in getState(messagesAtom).messagesByTextChannelKey);
-      const prefetchedHistory = takeChannelNavigationPrefetch(textChannel);
+      const prefetchedHistory = takeChannelNavigationPrefetch(textChannelRef);
       setState(messagesAtom, (currentState) => ({
         // Register the channel before requesting history so updates received
         // during the first fetch are retained and merged with its response.
@@ -112,7 +112,7 @@ export function fetchMessagesByTextChannel(
           history ??
           (yield* request({
             type: "messages_get_by_text_channel",
-            data: { text_channel: textChannel },
+            data: { text_channel_ref: textChannelRef },
           })).data;
         if (isStale()) return messages;
 
@@ -169,18 +169,18 @@ export function fetchMessagesByTextChannel(
 }
 
 export const createMessage = Effect.fn("Messages.create")(function* (
-  textChannel: TextChannelRef,
+  textChannelRef: TextChannelRef,
   newMessage: NewMessage
 ) {
   const reply = yield* request({
     type: "messages_create",
     data: {
-      text_channel: textChannel,
+      text_channel_ref: textChannelRef,
       new_message: newMessage,
     },
   });
 
-  storeMessages(resourceKey(textChannel), [reply.data]);
+  storeMessages(resourceKey(textChannelRef), [reply.data]);
   return reply.data;
 });
 
@@ -188,8 +188,8 @@ export const createMessage = Effect.fn("Messages.create")(function* (
 // the reply
 const deletingMessages = new Set<ResourceKey<MessageId>>();
 
-export function isDeletingMessage(message: MessageRef): boolean {
-  return deletingMessages.has(resourceKey(message));
+export function isDeletingMessage(messageRef: MessageRef): boolean {
+  return deletingMessages.has(resourceKey(messageRef));
 }
 
 export const deleteMessage = Effect.fn("Messages.delete")(function* (
@@ -199,10 +199,10 @@ export const deleteMessage = Effect.fn("Messages.delete")(function* (
   deletingMessages.add(key);
   const reply = yield* request({
     type: "messages_delete",
-    data: { message: { host: message.host, id: message.id } },
+    data: { message_ref: { host: message.host, id: message.id } },
   }).pipe(Effect.ensuring(Effect.sync(() => deletingMessages.delete(key))));
 
-  storeMessages(resourceKey(textChannelRef(message)), [reply.data]);
+  storeMessages(resourceKey(textChannelRefOf(message)), [reply.data]);
 });
 
 export function resetMessages(): void {

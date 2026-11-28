@@ -2,7 +2,7 @@ import {
   ServerChannelIdSchema,
   TextChannelIdSchema,
   resourceKey,
-  textChannelRef,
+  textChannelRefOf,
 } from "@runelink/sdk";
 import type {
   Message,
@@ -103,17 +103,17 @@ export const startChannelNavigationPrefetch = Effect.fn(
   cancelChannelNavigationPrefetch();
   if (route.screen !== "channel" && route.screen !== "channel-members") return;
   const textChannelId =
-    readHints()[accountStorageKey(account)]?.[resourceKey(route.server)]?.[
+    readHints()[accountStorageKey(account)]?.[resourceKey(route.serverRef)]?.[
       route.channelId
     ];
   if (textChannelId == null) return;
-  const textChannel = { host: route.server.host, id: textChannelId };
-  const textChannelKey = resourceKey(textChannel);
+  const textChannelRef = { host: route.serverRef.host, id: textChannelId };
+  const textChannelKey = resourceKey(textChannelRef);
   // Reconnects can rerun startup while a channel is already cached or loading.
   if (textChannelKey in cachedMessages) return;
   const history = yield* request({
     type: "messages_get_by_text_channel",
-    data: { text_channel: textChannel },
+    data: { text_channel_ref: textChannelRef },
   }).pipe(
     Effect.map((reply) => reply.data),
     // Any failure falls back to an ordinary fetch.
@@ -126,12 +126,12 @@ export const startChannelNavigationPrefetch = Effect.fn(
 // History and live updates stay outside the message cache until a normal fetch
 // supplies a text channel confirmed by fresh channel metadata.
 export function takeChannelNavigationPrefetch(
-  textChannel: TextChannelRef
+  textChannelRef: TextChannelRef
 ): Effect.Effect<readonly Message[] | null> | null {
   const prefetch = pending;
   if (!prefetch) return null;
   pending = null;
-  if (prefetch.textChannelKey !== resourceKey(textChannel)) {
+  if (prefetch.textChannelKey !== resourceKey(textChannelRef)) {
     prefetch.history.interruptUnsafe();
     return null;
   }
@@ -143,7 +143,7 @@ export function takeChannelNavigationPrefetch(
 }
 
 export function captureChannelNavigationUpdate(message: Message): void {
-  if (pending?.textChannelKey === resourceKey(textChannelRef(message))) {
+  if (pending?.textChannelKey === resourceKey(textChannelRefOf(message))) {
     pending.updates.push(message);
   }
 }

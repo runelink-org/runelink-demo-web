@@ -2,7 +2,7 @@ import { omitRecordKey, omitRecordKeys } from "./record";
 import { captureChannelNavigationUpdate } from "@/lib/channel-navigation-hints";
 import { compareResourceVersions } from "./resource-version";
 import { mergeMessages } from "./message-cache";
-import { channelServerRef, resourceKey, textChannelRef } from "@runelink/sdk";
+import { serverRefOf, resourceKey, textChannelRefOf } from "@runelink/sdk";
 import type {
   FullServerMembership,
   Message,
@@ -38,10 +38,10 @@ import { closeMessageEdit } from "@/lib/message-composer-store";
 import { isDeletingMessage, messagesAtom } from "@/lib/messages-store";
 import { navigationAtom } from "@/lib/navigation-store";
 import {
-  channelRef,
+  channelRefOf,
   sameResource,
   userRefKey,
-  ownedTextChannelRef,
+  ownedTextChannelRefOf,
 } from "@/lib/runelink-store-utils";
 import { debugRunelink } from "@/lib/runelink-debug";
 import { serversAtom } from "@/lib/servers-store";
@@ -56,9 +56,9 @@ export function setUpdateNotifier(
   notify = notifier;
 }
 
-function isLoadedServer(server: ServerRef): boolean {
+function isLoadedServer(serverRef: ServerRef): boolean {
   const state = getState(serversAtom);
-  const key = resourceKey(server);
+  const key = resourceKey(serverRef);
   return key in state.serverByKey || key in state.serverWithChannelsByKey;
 }
 
@@ -72,8 +72,8 @@ function getKnownTextChannelKeysForServer(
         ...(getState(serversAtom).serverWithChannelsByKey[serverKey]
           ?.channels ?? []),
       ].flatMap((channel) => {
-        const textChannel = ownedTextChannelRef(channel);
-        return textChannel ? [resourceKey(textChannel)] : [];
+        const textChannelRef = ownedTextChannelRefOf(channel);
+        return textChannelRef ? [resourceKey(textChannelRef)] : [];
       })
     ),
   ];
@@ -102,8 +102,8 @@ function removeMessageState(
   }));
 }
 
-function removeLoadedServerState(server: ServerRef): void {
-  const serverKey = resourceKey(server);
+function removeLoadedServerState(serverRef: ServerRef): void {
+  const serverKey = resourceKey(serverRef);
   const deletedTextChannelKeys = getKnownTextChannelKeysForServer(serverKey);
 
   setState(membershipsAtom, (state) => ({
@@ -111,7 +111,7 @@ function removeLoadedServerState(server: ServerRef): void {
       Object.entries(state.membershipsByUserRefKey).map(
         ([userKey, memberships]) => [
           userKey,
-          removeMembership(memberships, server),
+          removeMembership(memberships, serverRef),
         ]
       )
     ),
@@ -130,9 +130,9 @@ function removeLoadedServerState(server: ServerRef): void {
     ),
   }));
   setState(navigationAtom, (state) => ({
-    selectedServer: sameResource(state.selectedServer, server)
+    selectedServerRef: sameResource(state.selectedServerRef, serverRef)
       ? null
-      : state.selectedServer,
+      : state.selectedServerRef,
     selectedChannelIdByServerKey: omitRecordKey(
       state.selectedChannelIdByServerKey,
       serverKey
@@ -178,14 +178,14 @@ function handleMembershipUpsert(membership: FullServerMembership): void {
     !(serverKey in state.membersByServerKey)
   ) {
     debugRunelink("skip membership_upserted", {
-      server: serverKey,
+      serverKey,
       user: membership.user,
     });
     return;
   }
 
   debugRunelink("apply membership_upserted", {
-    server: serverKey,
+    serverKey,
     user: membership.user,
   });
 
@@ -211,32 +211,32 @@ function handleMembershipUpsert(membership: FullServerMembership): void {
   }));
 }
 
-function handleMembershipDeleted(server: ServerRef, userRef: UserRef): void {
+function handleMembershipDeleted(serverRef: ServerRef, userRef: UserRef): void {
   const state = getState(membershipsAtom);
   const activeAccount = authAtom.pipe(getState, getActiveAccount);
   const userKey = userRefKey(userRef);
-  const serverKey = resourceKey(server);
+  const serverKey = resourceKey(serverRef);
   const membership = (state.membershipsByUserRefKey[userKey] ?? []).find(
     (innerMembership) => resourceKey(innerMembership.server) === serverKey
   );
   const hasMembers = serverKey in state.membersByServerKey;
 
   if (!membership && !hasMembers) {
-    debugRunelink("skip membership_deleted", { server: serverKey, userRef });
+    debugRunelink("skip membership_deleted", { serverKey, userRef });
     return;
   }
 
   if (activeAccount !== null && userRefKey(activeAccount) === userKey) {
     debugRunelink("remove server state for active account membership_deleted", {
-      server: serverKey,
+      serverKey,
       userRef,
     });
     // The server cache follows renames, unlike the membership
     const title = getState(serversAtom).serverByKey[serverKey]?.title;
-    removeLoadedServerState(server);
+    removeLoadedServerState(serverRef);
     if (
       membership &&
-      !isDeletingMembership(server, userRef) &&
+      !isDeletingMembership(serverRef, userRef) &&
       !isDeletingAccount(userRef)
     ) {
       notify?.(
@@ -246,7 +246,7 @@ function handleMembershipDeleted(server: ServerRef, userRef: UserRef): void {
     return;
   }
 
-  debugRunelink("apply membership_deleted", { server: serverKey, userRef });
+  debugRunelink("apply membership_deleted", { serverKey, userRef });
 
   setState(membershipsAtom, (currentState) => ({
     ...(membership && {
@@ -254,7 +254,7 @@ function handleMembershipDeleted(server: ServerRef, userRef: UserRef): void {
         ...currentState.membershipsByUserRefKey,
         [userKey]: removeMembership(
           currentState.membershipsByUserRefKey[userKey] ?? [],
-          server
+          serverRef
         ),
       },
     }),
@@ -294,35 +294,35 @@ function handleServerUpsert(server: Server): void {
 }
 
 function handleChannelUpsert(channel: ServerChannel): void {
-  const server = channelServerRef(channel);
-  if (!isLoadedServer(server)) {
+  const serverRef = serverRefOf(channel);
+  if (!isLoadedServer(serverRef)) {
     return;
   }
 
-  applyChannelUpserts(server, [channel]);
+  applyChannelUpserts(serverRef, [channel]);
 }
 
 function handleChannelDeleted(
-  server: ServerRef,
+  serverRef: ServerRef,
   channelId: ServerChannelId
 ): void {
-  if (!isLoadedServer(server)) {
+  if (!isLoadedServer(serverRef)) {
     return;
   }
 
-  const serverKey = resourceKey(server);
+  const serverKey = resourceKey(serverRef);
   const channel =
     getState(channelsAtom).channelByKey[
-      resourceKey(channelRef(server, channelId))
+      resourceKey(channelRefOf(serverRef, channelId))
     ] ??
     getState(serversAtom).serverWithChannelsByKey[serverKey]?.channels.find(
       (matchedChannel) => matchedChannel.id === channelId
     );
-  const textChannel = channel && ownedTextChannelRef(channel);
-  if (textChannel) {
-    removeMessageState([resourceKey(textChannel)]);
+  const textChannelRef = channel && ownedTextChannelRefOf(channel);
+  if (textChannelRef) {
+    removeMessageState([resourceKey(textChannelRef)]);
   }
-  removeChannelFromCaches(server, channelId);
+  removeChannelFromCaches(serverRef, channelId);
   setState(navigationAtom, (state) => ({
     selectedChannelIdByServerKey: {
       ...state.selectedChannelIdByServerKey,
@@ -336,7 +336,7 @@ function handleChannelDeleted(
 
 function handleMessageUpsert(message: Message): void {
   captureChannelNavigationUpdate(message);
-  const textChannelKey = resourceKey(textChannelRef(message));
+  const textChannelKey = resourceKey(textChannelRefOf(message));
   if (!(textChannelKey in getState(messagesAtom).messagesByTextChannelKey)) {
     return;
   }
@@ -377,7 +377,7 @@ export function handleRunelinkUpdate(update: WsUpdate): void {
       break;
     }
     case "membership_deleted": {
-      handleMembershipDeleted(update.data.server, update.data.user_ref);
+      handleMembershipDeleted(update.data.server_ref, update.data.user_ref);
       break;
     }
     case "server_upserted": {
@@ -385,8 +385,8 @@ export function handleRunelinkUpdate(update: WsUpdate): void {
       break;
     }
     case "server_deleted": {
-      if (isLoadedServer(update.data.server)) {
-        removeLoadedServerState(update.data.server);
+      if (isLoadedServer(update.data.server_ref)) {
+        removeLoadedServerState(update.data.server_ref);
       }
       break;
     }
@@ -395,7 +395,7 @@ export function handleRunelinkUpdate(update: WsUpdate): void {
       break;
     }
     case "channel_deleted": {
-      handleChannelDeleted(update.data.server, update.data.channel_id);
+      handleChannelDeleted(update.data.server_ref, update.data.channel_id);
       break;
     }
     case "message_upserted": {

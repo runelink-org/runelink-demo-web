@@ -79,12 +79,12 @@ export const fetchMembershipsByUser = Effect.fn("Memberships.fetchByUser")(
 );
 
 export const fetchMembersByServer = Effect.fn("Memberships.fetchMembers")(
-  function* (server: ServerRef) {
-    const serverKey = resourceKey(server);
+  function* (serverRef: ServerRef) {
+    const serverKey = resourceKey(serverRef);
     setServerLoading(serverKey, true);
     const reply = yield* request({
       type: "memberships_get_members_by_server",
-      data: { server },
+      data: { server_ref: serverRef },
     }).pipe(
       Effect.onError(() =>
         Effect.sync(() => {
@@ -121,7 +121,7 @@ export const upsertMembership = Effect.fn("Memberships.upsert")(function* (
   });
 
   const userKey = userRefKey(reply.data.user);
-  const serverKey = resourceKey(newMembership.server);
+  const serverKey = resourceKey(newMembership.server_ref);
   setState(membershipsAtom, (state) => ({
     membershipsByUserRefKey: {
       ...state.membershipsByUserRefKey,
@@ -140,7 +140,7 @@ export const upsertMembership = Effect.fn("Memberships.upsert")(function* (
   }));
 
   debugRunelink("created membership", {
-    server: serverKey,
+    serverKey,
     user: reply.data.user,
   });
 
@@ -151,29 +151,29 @@ export const upsertMembership = Effect.fn("Memberships.upsert")(function* (
 // before the reply
 const deletingMemberships = new Set<string>();
 
-function deletingMembershipKey(server: ServerRef, userRef: UserRef): string {
-  return `${resourceKey(server)}/${userRefKey(userRef)}`;
+function deletingMembershipKey(serverRef: ServerRef, userRef: UserRef): string {
+  return `${resourceKey(serverRef)}/${userRefKey(userRef)}`;
 }
 
 export function isDeletingMembership(
-  server: ServerRef,
+  serverRef: ServerRef,
   userRef: UserRef
 ): boolean {
-  return deletingMemberships.has(deletingMembershipKey(server, userRef));
+  return deletingMemberships.has(deletingMembershipKey(serverRef, userRef));
 }
 
 export const deleteMembership = Effect.fn("Memberships.delete")(function* (
-  server: ServerRef,
+  serverRef: ServerRef,
   userRef: UserRef
 ) {
   const userKey = userRefKey(userRef);
-  const serverKey = resourceKey(server);
-  const key = deletingMembershipKey(server, userRef);
+  const serverKey = resourceKey(serverRef);
+  const key = deletingMembershipKey(serverRef, userRef);
   deletingMemberships.add(key);
   yield* request({
     type: "memberships_delete",
     data: {
-      server,
+      server_ref: serverRef,
       user_ref: userRef,
     },
   }).pipe(
@@ -187,7 +187,7 @@ export const deleteMembership = Effect.fn("Memberships.delete")(function* (
       ...state.membershipsByUserRefKey,
       [userKey]: removeMembership(
         state.membershipsByUserRefKey[userKey] ?? [],
-        server
+        serverRef
       ),
     },
     membersByServerKey: {

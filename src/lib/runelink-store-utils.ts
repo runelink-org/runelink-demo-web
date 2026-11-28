@@ -1,4 +1,4 @@
-import { textChannelRef } from "@runelink/sdk";
+import { textChannelRefOf } from "@runelink/sdk";
 import type {
   ResourceId,
   ResourceRef,
@@ -26,11 +26,11 @@ export function userRefKey(userRef: UserRef): string {
 }
 
 // Channels are on the host of their server
-export function channelRef(
-  server: ServerRef,
+export function channelRefOf(
+  serverRef: ServerRef,
   channelId: ServerChannelId
 ): ServerChannelRef {
-  return { host: server.host, id: channelId };
+  return { host: serverRef.host, id: channelId };
 }
 
 export function sameResource<Id extends ResourceId>(
@@ -42,10 +42,10 @@ export function sameResource<Id extends ResourceId>(
 }
 
 /** The text channel a channel owns, if it is a text channel. */
-export function ownedTextChannelRef(
+export function ownedTextChannelRefOf(
   channel: ServerChannel
 ): TextChannelRef | null {
-  return channel.kind === "text" ? textChannelRef(channel) : null;
+  return channel.kind === "text" ? textChannelRefOf(channel) : null;
 }
 
 export function bindStoreToActiveAccount(reset: () => void): () => void {

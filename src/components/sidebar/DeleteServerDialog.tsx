@@ -21,7 +21,7 @@ import { runPromise } from "@/lib/runtime";
 type DeleteServerDialogProps = {
   server: Server | null;
   onOpenChange: (open: boolean) => void;
-  onDeleteServer: (server: ServerRef) => RequestEffect<void>;
+  onDeleteServer: (serverRef: ServerRef) => RequestEffect<void>;
 };
 
 function normalizeWhitespace(value: string): string {

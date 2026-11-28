@@ -12,18 +12,20 @@ function formatCliPath(ref: ResourceRef<ResourceId>, idFlag: string): string {
   return `--host=${JSON.stringify(ref.host)} --${idFlag}=${JSON.stringify(ref.id)}`;
 }
 
-export function formatServerCliPath(server: ServerRef): string {
-  return formatCliPath(server, "server-id");
+export function formatServerCliPath(serverRef: ServerRef): string {
+  return formatCliPath(serverRef, "server-id");
 }
 
-export function formatChannelCliPath(channel: ServerChannelRef): string {
-  return formatCliPath(channel, "channel-id");
+export function formatChannelCliPath(channelRef: ServerChannelRef): string {
+  return formatCliPath(channelRef, "channel-id");
 }
 
-export function formatTextChannelCliPath(textChannel: TextChannelRef): string {
-  return formatCliPath(textChannel, "text-channel-id");
+export function formatTextChannelCliPath(
+  textChannelRef: TextChannelRef
+): string {
+  return formatCliPath(textChannelRef, "text-channel-id");
 }
 
-export function formatMessageCliPath(message: MessageRef): string {
-  return formatCliPath(message, "message-id");
+export function formatMessageCliPath(messageRef: MessageRef): string {
+  return formatCliPath(messageRef, "message-id");
 }

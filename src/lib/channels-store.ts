@@ -1,6 +1,6 @@
 import { omitRecordKey } from "./record";
 import { sameUserRef } from "./account-storage";
-import { channelServerRef, resourceKey } from "@runelink/sdk";
+import { serverRefOf, resourceKey } from "@runelink/sdk";
 import type {
   NewServerChannel,
   ServerChannel,
@@ -14,7 +14,7 @@ import { authAtom, getActiveAccount } from "@/lib/auth-store";
 import { NotConnectedError, request } from "@/lib/runelink-session";
 import {
   bindStoreToActiveAccount,
-  channelRef,
+  channelRefOf,
 } from "@/lib/runelink-store-utils";
 import { channelsAtom, initialChannelsState } from "@/lib/channel-state";
 import {
@@ -54,19 +54,19 @@ function removeChannel(
 }
 
 export const createChannel = Effect.fn("Channels.create")(function* (
-  server: ServerRef,
+  serverRef: ServerRef,
   newChannel: NewServerChannel
 ) {
   const reply = yield* request({
     type: "channels_create",
     data: {
-      server,
+      server_ref: serverRef,
       new_channel: newChannel,
     },
   });
 
   const channel = newestChannel(reply.data);
-  const serverKey = resourceKey(server);
+  const serverKey = resourceKey(serverRef);
   setState(channelsAtom, (state) => ({
     channelsByServerKey: {
       ...state.channelsByServerKey,
@@ -97,24 +97,24 @@ export const deleteChannel = Effect.fn("Channels.delete")(function* (
 
   yield* request({
     type: "channels_delete",
-    data: { channel: { host: channel.host, id: channel.id } },
+    data: { channel_ref: { host: channel.host, id: channel.id } },
   }).pipe(
     // Already deleted, such as by another admin or tab
     Effect.catchTags({ RunelinkNotFoundError: () => Effect.void })
   );
 
   if (sameUserRef(account, authAtom.pipe(getState, getActiveAccount))) {
-    removeChannelFromCaches(channelServerRef(channel), channel.id);
+    removeChannelFromCaches(serverRefOf(channel), channel.id);
   }
   return undefined;
 });
 
 // Removes a deleted channel from the channel and server stores
 export function removeChannelFromCaches(
-  server: ServerRef,
+  serverRef: ServerRef,
   channelId: ServerChannelId
 ): void {
-  const serverKey = resourceKey(server);
+  const serverKey = resourceKey(serverRef);
   setState(channelsAtom, (state) => ({
     channelsByServerKey: {
       ...state.channelsByServerKey,
@@ -125,7 +125,7 @@ export function removeChannelFromCaches(
     },
     channelByKey: omitRecordKey(
       state.channelByKey,
-      resourceKey(channelRef(server, channelId))
+      resourceKey(channelRefOf(serverRef, channelId))
     ),
   }));
 
@@ -152,22 +152,22 @@ export const moveChannel = Effect.fn("Channels.move")(function* (
   const reply = yield* request({
     type: "channels_move",
     data: {
-      channel: { host: channel.host, id: channel.id },
+      channel_ref: { host: channel.host, id: channel.id },
       channel_move: channelMove,
     },
   });
 
-  applyChannelUpserts(channelServerRef(channel), reply.data);
+  applyChannelUpserts(serverRefOf(channel), reply.data);
   return reply.data;
 });
 
 // Apply upserted channels of a server to the channel and server stores
 export function applyChannelUpserts(
-  server: ServerRef,
+  serverRef: ServerRef,
   upserted: readonly ServerChannel[]
 ): void {
   const channels = newestChannels(upserted);
-  const serverKey = resourceKey(server);
+  const serverKey = resourceKey(serverRef);
   setState(channelsAtom, (state) => {
     const channelByKey = { ...state.channelByKey };
     for (const channel of channels) {

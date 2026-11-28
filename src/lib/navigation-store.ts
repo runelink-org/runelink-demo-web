@@ -12,7 +12,7 @@ import {
 } from "@/lib/runelink-store-utils";
 
 type NavigationState = {
-  selectedServer: ServerRef | null;
+  selectedServerRef: ServerRef | null;
   // Channel IDs are on their server's host
   selectedChannelIdByServerKey: Record<
     ResourceKey<ServerId>,
@@ -21,37 +21,37 @@ type NavigationState = {
 };
 
 const initialState: NavigationState = {
-  selectedServer: null,
+  selectedServerRef: null,
   selectedChannelIdByServerKey: {},
 };
 
 export const navigationAtom = stateAtom(initialState);
 
-export function selectServer(server: ServerRef | null): void {
+export function selectServer(serverRef: ServerRef | null): void {
   appAtomRegistry.update(navigationAtom, (state) =>
-    sameResource(state.selectedServer, server)
+    sameResource(state.selectedServerRef, serverRef)
       ? state
-      : { ...state, selectedServer: server }
+      : { ...state, selectedServerRef: serverRef }
   );
 }
 
 export function selectChannel(
-  server: ServerRef,
+  serverRef: ServerRef,
   channelId: ServerChannelId | null
 ): void {
   appAtomRegistry.update(navigationAtom, (state) => {
-    const serverKey = resourceKey(server);
+    const serverKey = resourceKey(serverRef);
     const currentChannelId =
       state.selectedChannelIdByServerKey[serverKey] ?? null;
     if (
-      sameResource(state.selectedServer, server) &&
+      sameResource(state.selectedServerRef, serverRef) &&
       currentChannelId === channelId
     ) {
       return state;
     }
 
     return {
-      selectedServer: server,
+      selectedServerRef: serverRef,
       selectedChannelIdByServerKey: {
         ...state.selectedChannelIdByServerKey,
         [serverKey]: channelId,

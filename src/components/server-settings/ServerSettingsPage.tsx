@@ -169,7 +169,7 @@ function ServerSettingsContent({
       request({
         type: "servers_update",
         data: {
-          server: { host: baseline.host, id: baseline.id },
+          server_ref: { host: baseline.host, id: baseline.id },
           server_update: {
             title: submittedTitle,
             description: submittedDescription || null,
@@ -203,16 +203,18 @@ function ServerSettingsContent({
     });
   }
 
-  const handleLeaveServer = withLeaveServerSpan(function* (target: ServerRef) {
+  const handleLeaveServer = withLeaveServerSpan(function* (
+    serverRef: ServerRef
+  ) {
     if (!activeAccount) return;
-    yield* deleteMembership(target, activeAccount);
+    yield* deleteMembership(serverRef, activeAccount);
     onDone();
   });
 
   const handleDeleteServer = withDeleteServerSpan(function* (
-    target: ServerRef
+    serverRef: ServerRef
   ) {
-    yield* deleteServer(target);
+    yield* deleteServer(serverRef);
     onDone();
   });
 
@@ -395,7 +397,7 @@ function ServerSettingsContent({
 
               <div className="mt-5">
                 <ServerMembersTable
-                  server={server.server}
+                  serverRef={server.server}
                   members={sortedMembers}
                   isLoadingMembers={isLoadingMembers}
                   membersError={membersError}

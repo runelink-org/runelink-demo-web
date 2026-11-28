@@ -1107,7 +1107,7 @@ export function MessagesPane({
           channelKey={channelKey}
           channelRoute={{
             screen: "channel",
-            server: selectedServer.server,
+            serverRef: selectedServer.server,
             channelId: selectedChannel.id,
           }}
           messages={selectedMessages}

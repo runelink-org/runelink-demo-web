@@ -27,7 +27,7 @@ type JoinServerDialogProps = {
   joinedServerKeys: ReadonlySet<ResourceKey<ServerId>>;
   onOpenChange: (open: boolean) => void;
   onSearchServers: (host: string) => RequestEffect<readonly Server[]>;
-  onJoinServer: (server: ServerRef) => RequestEffect<void>;
+  onJoinServer: (serverRef: ServerRef) => RequestEffect<void>;
 };
 
 export function JoinServerDialog(props: JoinServerDialogProps) {
