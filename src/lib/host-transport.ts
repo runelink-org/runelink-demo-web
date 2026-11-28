@@ -3,6 +3,7 @@ import type { Host } from "@runelink/sdk";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
+import { loadStoredJson } from "@/lib/account-storage";
 import { appAtomRegistry, stateAtom } from "@/lib/atom-registry";
 
 const STORAGE_KEY = "runelink.demo.host-transports";
@@ -34,38 +35,16 @@ const HostTransportSchema = Schema.Struct({
 });
 type HostTransport = typeof HostTransportSchema.Type;
 
+// Keys saved with the default port decode to the canonical host.
 const decodeHostTransports = Schema.decodeUnknownOption(
-  Schema.fromJsonString(Schema.Record(Schema.String, HostTransportSchema))
+  Schema.fromJsonString(Schema.Record(HostSchema, HostTransportSchema))
 );
-const decodeHost = Schema.decodeUnknownOption(HostSchema);
 
-// Saved before hosts were canonical, keys may name the default port. Spellings
-// of one host keep HTTP approval only if all of them had it, and keys that
-// aren't hosts are dropped.
-function loadHostTransports(): Map<Host, HostTransport> {
-  const raw = window.localStorage.getItem(STORAGE_KEY);
-  const stored: Readonly<Record<string, HostTransport>> =
-    raw != null && raw !== ""
-      ? Option.getOrElse(decodeHostTransports(raw), () => ({}))
-      : {};
-  // A map, since a host such as `constructor` would find an object's
-  // prototype
-  const hosts = new Map<Host, HostTransport>();
-  for (const [key, transport] of Object.entries(stored)) {
-    const host = decodeHost(key);
-    if (Option.isNone(host)) continue;
-    const merged = hosts.get(host.value);
-    hosts.set(
-      host.value,
-      merged === undefined
-        ? transport
-        : {
-            secure: merged.secure || transport.secure,
-            allow_insecure: merged.allow_insecure && transport.allow_insecure,
-          }
-    );
-  }
-  return hosts;
+// A map, since a host such as `constructor` would find an object's prototype.
+function loadHostTransports(): Map<string, HostTransport> {
+  return new Map(
+    Object.entries(loadStoredJson(STORAGE_KEY, decodeHostTransports, {}))
+  );
 }
 
 function saveHostTransports(
