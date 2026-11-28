@@ -1,4 +1,4 @@
-import type { ServerRole, UserRef } from "@runelink/sdk";
+import type { ResourceRef, ServerRole, UserRef } from "@runelink/sdk";
 import { Ellipsis, Shield, ShieldOff, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -31,16 +31,11 @@ import { toastFailure } from "@/lib/toast-failure";
 type MemberActionsMenuProps = {
   contextMenu?: ReturnType<typeof useContextActionsMenu>;
   contextOnly?: boolean;
-  serverId: string;
-  serverHost: string;
+  server: ResourceRef;
   user: UserRef;
   role?: ServerRole;
   canModerateMembers: boolean;
 };
-
-function getTargetHost(serverHost: string, activeHost: string): string | null {
-  return serverHost === activeHost ? null : serverHost;
-}
 
 function formatUserId(user: { name: string; host: string }): string {
   return `${user.name}@${user.host}`;
@@ -49,8 +44,7 @@ function formatUserId(user: { name: string; host: string }): string {
 export function MemberActionsMenu({
   contextMenu,
   contextOnly = false,
-  serverId,
-  serverHost,
+  server,
   user,
   role,
   canModerateMembers,
@@ -74,10 +68,9 @@ export function MemberActionsMenu({
     setIsUpdatingRole(true);
 
     await runPromise(
-      upsertMembership(serverId, {
+      upsertMembership({
         user_ref: user,
-        server_id: serverId,
-        server_host: serverHost,
+        server: { host: server.host, id: server.id },
         role: nextRole,
       }).pipe(
         Effect.match({
@@ -112,11 +105,7 @@ export function MemberActionsMenu({
     }
 
     await runPromise(
-      deleteMembership(
-        serverId,
-        user,
-        getTargetHost(serverHost, activeAccount.host)
-      ).pipe(
+      deleteMembership(server, user).pipe(
         Effect.match({
           onSuccess: () =>
             toast.success(`Kicked ${user.name} from the server.`),

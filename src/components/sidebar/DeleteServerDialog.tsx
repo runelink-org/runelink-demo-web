@@ -1,4 +1,5 @@
-import type { Server } from "@runelink/sdk";
+import { resourceKey } from "@runelink/sdk";
+import type { ResourceRef, Server } from "@runelink/sdk";
 import { useState } from "react";
 import { toast } from "sonner";
 import { TypedConfirmationField } from "@/components/TypedConfirmationField";
@@ -20,7 +21,7 @@ import { runPromise } from "@/lib/runtime";
 type DeleteServerDialogProps = {
   server: Server | null;
   onOpenChange: (open: boolean) => void;
-  onDeleteServer: (serverId: string, serverHost: string) => RequestEffect<void>;
+  onDeleteServer: (server: ResourceRef) => RequestEffect<void>;
 };
 
 function normalizeWhitespace(value: string): string {
@@ -35,10 +36,11 @@ export function DeleteServerDialog({
   const [confirmation, setConfirmation] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
-  const [shownServerId, setShownServerId] = useState(server?.id);
+  const serverKey = server ? resourceKey(server) : null;
+  const [shownServerKey, setShownServerKey] = useState(serverKey);
   // Start fresh for each server, even when the parent closes the dialog.
-  if (shownServerId !== server?.id) {
-    setShownServerId(server?.id);
+  if (shownServerKey !== serverKey) {
+    setShownServerKey(serverKey);
     setConfirmation("");
     setError(null);
   }
@@ -56,7 +58,7 @@ export function DeleteServerDialog({
     setError(null);
 
     await runPromise(
-      onDeleteServer(server.id, server.host).pipe(
+      onDeleteServer(server).pipe(
         Effect.match({
           onSuccess: () => {
             toast.success(`Deleted server: ${server.title}`);

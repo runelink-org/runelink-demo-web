@@ -18,7 +18,6 @@ import type { AppRoute } from "@/lib/app-route";
 
 type MessageActionsMenuProps = {
   anchor?: ComponentProps<typeof DropdownMenuContent>["anchor"];
-  host: string;
   channelRoute: Extract<AppRoute, { screen: "channel" }>;
   message: ActiveMessage;
   canDeleteMessage: boolean;
@@ -29,7 +28,6 @@ type MessageActionsMenuProps = {
 
 export function MessageActionsMenu({
   anchor,
-  host,
   channelRoute,
   message,
   canDeleteMessage,
@@ -124,7 +122,7 @@ export function MessageActionsMenu({
             },
             {
               label: "Path for CLI",
-              value: formatMessageCliPath(host, message.id),
+              value: formatMessageCliPath(message.host, message.id),
               successLabel: "Copied CLI path.",
             },
           ]}

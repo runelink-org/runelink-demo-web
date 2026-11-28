@@ -1,8 +1,11 @@
 import { omitRecordKey } from "./record";
 import { newestResource } from "./resource-version";
 import { channelsAtom } from "./channel-state";
+import { channelServerRef, resourceKey } from "@runelink/sdk";
 import type {
   NewServer,
+  ResourceKey,
+  ResourceRef,
   Server,
   ServerChannel,
   ServerWithChannels,
@@ -13,28 +16,28 @@ import { getState, setState, stateAtom } from "@/lib/atom-registry";
 import { request } from "@/lib/runelink-session";
 import type { RequestFailure, RunelinkSession } from "@/lib/runelink-session";
 import { bindStoreToActiveAccount } from "@/lib/runelink-store-utils";
-import type { ServerId, TargetHost } from "@/lib/runelink-store-utils";
+import type { TargetHost } from "@/lib/runelink-store-utils";
 
 type ServersState = {
-  serverById: Record<string, Server>;
-  serverWithChannelsById: Record<string, ServerWithChannels>;
+  serverByKey: Record<ResourceKey, Server>;
+  serverWithChannelsByKey: Record<ResourceKey, ServerWithChannels>;
 };
 
 const initialState: ServersState = {
-  serverById: {},
-  serverWithChannelsById: {},
+  serverByKey: {},
+  serverWithChannelsByKey: {},
 };
 
 export const serversAtom = stateAtom(initialState);
 
 export function newestChannel(
   channel: ServerChannel,
-  byId = getState(channelsAtom).channelById,
-  servers = getState(serversAtom).serverWithChannelsById
+  byKey = getState(channelsAtom).channelByKey,
+  servers = getState(serversAtom).serverWithChannelsByKey
 ): ServerChannel {
   return newestResource(
-    newestResource(channel, byId[channel.id]),
-    servers[channel.server_id]?.channels.find(
+    newestResource(channel, byKey[resourceKey(channel)]),
+    servers[resourceKey(channelServerRef(channel))]?.channels.find(
       (cached) => cached.id === channel.id
     )
   );
@@ -43,24 +46,25 @@ export function newestChannel(
 export function newestChannels(
   channels: readonly ServerChannel[]
 ): readonly ServerChannel[] {
-  const byId = getState(channelsAtom).channelById;
-  const servers = getState(serversAtom).serverWithChannelsById;
-  return channels.map((channel) => newestChannel(channel, byId, servers));
+  const byKey = getState(channelsAtom).channelByKey;
+  const servers = getState(serversAtom).serverWithChannelsByKey;
+  return channels.map((channel) => newestChannel(channel, byKey, servers));
 }
 
 type ServerWithChannelsLoad = Deferred.Deferred<
   ServerWithChannels,
   RequestFailure
 >;
-let pendingServerWithChannelsLoads = new Map<string, ServerWithChannelsLoad>();
+let pendingServerWithChannelsLoads = new Map<
+  ResourceKey,
+  ServerWithChannelsLoad
+>();
 
 function cachedServer(
   state: ServersState,
-  serverId: ServerId
+  key: ResourceKey
 ): Server | undefined {
-  return (
-    state.serverById[serverId] ?? state.serverWithChannelsById[serverId]?.server
-  );
+  return state.serverByKey[key] ?? state.serverWithChannelsByKey[key]?.server;
 }
 
 export const fetchServers = Effect.fn("Servers.fetchAll")(function* (
@@ -72,13 +76,13 @@ export const fetchServers = Effect.fn("Servers.fetchAll")(function* (
   });
 
   setState(serversAtom, (state) => ({
-    serverById: {
-      ...state.serverById,
+    serverByKey: {
+      ...state.serverByKey,
       ...Object.fromEntries(
-        reply.data.map((server) => [
-          server.id,
-          newestResource(server, cachedServer(state, server.id)),
-        ])
+        reply.data.map((server) => {
+          const key = resourceKey(server);
+          return [key, newestResource(server, cachedServer(state, key))];
+        })
       ),
     },
   }));
@@ -87,26 +91,24 @@ export const fetchServers = Effect.fn("Servers.fetchAll")(function* (
 });
 
 const loadServerWithChannels = Effect.fn("Servers.fetchWithChannels")(
-  function* (serverId: ServerId, targetHost: TargetHost) {
+  function* (serverRef: ResourceRef) {
     const reply = yield* request({
       type: "servers_get_with_channels",
-      data: {
-        server_id: serverId,
-        target_host: targetHost,
-      },
+      data: { server: serverRef },
     });
 
+    const key = resourceKey(serverRef);
     setState(serversAtom, (state) => {
       const server = newestResource(
         reply.data.server,
-        cachedServer(state, serverId)
+        cachedServer(state, key)
       );
       const channels = newestChannels(reply.data.channels);
       return {
-        serverById: { ...state.serverById, [serverId]: server },
-        serverWithChannelsById: {
-          ...state.serverWithChannelsById,
-          [serverId]: { server, channels },
+        serverByKey: { ...state.serverByKey, [key]: server },
+        serverWithChannelsByKey: {
+          ...state.serverWithChannelsByKey,
+          [key]: { server, channels },
         },
       };
     });
@@ -118,26 +120,26 @@ const loadServerWithChannels = Effect.fn("Servers.fetchWithChannels")(
 // Loads a server with its channels. Concurrent callers, such as the server
 // load and a new membership, share one request.
 export function fetchServerWithChannels(
-  serverId: ServerId,
-  targetHost: TargetHost = null
+  server: ResourceRef
 ): Effect.Effect<ServerWithChannels, RequestFailure, RunelinkSession> {
+  const key = resourceKey(server);
   // Uninterruptible until the shared load is running, so it is never
   // registered without starting
   return Effect.uninterruptibleMask((restore) =>
     Effect.suspend(() => {
-      const pending = pendingServerWithChannelsLoads.get(serverId);
+      const pending = pendingServerWithChannelsLoads.get(key);
       if (pending) return restore(Deferred.await(pending));
 
       // Reset replaces this map, so an old account's load is never shared
       const loads = pendingServerWithChannelsLoads;
       const load: ServerWithChannelsLoad = Deferred.makeUnsafe();
-      loads.set(serverId, load);
+      loads.set(key, load);
       // Detached, so a caller that stops waiting does not cancel the load for
       // the others
       return Effect.forkDetach(
         Deferred.into(
-          loadServerWithChannels(serverId, targetHost).pipe(
-            Effect.ensuring(Effect.sync(() => loads.delete(serverId)))
+          loadServerWithChannels(server).pipe(
+            Effect.ensuring(Effect.sync(() => loads.delete(key)))
           ),
           load
         ),
@@ -159,34 +161,28 @@ export const createServer = Effect.fn("Servers.create")(function* (
     },
   });
 
-  setState(serversAtom, (state) => {
-    const server = newestResource(
-      reply.data,
-      cachedServer(state, reply.data.id)
-    );
-    return { serverById: { ...state.serverById, [server.id]: server } };
-  });
+  const key = resourceKey(reply.data);
+  setState(serversAtom, (state) => ({
+    serverByKey: {
+      ...state.serverByKey,
+      [key]: newestResource(reply.data, cachedServer(state, key)),
+    },
+  }));
   return reply.data;
 });
 
 export const deleteServer = Effect.fn("Servers.delete")(function* (
-  serverId: ServerId,
-  targetHost: TargetHost = null
+  server: ResourceRef
 ) {
   yield* request({
     type: "servers_delete",
-    data: {
-      server_id: serverId,
-      target_host: targetHost,
-    },
+    data: { server },
   });
 
+  const key = resourceKey(server);
   setState(serversAtom, (state) => ({
-    serverById: omitRecordKey(state.serverById, serverId),
-    serverWithChannelsById: omitRecordKey(
-      state.serverWithChannelsById,
-      serverId
-    ),
+    serverByKey: omitRecordKey(state.serverByKey, key),
+    serverWithChannelsByKey: omitRecordKey(state.serverWithChannelsByKey, key),
   }));
 });
 

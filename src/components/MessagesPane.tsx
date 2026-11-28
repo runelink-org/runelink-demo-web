@@ -1,3 +1,4 @@
+import { resourceKey } from "@runelink/sdk";
 import * as Arr from "effect/Array";
 import {
   readTextareaSelection,
@@ -11,11 +12,13 @@ import type {
   ServerWithChannels,
   ServerChannel,
   UserRef,
+  ResourceKey,
 } from "@runelink/sdk";
 import {
   useCallback,
   useEffect,
   useLayoutEffect,
+  useMemo,
   useRef,
   useState,
 } from "react";
@@ -62,7 +65,6 @@ import { DeleteChannelDialog } from "@/components/sidebar/DeleteChannelDialog";
 type MessagesPaneProps = {
   selectedServer: ServerWithChannels | null;
   selectedChannel: ServerWithChannels["channels"][number] | undefined;
-  selectedChannelKey: string | null;
   selectedMessages: readonly Message[];
   targetMessageId: string | null;
   hasLoadedMessages: boolean;
@@ -264,7 +266,7 @@ function jumpToMessage(id: string) {
 }
 
 function MessageList({
-  host,
+  channelKey,
   channelRoute,
   messages,
   scrollContainerRef,
@@ -279,7 +281,7 @@ function MessageList({
   onDeleteMessage,
   onReply,
 }: {
-  host: string;
+  channelKey: ResourceKey;
   channelRoute: Extract<AppRoute, { screen: "channel" }>;
   messages: readonly Message[];
   scrollContainerRef: RefObject<HTMLDivElement | null>;
@@ -328,7 +330,7 @@ function MessageList({
           return (
             <MessageListItem
               key={message.id}
-              host={host}
+              channelKey={channelKey}
               channelRoute={channelRoute}
               message={message}
               authorName={authorName}
@@ -371,10 +373,93 @@ function MessageList({
   );
 }
 
+// Keyed by its channel, so an open menu never carries over to another channel
+function ChannelHeader({
+  channel,
+  hasMembersPane,
+  isMembersPaneOpen,
+  canDeleteChannel,
+  onDeselectChannel,
+  onEditChannel,
+  onDeleteChannel,
+  onOpenMembers,
+  onToggleMembersPane,
+}: {
+  channel: ServerChannel;
+  hasMembersPane: boolean;
+  isMembersPaneOpen: boolean;
+  canDeleteChannel: boolean;
+  onDeselectChannel: () => void;
+  onEditChannel: (channel: ServerChannel) => void;
+  onDeleteChannel: (channel: ServerChannel) => void;
+  onOpenMembers: () => void;
+  onToggleMembersPane: () => void;
+}) {
+  const channelMenu = useContextActionsMenu();
+  return (
+    <div className="flex min-h-9 min-w-0 items-center justify-between gap-3">
+      <div className="flex min-w-0 items-center gap-2">
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          className="-ml-2 size-9 shrink-0 rounded-full sm:hidden"
+          onClick={onDeselectChannel}
+          aria-label="Back to channels"
+        >
+          <ArrowLeft className="size-4" />
+        </Button>
+        <Hash className="size-5 shrink-0 text-muted-foreground" />
+        <h1
+          {...channelMenu.targetProps}
+          className="truncate text-xl font-semibold text-foreground"
+        >
+          <button
+            type="button"
+            className="block w-full cursor-pointer truncate rounded-sm text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+            onClick={() => {
+              onEditChannel(channel);
+            }}
+          >
+            {channel.title}
+          </button>
+        </h1>
+      </div>
+
+      <div className="flex shrink-0 items-center gap-1">
+        {hasMembersPane ? null : (
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="size-9 rounded-full"
+            onClick={onOpenMembers}
+            aria-label="Show members"
+          >
+            <Users className="size-4" />
+          </Button>
+        )}
+        {hasMembersPane && !isMembersPaneOpen ? (
+          <MembersPaneToggle isOpen={false} onToggle={onToggleMembersPane} />
+        ) : null}
+        <div className="sm:hidden">
+          <ChannelActionsMenu
+            contextMenu={channelMenu}
+            channel={channel}
+            canDeleteChannel={canDeleteChannel}
+            forceVisible
+            onEditChannel={onEditChannel}
+            onDeleteChannel={onDeleteChannel}
+          />
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function MessagesPane({
   selectedServer,
   selectedChannel,
-  selectedChannelKey,
   selectedMessages,
   targetMessageId,
   hasLoadedMessages,
@@ -395,7 +480,10 @@ export function MessagesPane({
   membersPane,
   onOpenMembers,
 }: MessagesPaneProps) {
-  const channelMenu = useContextActionsMenu();
+  const selectedChannelKey = useMemo(
+    () => (selectedChannel ? resourceKey(selectedChannel) : null),
+    [selectedChannel]
+  );
   const [channelPendingDelete, setChannelPendingDelete] =
     useState<ServerChannel | null>(null);
   const [isMembersPaneOpen, setIsMembersPaneOpen] = useState(() =>
@@ -472,7 +560,7 @@ export function MessagesPane({
   const scrollToBottomOnEditRef = useRef(false);
   const hasRestoredScrollRef = useRef(false);
   const previousTargetMessageIdRef = useRef(targetMessageId);
-  const previousChannelKeyRef = useRef<string | null>(null);
+  const previousChannelKeyRef = useRef<ResourceKey | null>(null);
   const previousMessageCountRef = useRef(0);
   const wasAtBottomRef = useRef(true);
   const lastKnownScrollTopRef = useRef(0);
@@ -556,8 +644,8 @@ export function MessagesPane({
   }, [editingMessage, scrollToBottom]);
 
   const saveScrollPosition = useCallback(
-    (channelKey: string | null, scrollTop?: number) => {
-      if (channelKey == null || channelKey === "") return;
+    (channelKey: ResourceKey | null, scrollTop?: number) => {
+      if (channelKey == null) return;
 
       const nextScrollTop = scrollTop ?? scrollContainerRef.current?.scrollTop;
       if (nextScrollTop == null) {
@@ -622,8 +710,7 @@ export function MessagesPane({
     composer.focusedInput,
     editingMessage,
     // oxlint-disable-next-line react/exhaustive-effect-dependencies -- Refocus the composer on channel navigation.
-    selectedChannel?.id,
-    selectedServer?.server.id,
+    selectedChannelKey,
   ]);
 
   useEffect(() => {
@@ -1006,12 +1093,14 @@ export function MessagesPane({
       );
     }
     if (selectedMessages.some((message) => message.deleted_at === null)) {
+      const channelKey = resourceKey(selectedChannel);
       return (
         <MessageList
-          host={selectedServer.server.host}
+          key={channelKey}
+          channelKey={channelKey}
           channelRoute={{
             screen: "channel",
-            serverId: selectedServer.server.id,
+            server: selectedServer.server,
             channelId: selectedChannel.id,
           }}
           messages={selectedMessages}
@@ -1061,67 +1150,18 @@ export function MessagesPane({
       <section className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
         <header className="border-b border-border/70 bg-background/80 px-4 py-4 backdrop-blur sm:px-6">
           {selectedServer && selectedChannel ? (
-            <div className="flex min-h-9 min-w-0 items-center justify-between gap-3">
-              <div className="flex min-w-0 items-center gap-2">
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  className="-ml-2 size-9 shrink-0 rounded-full sm:hidden"
-                  onClick={onDeselectChannel}
-                  aria-label="Back to channels"
-                >
-                  <ArrowLeft className="size-4" />
-                </Button>
-                <Hash className="size-5 shrink-0 text-muted-foreground" />
-                <h1
-                  {...channelMenu.targetProps}
-                  className="truncate text-xl font-semibold text-foreground"
-                >
-                  <button
-                    type="button"
-                    className="block w-full cursor-pointer truncate rounded-sm text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
-                    onClick={() => {
-                      onEditChannel(selectedChannel);
-                    }}
-                  >
-                    {selectedChannel.title}
-                  </button>
-                </h1>
-              </div>
-
-              <div className="flex shrink-0 items-center gap-1">
-                {hasMembersPane ? null : (
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    className="size-9 rounded-full"
-                    onClick={onOpenMembers}
-                    aria-label="Show members"
-                  >
-                    <Users className="size-4" />
-                  </Button>
-                )}
-                {hasMembersPane && !isMembersPaneOpen ? (
-                  <MembersPaneToggle
-                    isOpen={false}
-                    onToggle={handleToggleMembersPane}
-                  />
-                ) : null}
-                <div className="sm:hidden">
-                  <ChannelActionsMenu
-                    contextMenu={channelMenu}
-                    host={selectedServer.server.host}
-                    channel={selectedChannel}
-                    canDeleteChannel={canDeleteChannel}
-                    forceVisible
-                    onEditChannel={onEditChannel}
-                    onDeleteChannel={setChannelPendingDelete}
-                  />
-                </div>
-              </div>
-            </div>
+            <ChannelHeader
+              key={selectedChannelKey}
+              channel={selectedChannel}
+              hasMembersPane={hasMembersPane}
+              isMembersPaneOpen={isMembersPaneOpen}
+              canDeleteChannel={canDeleteChannel}
+              onDeselectChannel={onDeselectChannel}
+              onEditChannel={onEditChannel}
+              onDeleteChannel={setChannelPendingDelete}
+              onOpenMembers={onOpenMembers}
+              onToggleMembersPane={handleToggleMembersPane}
+            />
           ) : (
             <div className="flex min-h-9 items-center justify-between gap-3">
               <h1 className="text-xl font-semibold text-foreground">

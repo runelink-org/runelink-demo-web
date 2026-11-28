@@ -1,4 +1,7 @@
+import { channelServerRef, resourceKey } from "@runelink/sdk";
 import type {
+  ResourceKey,
+  ResourceRef,
   Server,
   ServerChannel,
   ServerChannelKind,
@@ -22,14 +25,15 @@ import { ServerRailButton } from "@/components/sidebar/ServerRailButton";
 import { Separator } from "@/components/ui/separator";
 import { useContextActionsMenu } from "@/lib/use-context-actions-menu";
 import { getAppRoutePath, getContentRoute } from "@/lib/app-route";
+import { sameResource } from "@/lib/runelink-store-utils";
 import type { RequestEffect } from "@/lib/runelink-session";
 import * as Effect from "effect/Effect";
 
 type SidebarProps = {
   servers: readonly ServerWithChannels[];
-  selectedServerId: string | null;
+  selectedServerKey: ResourceKey | null;
   selectedChannelId: string | null;
-  selectedChannelIdByServerId: Record<string, string | null>;
+  selectedChannelIdByServerKey: Record<ResourceKey, string | null>;
   isLoading: boolean;
   error: string | null;
   isSelectedServerHydrating: boolean;
@@ -37,18 +41,18 @@ type SidebarProps = {
   accountRailOnly?: boolean;
   onManageAccounts: () => void;
   onSelectAccount: () => void;
-  onSelectServer: (serverId: string) => void;
-  onSelectChannel: (serverId: string, channel: ServerChannel) => void;
+  onSelectServer: (server: ResourceRef) => void;
+  onSelectChannel: (channel: ServerChannel) => void;
   onCreateServer: (
     host: string,
     title: string,
     description: string
   ) => RequestEffect<void>;
   onSearchServers: (host: string) => RequestEffect<readonly Server[]>;
-  onJoinServer: (serverId: string, serverHost: string) => RequestEffect<void>;
+  onJoinServer: (server: ResourceRef) => RequestEffect<void>;
   onOpenServerSettings: (server: Server) => void;
-  onLeaveServer: (serverId: string, serverHost: string) => RequestEffect<void>;
-  onDeleteServer: (serverId: string, serverHost: string) => RequestEffect<void>;
+  onLeaveServer: (server: ResourceRef) => RequestEffect<void>;
+  onDeleteServer: (server: ResourceRef) => RequestEffect<void>;
   canDeleteSelectedServer: boolean;
   canManageServer: (server: Server) => boolean;
   onCreateChannel: (
@@ -65,13 +69,15 @@ type SidebarProps = {
   ) => RequestEffect<void>;
 };
 
+const NO_COLLAPSED_IDS: ReadonlySet<string> = new Set();
+
 const CHANNEL_PANEL_WIDTH_KEY = "runelink.demo.channels-sidebar-width";
 const DEFAULT_CHANNEL_PANEL_WIDTH = 280;
 const MIN_CHANNEL_PANEL_WIDTH = 160;
 const MAX_CHANNEL_PANEL_WIDTH = 420;
 
 type PendingSelection = {
-  serverId: string;
+  serverKey: ResourceKey;
   channelId: string | null;
 };
 
@@ -100,9 +106,9 @@ function loadStoredChannelPanelWidth(): number {
 
 export function Sidebar({
   servers,
-  selectedServerId,
+  selectedServerKey,
   selectedChannelId,
-  selectedChannelIdByServerId,
+  selectedChannelIdByServerKey,
   isLoading,
   error,
   isSelectedServerHydrating,
@@ -141,28 +147,40 @@ export function Sidebar({
   const [serverPendingDelete, setServerPendingDelete] = useState<Server | null>(
     null
   );
+  const [collapsedIdsByServerKey, setCollapsedIdsByServerKey] = useState<
+    Record<ResourceKey, ReadonlySet<string>>
+  >({});
   const [pendingSelection, setPendingSelection] =
     useState<PendingSelection | null>(null);
   const previousSelectionRef = useRef({
-    serverId: selectedServerId,
+    serverKey: selectedServerKey,
     channelId: selectedChannelId,
   });
   const pendingNavigationTimeoutRef = useRef<number | null>(null);
 
-  const effectiveSelectedServerId =
-    pendingSelection?.serverId ?? selectedServerId;
-  const effectiveSelectedChannelId =
-    pendingSelection?.channelId ?? selectedChannelId;
+  const effectiveSelectedServerKey =
+    pendingSelection?.serverKey ?? selectedServerKey;
+  // A pending selection of no channel is kept, rather than showing the
+  // previous server's channel
+  const effectiveSelectedChannelId = pendingSelection
+    ? pendingSelection.channelId
+    : selectedChannelId;
   const selectedServer =
-    effectiveSelectedServerId != null && effectiveSelectedServerId !== ""
-      ? (servers.find(
-          (server) => server.server.id === effectiveSelectedServerId
-        ) ?? null)
-      : null;
+    servers.find(
+      ({ server }) => resourceKey(server) === effectiveSelectedServerKey
+    ) ?? null;
+  // The server whose channels are shown, which may be a pending selection
+  const shownServerKey = selectedServer
+    ? resourceKey(selectedServer.server)
+    : null;
   const createChannelServer = createChannelRequest
-    ? servers.find(({ server }) => server.id === createChannelRequest.server.id)
+    ? servers.find(({ server }) =>
+        sameResource(server, createChannelRequest.server)
+      )
     : undefined;
-  const joinedServerIds = new Set(servers.map((server) => server.server.id));
+  const joinedServerKeys = new Set(
+    servers.map(({ server }) => resourceKey(server))
+  );
 
   useEffect(() => {
     if (typeof window === "undefined") {
@@ -187,17 +205,17 @@ export function Sidebar({
   useEffect(() => {
     if (!pendingSelection) {
       previousSelectionRef.current = {
-        serverId: selectedServerId,
+        serverKey: selectedServerKey,
         channelId: selectedChannelId,
       };
       return undefined;
     }
 
     const selectionChangedExternally =
-      previousSelectionRef.current.serverId !== selectedServerId ||
+      previousSelectionRef.current.serverKey !== selectedServerKey ||
       previousSelectionRef.current.channelId !== selectedChannelId;
     const pendingSelectionCommitted =
-      selectedServerId === pendingSelection.serverId &&
+      selectedServerKey === pendingSelection.serverKey &&
       (pendingSelection.channelId === null ||
         selectedChannelId === pendingSelection.channelId);
 
@@ -207,7 +225,7 @@ export function Sidebar({
       }, 0);
 
       previousSelectionRef.current = {
-        serverId: selectedServerId,
+        serverKey: selectedServerKey,
         channelId: selectedChannelId,
       };
 
@@ -217,11 +235,11 @@ export function Sidebar({
     }
 
     previousSelectionRef.current = {
-      serverId: selectedServerId,
+      serverKey: selectedServerKey,
       channelId: selectedChannelId,
     };
     return undefined;
-  }, [pendingSelection, selectedChannelId, selectedServerId]);
+  }, [pendingSelection, selectedChannelId, selectedServerKey]);
 
   function openCreateChannel(
     server: Server,
@@ -292,34 +310,32 @@ export function Sidebar({
       );
     }
     return servers.map(({ server }) => {
-      const isSelected = server.id === effectiveSelectedServerId;
+      const serverKey = resourceKey(server);
+      const isSelected = serverKey === effectiveSelectedServerKey;
 
       return (
         <ServerRailButton
-          key={server.id}
+          key={serverKey}
           isSelected={isSelected}
           server={server}
           href={getAppRoutePath(
             getContentRoute(
-              server.id,
-              selectedChannelIdByServerId[server.id] ?? null
+              server,
+              selectedChannelIdByServerKey[serverKey] ?? null
             )
           )}
           onOpenServerSettings={onOpenServerSettings}
           canCreateChannels={canManageServer(server)}
           onCreateChannel={openCreateChannel}
           onLeaveServer={setServerPendingLeave}
-          onSelect={(nextServerId) => {
-            const nextChannelId =
-              selectedChannelIdByServerId[nextServerId] ?? null;
-
+          onSelect={() => {
             scheduleSelectionCommit(
               {
-                serverId: nextServerId,
-                channelId: nextChannelId,
+                serverKey,
+                channelId: selectedChannelIdByServerKey[serverKey] ?? null,
               },
               () => {
-                onSelectServer(nextServerId);
+                onSelectServer(server);
               }
             );
           }}
@@ -362,7 +378,7 @@ export function Sidebar({
             <AddServerMenu
               contextMenu={addServerMenu}
               activeHost={activeHost}
-              joinedServerIds={joinedServerIds}
+              joinedServerKeys={joinedServerKeys}
               onCreateServer={onCreateServer}
               onSearchServers={onSearchServers}
               onJoinServer={onJoinServer}
@@ -425,8 +441,27 @@ export function Sidebar({
           </div>
 
           <ChannelSection
+            // Channel IDs are only unique on their host, so tree interaction
+            // state starts over for each server
+            key={shownServerKey ?? "none"}
             selectedServer={selectedServer}
             selectedChannelId={effectiveSelectedChannelId}
+            collapsedIds={
+              (shownServerKey === null
+                ? undefined
+                : collapsedIdsByServerKey[shownServerKey]) ?? NO_COLLAPSED_IDS
+            }
+            onCollapsedIdsChange={(update) => {
+              if (shownServerKey === null) return;
+              const key = shownServerKey;
+              setCollapsedIdsByServerKey((current) => {
+                const previous = current[key] ?? NO_COLLAPSED_IDS;
+                const next = update(previous);
+                return next === previous
+                  ? current
+                  : { ...current, [key]: next };
+              });
+            }}
             isLoading={isLoading}
             error={error}
             isSelectedServerHydrating={isSelectedServerHydrating}
@@ -436,14 +471,14 @@ export function Sidebar({
                 openCreateChannel(selectedServer.server, kind, parentChannelId);
               }
             }}
-            onSelectChannel={(serverId, channel) => {
+            onSelectChannel={(channel) => {
               scheduleSelectionCommit(
                 {
-                  serverId,
+                  serverKey: resourceKey(channelServerRef(channel)),
                   channelId: channel.id,
                 },
                 () => {
-                  onSelectChannel(serverId, channel);
+                  onSelectChannel(channel);
                 }
               );
             }}

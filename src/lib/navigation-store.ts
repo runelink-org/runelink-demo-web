@@ -1,43 +1,52 @@
+import { resourceKey } from "@runelink/sdk";
+import type { ResourceKey, ResourceRef } from "@runelink/sdk";
 import { appAtomRegistry, stateAtom } from "@/lib/atom-registry";
-import { bindStoreToActiveAccount } from "@/lib/runelink-store-utils";
-import type { ChannelId, ServerId } from "@/lib/runelink-store-utils";
+import {
+  bindStoreToActiveAccount,
+  sameResource,
+} from "@/lib/runelink-store-utils";
 
 type NavigationState = {
-  selectedServerId: ServerId | null;
-  selectedChannelIdByServerId: Record<string, ChannelId | null>;
+  selectedServer: ResourceRef | null;
+  // Channel IDs are on their server's host
+  selectedChannelIdByServerKey: Record<ResourceKey, string | null>;
 };
 
 const initialState: NavigationState = {
-  selectedServerId: null,
-  selectedChannelIdByServerId: {},
+  selectedServer: null,
+  selectedChannelIdByServerKey: {},
 };
 
 export const navigationAtom = stateAtom(initialState);
 
-export function selectServer(serverId: ServerId | null): void {
+export function selectServer(server: ResourceRef | null): void {
   appAtomRegistry.update(navigationAtom, (state) =>
-    state.selectedServerId === serverId
+    sameResource(state.selectedServer, server)
       ? state
-      : { ...state, selectedServerId: serverId }
+      : { ...state, selectedServer: server }
   );
 }
 
 export function selectChannel(
-  serverId: ServerId,
-  channelId: ChannelId | null
+  server: ResourceRef,
+  channelId: string | null
 ): void {
   appAtomRegistry.update(navigationAtom, (state) => {
+    const serverKey = resourceKey(server);
     const currentChannelId =
-      state.selectedChannelIdByServerId[serverId] ?? null;
-    if (state.selectedServerId === serverId && currentChannelId === channelId) {
+      state.selectedChannelIdByServerKey[serverKey] ?? null;
+    if (
+      sameResource(state.selectedServer, server) &&
+      currentChannelId === channelId
+    ) {
       return state;
     }
 
     return {
-      selectedServerId: serverId,
-      selectedChannelIdByServerId: {
-        ...state.selectedChannelIdByServerId,
-        [serverId]: channelId,
+      selectedServer: server,
+      selectedChannelIdByServerKey: {
+        ...state.selectedChannelIdByServerKey,
+        [serverKey]: channelId,
       },
     };
   });

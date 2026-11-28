@@ -2,17 +2,21 @@ import assert from "node:assert/strict";
 import { it } from "@effect/vitest";
 import { getAppRoutePath, parseAppRoute } from "../src/lib/app-route.ts";
 
-const serverId = "00000000-0000-4000-8000-000000000001";
+const server = {
+  host: "localhost:7001",
+  id: "00000000-0000-4000-8000-000000000001",
+};
 const channelId = "00000000-0000-4000-8000-000000000002";
 const messageId = "00000000-0000-4000-8000-000000000003";
+const serverPath = `/servers/${encodeURIComponent(server.host)}/${server.id}`;
 
 it("message links round-trip through the channel URL", () => {
-  const route = { screen: "channel" as const, serverId, channelId, messageId };
+  const route = { screen: "channel" as const, server, channelId, messageId };
   const url = new URL(getAppRoutePath(route), "https://app.runelink.chat");
   assert.equal(url.search, `?message=${messageId}`);
   assert.equal(
     getAppRoutePath(
-      { screen: "channel" as const, serverId, channelId },
+      { screen: "channel" as const, server, channelId },
       messageId
     ),
     `${url.pathname}${url.search}`
@@ -25,8 +29,8 @@ it("message links round-trip through the channel URL", () => {
 });
 
 it("invalid message targets leave the channel accessible", () => {
-  const path = `/servers/${serverId}/channels/${channelId}`;
-  const route = { screen: "channel" as const, serverId, channelId };
+  const path = `${serverPath}/channels/${channelId}`;
+  const route = { screen: "channel" as const, server, channelId };
   for (const search of [
     "",
     "?message=",
@@ -37,38 +41,58 @@ it("invalid message targets leave the channel accessible", () => {
   }
   assert.deepEqual(parseAppRoute(`${path}/settings`, `?message=${messageId}`), {
     screen: "channel-settings" as const,
-    serverId,
+    server,
     channelId,
   });
 });
 
-it("channel and category settings have a distinct, reloadable route", () => {
-  const route = { screen: "channel-settings" as const, serverId, channelId };
-  const path = `/servers/${serverId}/channels/${channelId}/settings`;
-  assert.equal(getAppRoutePath(route), path);
-  assert.deepEqual(parseAppRoute(path), route);
-  assert.deepEqual(parseAppRoute(`${path}/`), route);
-  assert.deepEqual(
-    parseAppRoute(`/servers/${serverId}/channels/${channelId}`),
-    { screen: "channel" as const, serverId, channelId }
-  );
-  assert.deepEqual(
-    parseAppRoute(`/servers/${serverId}/channels/${channelId}/members`),
-    { screen: "channel-members" as const, serverId, channelId }
+it("routes name the server's host", () => {
+  for (const route of [
+    { screen: "server" as const, server },
+    { screen: "server-settings" as const, server },
+    { screen: "channel-settings" as const, server, channelId },
+    { screen: "channel-members" as const, server, channelId },
+  ]) {
+    const path = getAppRoutePath(route);
+    assert.ok(path.startsWith(serverPath), path);
+    assert.deepEqual(parseAppRoute(path), route);
+    assert.deepEqual(parseAppRoute(`${path}/`), route);
+  }
+  // The same ID on another host is another server
+  assert.notDeepEqual(
+    parseAppRoute(`/servers/localhost/${server.id}`),
+    parseAppRoute(serverPath)
   );
 });
 
-it("settings routes reject malformed IDs and unknown nested pages", () => {
-  assert.equal(
-    parseAppRoute(`/servers/${serverId}/channels/invalid/settings`),
-    null
-  );
-  assert.equal(
-    parseAppRoute(`/servers/invalid/channels/${channelId}/settings`),
-    null
-  );
-  assert.equal(
-    parseAppRoute(`/servers/${serverId}/channels/${channelId}/settings/extra`),
-    null
+it("IPv6 hosts round-trip through routes", () => {
+  const route = {
+    screen: "channel" as const,
+    server: { host: "[::1]:7001", id: server.id },
+    channelId,
+  };
+  const url = new URL(getAppRoutePath(route), "https://app.runelink.chat");
+  assert.deepEqual(parseAppRoute(url.pathname, url.search), route);
+});
+
+it("routes reject missing hosts, malformed IDs, and unknown nested pages", () => {
+  for (const path of [
+    `/servers/${server.id}`,
+    `/servers/${server.id}/channels/${channelId}`,
+    `/servers//${server.id}`,
+    `${serverPath}/channels/invalid/settings`,
+    `/servers/${encodeURIComponent(server.host)}/invalid/channels/${channelId}/settings`,
+    `${serverPath}/channels/${channelId}/settings/extra`,
+    `/servers/%E0%A4%A/${server.id}`,
+  ]) {
+    assert.equal(parseAppRoute(path), null, path);
+  }
+});
+
+it("percent-encoded server IDs decode before validation", () => {
+  const encodedId = server.id.replace("1", "%31");
+  assert.deepEqual(
+    parseAppRoute(`/servers/${encodeURIComponent(server.host)}/${encodedId}`),
+    { screen: "server", server }
   );
 });

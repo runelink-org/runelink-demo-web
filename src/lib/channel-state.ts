@@ -1,14 +1,17 @@
-import type { ServerChannel } from "@runelink/sdk";
+import type { ResourceKey, ServerChannel } from "@runelink/sdk";
 import { stateAtom } from "@/lib/atom-registry";
 
 type ChannelsState = {
-  channelsByServerId: Record<string, readonly ServerChannel[] | undefined>;
-  channelById: Record<string, ServerChannel | undefined>;
+  channelsByServerKey: Record<
+    ResourceKey,
+    readonly ServerChannel[] | undefined
+  >;
+  channelByKey: Record<ResourceKey, ServerChannel | undefined>;
 };
 
 export const initialChannelsState: ChannelsState = {
-  channelsByServerId: {},
-  channelById: {},
+  channelsByServerKey: {},
+  channelByKey: {},
 };
 
 export const channelsAtom = stateAtom(initialChannelsState);

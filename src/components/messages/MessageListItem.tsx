@@ -1,10 +1,10 @@
-import { serverChannelKey } from "@/lib/runelink-store-utils";
+import { resourceKey } from "@runelink/sdk";
 import { InlineMessageEditor } from "./InlineMessageEditor";
 import { cn } from "@/lib/utils";
 import { useContextActionsMenu } from "@/lib/use-context-actions-menu";
 import { DropdownMenu } from "@/components/ui/dropdown-menu";
 import { formatMessagePreview } from "@/lib/message-preview";
-import type { ActiveMessage, Message } from "@runelink/sdk";
+import type { ActiveMessage, Message, ResourceKey } from "@runelink/sdk";
 import { MessageActionsMenu } from "./MessageActionsMenu";
 import type { AppRoute } from "@/lib/app-route";
 import { MemberActionsMenu } from "@/components/members/MemberActionsMenu";
@@ -14,7 +14,7 @@ import { sameUserRef } from "@/lib/account-storage";
 import type { MouseEvent } from "react";
 
 type MessageListItemProps = {
-  host: string;
+  channelKey: ResourceKey;
   channelRoute: Extract<AppRoute, { screen: "channel" }>;
   message: ActiveMessage;
   authorName: string;
@@ -34,7 +34,7 @@ type MessageListItemProps = {
 };
 
 export function MessageListItem({
-  host,
+  channelKey,
   channelRoute,
   message,
   authorName,
@@ -56,8 +56,8 @@ export function MessageListItem({
   const authorContextMenu = useContextActionsMenu();
   const authorRole = useAtomValue(membershipsAtom, (state) =>
     message.author
-      ? state.membersByServerId[channelRoute.serverId]?.find((member) =>
-          sameUserRef(member.user, message.author)
+      ? state.membersByServerKey[resourceKey(channelRoute.server)]?.find(
+          (member) => sameUserRef(member.user, message.author)
         )?.role
       : undefined
   );
@@ -130,7 +130,6 @@ export function MessageListItem({
             >
               <MessageActionsMenu
                 anchor={contextMenu.anchor}
-                host={host}
                 channelRoute={channelRoute}
                 message={message}
                 canDeleteMessage={canDeleteMessage}
@@ -182,11 +181,7 @@ export function MessageListItem({
               {editing ? (
                 <InlineMessageEditor
                   message={editing}
-                  channelKey={serverChannelKey(
-                    channelRoute.serverId,
-                    channelRoute.channelId
-                  )}
-                  host={host}
+                  channelKey={channelKey}
                   onDelete={() => {
                     onDeleteMessage(message);
                   }}
@@ -219,8 +214,7 @@ export function MessageListItem({
         <MemberActionsMenu
           contextMenu={authorContextMenu}
           contextOnly
-          serverId={channelRoute.serverId}
-          serverHost={host}
+          server={channelRoute.server}
           user={message.author}
           role={authorRole}
           canModerateMembers={canModerateMembers}

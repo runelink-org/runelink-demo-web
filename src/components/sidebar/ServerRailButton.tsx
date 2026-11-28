@@ -11,7 +11,7 @@ type ServerRailButtonProps = {
   isSelected: boolean;
   server: Server;
   href: string;
-  onSelect: (serverId: string) => void;
+  onSelect: () => void;
   onOpenServerSettings: (server: Server) => void;
   canCreateChannels: boolean;
   onCreateChannel: (server: Server, kind: ServerChannelKind) => void;
@@ -101,9 +101,7 @@ export function ServerRailButton({
             ? "border-primary/30 bg-primary text-primary-foreground"
             : "border-sidebar-border bg-sidebar-accent text-sidebar-foreground hover:border-sidebar-foreground/35 hover:bg-sidebar-accent/80"
         )}
-        onNavigate={() => {
-          onSelect(server.id);
-        }}
+        onNavigate={onSelect}
         onMouseEnter={showTooltip}
         onMouseLeave={hideTooltip}
         onFocus={showTooltip}

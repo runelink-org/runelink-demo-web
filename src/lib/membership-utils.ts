@@ -1,7 +1,9 @@
 import * as Arr from "effect/Array";
 import * as Order from "effect/Order";
+import { resourceKey } from "@runelink/sdk";
 import type {
   FullServerMembership,
+  ResourceRef,
   ServerMember,
   ServerMembership,
   UserRef,
@@ -11,7 +13,9 @@ import { userRefKey } from "@/lib/runelink-store-utils";
 const membershipOrder = Order.make<ServerMembership>((left, right) => {
   const byTitle = left.server.title.localeCompare(right.server.title);
   return Order.Number(
-    byTitle === 0 ? left.server.id.localeCompare(right.server.id) : byTitle,
+    byTitle === 0
+      ? resourceKey(left.server).localeCompare(resourceKey(right.server))
+      : byTitle,
     0
   );
 });
@@ -27,18 +31,19 @@ export function upsertMembership(
   nextMembership: ServerMembership
 ): readonly ServerMembership[] {
   return sortMemberships([
-    ...memberships.filter(
-      (membership) => membership.server.id !== nextMembership.server.id
-    ),
+    ...removeMembership(memberships, nextMembership.server),
     nextMembership,
   ]);
 }
 
 export function removeMembership(
   memberships: readonly ServerMembership[],
-  serverId: string
+  server: ResourceRef
 ): readonly ServerMembership[] {
-  return memberships.filter((membership) => membership.server.id !== serverId);
+  const key = resourceKey(server);
+  return memberships.filter(
+    (membership) => resourceKey(membership.server) !== key
+  );
 }
 
 export function upsertMember(

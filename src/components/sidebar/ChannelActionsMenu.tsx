@@ -13,13 +13,13 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { copyToClipboard } from "@/lib/clipboard";
 import { getAppRoutePath } from "@/lib/app-route";
+import { channelServerRef } from "@runelink/sdk";
 import { formatChannelCliPath, formatTextChannelCliPath } from "@/lib/cli-path";
 import type { useContextActionsMenu } from "@/lib/use-context-actions-menu";
 import { cn } from "@/lib/utils";
 
 type ChannelActionsMenuProps = {
   contextMenu?: ReturnType<typeof useContextActionsMenu>;
-  host: string;
   channel: ServerChannel;
   canDeleteChannel: boolean;
   onDeleteChannel: (channel: ServerChannel) => void;
@@ -30,8 +30,8 @@ type ChannelActionsMenuProps = {
   forceVisible?: boolean;
 };
 
-function getCopyOptions(host: string, channel: ServerChannel): CopyOption[] {
-  const path = formatChannelCliPath(host, channel.id);
+function getCopyOptions(channel: ServerChannel): CopyOption[] {
+  const path = formatChannelCliPath(channel.host, channel.id);
   switch (channel.kind) {
     case "text": {
       return [
@@ -40,7 +40,7 @@ function getCopyOptions(host: string, channel: ServerChannel): CopyOption[] {
           value: new URL(
             getAppRoutePath({
               screen: "channel",
-              serverId: channel.server_id,
+              server: channelServerRef(channel),
               channelId: channel.id,
             }),
             window.location.origin
@@ -59,7 +59,10 @@ function getCopyOptions(host: string, channel: ServerChannel): CopyOption[] {
         },
         {
           label: "Path for CLI (Text Channel)",
-          value: formatTextChannelCliPath(host, channel.text_channel_id),
+          value: formatTextChannelCliPath(
+            channel.host,
+            channel.text_channel_id
+          ),
           successLabel: "Copied CLI path (text channel).",
         },
       ];
@@ -78,7 +81,6 @@ function getCopyOptions(host: string, channel: ServerChannel): CopyOption[] {
 
 export function ChannelActionsMenu({
   contextMenu,
-  host,
   channel,
   canDeleteChannel,
   onDeleteChannel,
@@ -173,7 +175,7 @@ export function ChannelActionsMenu({
             Copy {isCategory ? "Category" : "Channel"} ID
           </span>
         </DropdownMenuItem>
-        <CopyOtherSubmenu options={getCopyOptions(host, channel)} />
+        <CopyOtherSubmenu options={getCopyOptions(channel)} />
         <DropdownMenuItem
           variant="destructive"
           disabled={!canDeleteChannel}

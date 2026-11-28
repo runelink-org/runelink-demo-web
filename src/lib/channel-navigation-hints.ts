@@ -1,4 +1,11 @@
-import type { Message, ServerWithChannels, UserRef } from "@runelink/sdk";
+import { ResourceRefSchema, resourceKey, textChannelRef } from "@runelink/sdk";
+import type {
+  Message,
+  ResourceKey,
+  ResourceRef,
+  ServerWithChannels,
+  UserRef,
+} from "@runelink/sdk";
 import * as Effect from "effect/Effect";
 import * as Fiber from "effect/Fiber";
 import * as Option from "effect/Option";
@@ -8,15 +15,15 @@ import type { AppRoute } from "@/lib/app-route";
 import { mergeMessages } from "@/lib/message-cache";
 import { request } from "@/lib/runelink-session";
 
-const STORAGE_KEY = "runelink.demo.channel-navigation-hints";
-const Uuid = Schema.String.check(Schema.isUUID());
-const ServerHintsSchema = Schema.Struct({
-  host: Schema.String.check(Schema.isMinLength(1)),
-  channels: Schema.Record(Uuid, Uuid),
-});
+// Hints are by account, then by server key. Earlier versions keyed servers by
+// ID alone, under a key without the version.
+const STORAGE_KEY = "runelink.demo.channel-navigation-hints.v2";
+const Uuid = ResourceRefSchema.fields.id;
+// Text channel IDs by server channel ID, both on the server's host
+const ServerHintsSchema = Schema.Record(Uuid, Uuid);
 const HintsSchema = Schema.Record(
   Schema.String,
-  Schema.Record(Uuid, ServerHintsSchema)
+  Schema.Record(Schema.String, ServerHintsSchema)
 );
 const decodeHints = Schema.decodeUnknownOption(
   Schema.fromJsonString(HintsSchema)
@@ -42,7 +49,7 @@ function readHints(): Hints {
 // including removal of channels that were deleted or are no longer text channels.
 export function rememberChannelNavigationHints(
   account: UserRef,
-  servers: Record<string, ServerWithChannels>
+  servers: Record<ResourceKey, ServerWithChannels>
 ): void {
   if (Object.keys(servers).length === 0) return;
   const hints = readHints();
@@ -50,14 +57,11 @@ export function rememberChannelNavigationHints(
   const previous = hints[key] ?? {};
   const next = { ...previous };
   for (const { server, channels } of Object.values(servers)) {
-    next[server.id] = {
-      host: server.host,
-      channels: Object.fromEntries(
-        channels.flatMap((channel) =>
-          channel.kind === "text" ? [[channel.id, channel.text_channel_id]] : []
-        )
-      ),
-    };
+    next[resourceKey(server)] = Object.fromEntries(
+      channels.flatMap((channel) =>
+        channel.kind === "text" ? [[channel.id, channel.text_channel_id]] : []
+      )
+    );
   }
   if (JSON.stringify(previous) === JSON.stringify(next)) return;
   hints[key] = next;
@@ -66,8 +70,7 @@ export function rememberChannelNavigationHints(
 }
 
 type NavigationPrefetch = {
-  textChannelId: string;
-  targetHost: string | null;
+  textChannelKey: ResourceKey;
   history: Fiber.Fiber<readonly Message[] | null>;
   updates: Message[];
 };
@@ -86,41 +89,40 @@ export const startChannelNavigationPrefetch = Effect.fn(
 )(function* (
   account: UserRef,
   route: AppRoute,
-  cachedMessages: Record<string, readonly Message[]> = {}
+  cachedMessages: Record<ResourceKey, readonly Message[]> = {}
 ) {
   cancelChannelNavigationPrefetch();
   if (route.screen !== "channel" && route.screen !== "channel-members") return;
-  const server = readHints()[accountStorageKey(account)]?.[route.serverId];
-  const textChannelId = server?.channels[route.channelId];
-  if (server == null || !textChannelId) return;
+  const textChannelId =
+    readHints()[accountStorageKey(account)]?.[resourceKey(route.server)]?.[
+      route.channelId
+    ];
+  if (!textChannelId) return;
+  const textChannel = { host: route.server.host, id: textChannelId };
+  const textChannelKey = resourceKey(textChannel);
   // Reconnects can rerun startup while a channel is already cached or loading.
-  if (textChannelId in cachedMessages) return;
-  const targetHost = server.host === account.host ? null : server.host;
+  if (textChannelKey in cachedMessages) return;
   const history = yield* request({
     type: "messages_get_by_text_channel",
-    data: { text_channel_id: textChannelId, target_host: targetHost },
+    data: { text_channel: textChannel },
   }).pipe(
     Effect.map((reply) => reply.data),
     // Any failure falls back to an ordinary fetch.
     Effect.catchCause(() => Effect.succeed(null)),
     Effect.forkDetach({ startImmediately: true })
   );
-  pending = { textChannelId, targetHost, history, updates: [] };
+  pending = { textChannelKey, history, updates: [] };
 });
 
 // History and live updates stay outside the message cache until a normal fetch
-// supplies a text-channel ID and host confirmed by fresh channel metadata.
+// supplies a text channel confirmed by fresh channel metadata.
 export function takeChannelNavigationPrefetch(
-  textChannelId: string,
-  targetHost: string | null
+  textChannel: ResourceRef
 ): Effect.Effect<readonly Message[] | null> | null {
   const prefetch = pending;
   if (!prefetch) return null;
   pending = null;
-  if (
-    prefetch.textChannelId !== textChannelId ||
-    prefetch.targetHost !== targetHost
-  ) {
+  if (prefetch.textChannelKey !== resourceKey(textChannel)) {
     prefetch.history.interruptUnsafe();
     return null;
   }
@@ -132,7 +134,7 @@ export function takeChannelNavigationPrefetch(
 }
 
 export function captureChannelNavigationUpdate(message: Message): void {
-  if (pending?.textChannelId === message.text_channel_id) {
+  if (pending?.textChannelKey === resourceKey(textChannelRef(message))) {
     pending.updates.push(message);
   }
 }

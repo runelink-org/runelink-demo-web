@@ -1,4 +1,4 @@
-import type { Server } from "@runelink/sdk";
+import type { ResourceRef, Server } from "@runelink/sdk";
 import { useState } from "react";
 import { toast } from "sonner";
 import {
@@ -19,7 +19,7 @@ import { runPromise } from "@/lib/runtime";
 type LeaveServerDialogProps = {
   server: Server | null;
   onOpenChange: (open: boolean) => void;
-  onLeaveServer: (serverId: string, serverHost: string) => RequestEffect<void>;
+  onLeaveServer: (server: ResourceRef) => RequestEffect<void>;
 };
 
 export function LeaveServerDialog({
@@ -39,7 +39,7 @@ export function LeaveServerDialog({
     setError(null);
 
     await runPromise(
-      onLeaveServer(server.id, server.host).pipe(
+      onLeaveServer(server).pipe(
         Effect.match({
           onSuccess: () => {
             toast.success(`Left server: ${server.title}`);
