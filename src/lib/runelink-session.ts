@@ -3,7 +3,6 @@ import {
   RunelinkConnection,
   RunelinkIncompatibleHostError,
   RunelinkProtocolError,
-  hostClientWsUrl,
 } from "@runelink/sdk";
 import type {
   CapabilityIssue,
@@ -553,12 +552,12 @@ function* make(
       cancelTransport = undefined;
 
       const scope = yield* Scope.fork(layerScope);
-      // Explicit URL mode prevents the SDK from silently falling back to
-      // ws://. Browser WebSockets reject redirects during their handshake.
+      // The scheme resolved above, so the SDK never falls back to ws:// on
+      // its own. Browser WebSockets reject redirects during their handshake.
       const connection = yield* RunelinkConnection.make({
-        url: hostClientWsUrl(host, secure),
+        host,
         autoReconnect: true,
-        transportSecurity: "secure-only",
+        transportSecurity: secure ? "secure-only" : "insecure-only",
       }).pipe(Scope.provide(scope), Effect.provideContext(context));
       current = { host, connection, scope };
 

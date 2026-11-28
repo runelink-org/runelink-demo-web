@@ -26,29 +26,42 @@ class ProbeFetchError extends Schema.TaggedError<ProbeFetchError>()(
   { cause: Schema.Defect() }
 ) {}
 
-// Saved before hosts were canonical, keys may name the default port, which
-// decoding drops.
-const HostTransportsSchema = Schema.Record(
-  HostSchema,
-  Schema.Struct({
-    secure: Schema.Boolean,
-    allow_insecure: Schema.Boolean.pipe(
-      Schema.withDecodingDefault(Effect.succeed(false))
-    ),
-  })
-);
-const decodeHostTransports = Schema.decodeUnknownOption(
-  Schema.fromJsonString(HostTransportsSchema)
-);
+const HostTransportSchema = Schema.Struct({
+  secure: Schema.Boolean,
+  allow_insecure: Schema.Boolean.pipe(
+    Schema.withDecodingDefault(Effect.succeed(false))
+  ),
+});
+type HostTransport = typeof HostTransportSchema.Type;
 
-function loadHostTransports(): Record<
-  Host,
-  (typeof HostTransportsSchema.Type)[Host]
-> {
+const decodeHostTransports = Schema.decodeUnknownOption(
+  Schema.fromJsonString(Schema.Record(Schema.String, HostTransportSchema))
+);
+const decodeHost = Schema.decodeUnknownOption(HostSchema);
+
+// Saved before hosts were canonical, keys may name the default port. Spellings
+// of one host keep HTTP approval only if all of them had it, and keys that
+// aren't hosts are dropped.
+function loadHostTransports(): Record<Host, HostTransport> {
   const raw = window.localStorage.getItem(STORAGE_KEY);
-  return raw != null && raw !== ""
-    ? { ...Option.getOrElse(decodeHostTransports(raw), () => ({})) }
-    : {};
+  const stored: Readonly<Record<string, HostTransport>> =
+    raw != null && raw !== ""
+      ? Option.getOrElse(decodeHostTransports(raw), () => ({}))
+      : {};
+  const hosts: Record<Host, HostTransport> = {};
+  for (const [key, transport] of Object.entries(stored)) {
+    const host = decodeHost(key);
+    if (Option.isNone(host)) continue;
+    const merged: HostTransport | undefined = hosts[host.value];
+    hosts[host.value] =
+      merged === undefined
+        ? transport
+        : {
+            secure: merged.secure || transport.secure,
+            allow_insecure: merged.allow_insecure && transport.allow_insecure,
+          };
+  }
+  return hosts;
 }
 
 function saveHostTransports(
