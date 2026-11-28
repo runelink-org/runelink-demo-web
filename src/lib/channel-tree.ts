@@ -105,7 +105,7 @@ export function ancestorIds(
   const byId = new Map(channels.map((channel) => [channel.id, channel]));
   const ancestors: ServerChannelId[] = [];
   let parentId = byId.get(channelId)?.parent_channel_id ?? null;
-  while (parentId != null && parentId !== "") {
+  while (parentId != null) {
     ancestors.push(parentId);
     parentId = byId.get(parentId)?.parent_channel_id ?? null;
   }

@@ -1,23 +1,29 @@
+import type {
+  MessageRef,
+  ResourceId,
+  ResourceRef,
+  ServerChannelRef,
+  ServerRef,
+  TextChannelRef,
+} from "@runelink/sdk";
+
 // CLI arguments that locate a resource by its host and ID
-function formatCliPath(host: string, idFlag: string, id: string): string {
-  return `--host=${JSON.stringify(host)} --${idFlag}=${JSON.stringify(id)}`;
+function formatCliPath(ref: ResourceRef<ResourceId>, idFlag: string): string {
+  return `--host=${JSON.stringify(ref.host)} --${idFlag}=${JSON.stringify(ref.id)}`;
 }
 
-export function formatServerCliPath(host: string, serverId: string): string {
-  return formatCliPath(host, "server-id", serverId);
+export function formatServerCliPath(server: ServerRef): string {
+  return formatCliPath(server, "server-id");
 }
 
-export function formatChannelCliPath(host: string, channelId: string): string {
-  return formatCliPath(host, "channel-id", channelId);
+export function formatChannelCliPath(channel: ServerChannelRef): string {
+  return formatCliPath(channel, "channel-id");
 }
 
-export function formatTextChannelCliPath(
-  host: string,
-  textChannelId: string
-): string {
-  return formatCliPath(host, "text-channel-id", textChannelId);
+export function formatTextChannelCliPath(textChannel: TextChannelRef): string {
+  return formatCliPath(textChannel, "text-channel-id");
 }
 
-export function formatMessageCliPath(host: string, messageId: string): string {
-  return formatCliPath(host, "message-id", messageId);
+export function formatMessageCliPath(message: MessageRef): string {
+  return formatCliPath(message, "message-id");
 }

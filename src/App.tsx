@@ -805,11 +805,7 @@ export function App() {
   }
 
   function handleOpenMembers() {
-    if (
-      selectedServerRef == null ||
-      selectedChannelId == null ||
-      selectedChannelId === ""
-    ) {
+    if (selectedServerRef == null || selectedChannelId == null) {
       return;
     }
 

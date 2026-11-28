@@ -168,21 +168,22 @@ export function applyChannelUpserts(
 ): void {
   const channels = newestChannels(upserted);
   const serverKey = resourceKey(server);
-  setState(channelsAtom, (state) => ({
-    channelsByServerKey: {
-      ...state.channelsByServerKey,
-      [serverKey]: upsertChannels(
-        state.channelsByServerKey[serverKey] ?? [],
-        channels
-      ),
-    },
-    channelByKey: {
-      ...state.channelByKey,
-      ...Object.fromEntries(
-        channels.map((channel) => [resourceKey(channel), channel])
-      ),
-    },
-  }));
+  setState(channelsAtom, (state) => {
+    const channelByKey = { ...state.channelByKey };
+    for (const channel of channels) {
+      channelByKey[resourceKey(channel)] = channel;
+    }
+    return {
+      channelsByServerKey: {
+        ...state.channelsByServerKey,
+        [serverKey]: upsertChannels(
+          state.channelsByServerKey[serverKey] ?? [],
+          channels
+        ),
+      },
+      channelByKey,
+    };
+  });
 
   setState(serversAtom, (state) => {
     const cached = state.serverWithChannelsByKey[serverKey];

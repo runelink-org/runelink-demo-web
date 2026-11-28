@@ -122,7 +122,7 @@ export function MessageActionsMenu({
             },
             {
               label: "Path for CLI",
-              value: formatMessageCliPath(message.host, message.id),
+              value: formatMessageCliPath(message),
               successLabel: "Copied CLI path.",
             },
           ]}

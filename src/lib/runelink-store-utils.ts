@@ -1,5 +1,6 @@
 import { textChannelRef } from "@runelink/sdk";
 import type {
+  ResourceId,
   ResourceRef,
   ServerChannel,
   ServerChannelId,
@@ -32,7 +33,7 @@ export function channelRef(
   return { host: server.host, id: channelId };
 }
 
-export function sameResource<Id extends string>(
+export function sameResource<Id extends ResourceId>(
   a: ResourceRef<Id> | null,
   b: ResourceRef<Id> | null
 ): boolean {

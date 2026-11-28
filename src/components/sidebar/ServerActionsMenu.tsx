@@ -105,7 +105,7 @@ export function ServerActionsMenu({
             },
             {
               label: "Path for CLI",
-              value: formatServerCliPath(server.host, server.id),
+              value: formatServerCliPath(server),
               successLabel: "Copied CLI path.",
             },
           ]}
