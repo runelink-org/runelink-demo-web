@@ -57,7 +57,7 @@ type SidebarProps = {
   onJoinServer: (serverRef: ServerRef) => RequestEffect<void>;
   onOpenServerSettings: (server: Server) => void;
   onLeaveServer: (serverRef: ServerRef) => RequestEffect<void>;
-  canDeleteSelectedServer: boolean;
+  canManageChannels: boolean;
   canManageServer: (server: Server) => boolean;
   onCreateChannel: (
     server: Server,
@@ -127,7 +127,7 @@ export function Sidebar({
   onJoinServer,
   onOpenServerSettings,
   onLeaveServer,
-  canDeleteSelectedServer,
+  canManageChannels,
   canManageServer,
   onCreateChannel,
   onDeleteChannel,
@@ -465,7 +465,7 @@ export function Sidebar({
             isLoading={isLoading}
             error={error}
             isSelectedServerHydrating={isSelectedServerHydrating}
-            canManageChannels={canDeleteSelectedServer}
+            canManageChannels={canManageChannels}
             onOpenCreateChannel={(kind, parentChannelId) => {
               if (selectedServer) {
                 openCreateChannel(selectedServer.server, kind, parentChannelId);
