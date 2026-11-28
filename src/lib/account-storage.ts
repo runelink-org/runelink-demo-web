@@ -138,9 +138,11 @@ export function loadBrowserAppConfig(): BrowserAppConfig {
   )) {
     accounts = upsertAccount(accounts, account);
   }
+  const storedActive = config.active_account ?? config.default_account;
   const migrated: BrowserAppConfig = {
-    active_account: Option.getOrNull(
-      decodeUserRef(config.active_account ?? config.default_account)
+    // One that no longer parses gives way to another saved account.
+    active_account: Option.getOrElse(decodeUserRef(storedActive), () =>
+      storedActive == null ? null : (accounts[0] ?? null)
     ),
     accounts,
   };
