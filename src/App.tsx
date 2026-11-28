@@ -71,7 +71,6 @@ import type { TextServerChannel } from "@/lib/runelink-store-utils";
 import { runFork, runPromise, startApp } from "@/lib/runtime";
 import {
   createServer,
-  deleteServer,
   fetchServers,
   fetchServerWithChannels,
   serversAtom,
@@ -1109,7 +1108,6 @@ export function App() {
           onJoinServer={handleJoinServer}
           onOpenServerSettings={handleOpenServerSettings}
           onLeaveServer={handleLeaveServer}
-          onDeleteServer={deleteServer}
           canDeleteSelectedServer={canDeleteSelectedServer}
           canManageServer={canManageServer}
           onCreateChannel={handleCreateChannel}
