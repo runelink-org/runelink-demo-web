@@ -52,7 +52,7 @@ export function getFallbackSelection(
 
   const server = { host: nextServer.server.host, id: nextServer.server.id };
   const channelId = savedChannelIds[resourceKey(server)] ?? null;
-  if (channelId == null || channelId === "") {
+  if (channelId == null) {
     return { server, channelId: null };
   }
 
