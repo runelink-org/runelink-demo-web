@@ -1,5 +1,4 @@
 import { omitRecordKey } from "./record";
-import { sameUserRef } from "./account-storage";
 import { serverRefOf, resourceKey } from "@runelink/sdk";
 import type {
   NewServerChannel,
@@ -9,9 +8,8 @@ import type {
   ServerRef,
 } from "@runelink/sdk";
 import * as Effect from "effect/Effect";
-import { getState, setState } from "@/lib/atom-registry";
-import { authAtom, getActiveAccount } from "@/lib/auth-store";
-import { NotConnectedError, request } from "@/lib/runelink-session";
+import { setState } from "@/lib/atom-registry";
+import { request } from "@/lib/runelink-session";
 import {
   bindStoreToActiveAccount,
   channelRefOf,
@@ -87,14 +85,13 @@ export const createChannel = Effect.fn("Channels.create")(function* (
 // A channel and the server it is in
 type ChannelLocation = Pick<ServerChannel, "host" | "id" | "server_id">;
 
+/**
+ * Deletes a channel. Callers remove it from the stores with
+ * `removeChannelState` once it is deleted.
+ */
 export const deleteChannel = Effect.fn("Channels.delete")(function* (
   channel: ChannelLocation
 ) {
-  const account = authAtom.pipe(getState, getActiveAccount);
-  if (!account) {
-    return yield* new NotConnectedError();
-  }
-
   yield* request({
     type: "channels_delete",
     data: { channel_ref: { host: channel.host, id: channel.id } },
@@ -102,11 +99,6 @@ export const deleteChannel = Effect.fn("Channels.delete")(function* (
     // Already deleted, such as by another admin or tab
     Effect.catchTags({ RunelinkNotFoundError: () => Effect.void })
   );
-
-  if (sameUserRef(account, authAtom.pipe(getState, getActiveAccount))) {
-    removeChannelFromCaches(serverRefOf(channel), channel.id);
-  }
-  return undefined;
 });
 
 // Removes a deleted channel from the channel and server stores

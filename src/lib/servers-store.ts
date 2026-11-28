@@ -1,4 +1,3 @@
-import { omitRecordKey } from "./record";
 import { newestResource } from "./resource-version";
 import { channelsAtom } from "./channel-state";
 import { serverRefOf, resourceKey } from "@runelink/sdk";
@@ -169,6 +168,10 @@ export const createServer = Effect.fn("Servers.create")(function* (
   return reply.data;
 });
 
+/**
+ * Deletes a server. Callers remove it from the stores with
+ * `removeServerState` once it is deleted.
+ */
 export const deleteServer = Effect.fn("Servers.delete")(function* (
   serverRef: ServerRef
 ) {
@@ -176,12 +179,6 @@ export const deleteServer = Effect.fn("Servers.delete")(function* (
     type: "servers_delete",
     data: { server_ref: serverRef },
   });
-
-  const key = resourceKey(serverRef);
-  setState(serversAtom, (state) => ({
-    serverByKey: omitRecordKey(state.serverByKey, key),
-    serverWithChannelsByKey: omitRecordKey(state.serverWithChannelsByKey, key),
-  }));
 });
 
 bindStoreToActiveAccount(() => {

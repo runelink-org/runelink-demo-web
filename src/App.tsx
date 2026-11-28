@@ -76,6 +76,7 @@ import {
   fetchServerWithChannels,
   serversAtom,
 } from "@/lib/servers-store";
+import { removeChannelState } from "@/lib/runelink-updates";
 import { useAppNavigation } from "@/lib/use-app-navigation";
 import { useIsWideLayout } from "@/lib/use-wide-layout";
 import { fetchUserByRef, usersAtom } from "@/lib/users-store";
@@ -902,6 +903,8 @@ export function App() {
     ) {
       return undefined;
     }
+    // Now, since the update may come later
+    removeChannelState(serverRefOf(channel), channel.id);
     const current = getCurrentRoute();
     if (
       current.screen === "channel-settings" &&

@@ -102,7 +102,11 @@ function removeMessageState(
   }));
 }
 
-function removeLoadedServerState(serverRef: ServerRef): void {
+/**
+ * Removes a server and everything loaded for it. Deleting it does this on the
+ * reply, so that the update, which may come later, has nothing left to do.
+ */
+export function removeServerState(serverRef: ServerRef): void {
   const serverKey = resourceKey(serverRef);
   const deletedTextChannelKeys = getKnownTextChannelKeysForServer(serverKey);
 
@@ -233,7 +237,7 @@ function handleMembershipDeleted(serverRef: ServerRef, userRef: UserRef): void {
     });
     // The server cache follows renames, unlike the membership
     const title = getState(serversAtom).serverByKey[serverKey]?.title;
-    removeLoadedServerState(serverRef);
+    removeServerState(serverRef);
     if (
       membership &&
       !isDeletingMembership(serverRef, userRef) &&
@@ -302,7 +306,11 @@ function handleChannelUpsert(channel: ServerChannel): void {
   applyChannelUpserts(serverRef, [channel]);
 }
 
-function handleChannelDeleted(
+/**
+ * Removes a channel and everything loaded for it. Deleting it does this on the
+ * reply, so that the update, which may come later, has nothing left to do.
+ */
+export function removeChannelState(
   serverRef: ServerRef,
   channelId: ServerChannelId
 ): void {
@@ -386,7 +394,7 @@ export function handleRunelinkUpdate(update: WsUpdate): void {
     }
     case "server_deleted": {
       if (isLoadedServer(update.data.server_ref)) {
-        removeLoadedServerState(update.data.server_ref);
+        removeServerState(update.data.server_ref);
       }
       break;
     }
@@ -395,7 +403,7 @@ export function handleRunelinkUpdate(update: WsUpdate): void {
       break;
     }
     case "channel_deleted": {
-      handleChannelDeleted(update.data.server_ref, update.data.channel_id);
+      removeChannelState(update.data.server_ref, update.data.channel_id);
       break;
     }
     case "message_upserted": {
