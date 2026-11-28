@@ -1,4 +1,6 @@
-import type { ActiveMessage } from "@runelink/sdk";
+import { resourceKey } from "@runelink/sdk";
+import type { ActiveMessage, ResourceKey, ResourceRef } from "@runelink/sdk";
+import * as Rec from "effect/Record";
 import type { TextareaSelection } from "@/lib/textarea-selection";
 import { appAtomRegistry, stateAtom } from "@/lib/atom-registry";
 import { bindStoreToActiveAccount } from "@/lib/runelink-store-utils";
@@ -34,15 +36,15 @@ export const EMPTY_COMPOSER: ChannelComposerState = {
 
 // Composer state by channel key
 export const messageComposerAtom = stateAtom<
-  Record<string, ChannelComposerState>
+  Record<ResourceKey, ChannelComposerState>
 >({});
 
-export function getComposer(channelKey: string): ChannelComposerState {
+export function getComposer(channelKey: ResourceKey): ChannelComposerState {
   return appAtomRegistry.get(messageComposerAtom)[channelKey] ?? EMPTY_COMPOSER;
 }
 
 export function updateComposer(
-  channelKey: string,
+  channelKey: ResourceKey,
   update: (state: ChannelComposerState) => ChannelComposerState
 ): void {
   appAtomRegistry.update(messageComposerAtom, (byChannelKey) => {
@@ -54,7 +56,7 @@ export function updateComposer(
 }
 
 export function updateEdit(
-  channelKey: string,
+  channelKey: ResourceKey,
   session: object,
   patch: Partial<MessageEditState> | null
 ): void {
@@ -70,10 +72,11 @@ export function updateEdit(
 }
 
 // Closes the edit of a message, and returns whether one was open.
-export function closeMessageEdit(messageId: string): boolean {
+export function closeMessageEdit(message: ResourceRef): boolean {
   const byChannelKey = appAtomRegistry.get(messageComposerAtom);
-  for (const [channelKey, { editing }] of Object.entries(byChannelKey)) {
-    if (editing?.message.id === messageId) {
+  const key = resourceKey(message);
+  for (const [channelKey, { editing }] of Rec.toEntries(byChannelKey)) {
+    if (editing != null && resourceKey(editing.message) === key) {
       updateEdit(channelKey, editing.session, null);
       return true;
     }

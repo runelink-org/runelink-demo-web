@@ -4,6 +4,7 @@ import { mergeMessages } from "../src/lib/message-cache.ts";
 
 const active = {
   id: "original",
+  host: "localhost",
   text_channel_id: "channel",
   author: null,
   edited_at: null,

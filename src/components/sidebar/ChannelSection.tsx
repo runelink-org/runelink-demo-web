@@ -5,7 +5,7 @@ import type {
   ServerWithChannels,
 } from "@runelink/sdk";
 import { FolderPlus, Hash, Plus } from "lucide-react";
-import { useRef, useState } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
 import { CategoryListItem } from "@/components/sidebar/CategoryListItem";
 import { ChannelListItem } from "@/components/sidebar/ChannelListItem";
 import { Button } from "@/components/ui/button";
@@ -30,6 +30,11 @@ const DRAG_THRESHOLD_PX = 5;
 type ChannelSectionProps = {
   selectedServer: ServerWithChannels | null;
   selectedChannelId: string | null;
+  // Collapsed categories of the selected server
+  collapsedIds: ReadonlySet<string>;
+  onCollapsedIdsChange: (
+    update: (current: ReadonlySet<string>) => ReadonlySet<string>
+  ) => void;
   isLoading: boolean;
   error: string | null;
   isSelectedServerHydrating: boolean;
@@ -38,7 +43,7 @@ type ChannelSectionProps = {
     kind: ServerChannelKind,
     parentChannelId: string | null
   ) => void;
-  onSelectChannel: (serverId: string, channel: ServerChannel) => void;
+  onSelectChannel: (channel: ServerChannel) => void;
   onDeleteChannel: (channel: ServerChannel) => void;
   onEditChannel: (channel: ServerChannel) => void;
   onMoveChannel: (
@@ -109,6 +114,8 @@ function dropTargetAt(
 export function ChannelSection({
   selectedServer,
   selectedChannelId,
+  collapsedIds,
+  onCollapsedIdsChange: setCollapsedIds,
   isLoading,
   error: loadError,
   isSelectedServerHydrating,
@@ -121,13 +128,7 @@ export function ChannelSection({
 }: ChannelSectionProps) {
   const backgroundMenu = useContextActionsMenu();
 
-  const [collapsedIds, setCollapsedIds] = useState<ReadonlySet<string>>(
-    () => new Set()
-  );
   const [drag, setDrag] = useState<DragState | null>(null);
-  const [revealedChannelId, setRevealedChannelId] = useState<string | null>(
-    null
-  );
   // A pressed row that hasn't moved far enough to drag yet
   const pressRef = useRef<PressState | null>(null);
   // Set when a drag ends, so the click that follows doesn't select the row
@@ -136,18 +137,19 @@ export function ChannelSection({
   const rows = visibleRows(channels, collapsedIds, selectedChannelId);
 
   // Expand the categories containing a newly selected channel, such as one
-  // just created in a collapsed category
-  if (selectedChannelId !== revealedChannelId) {
-    setRevealedChannelId(selectedChannelId);
-    if (selectedChannelId != null && selectedChannelId !== "") {
-      const ancestors = ancestorIds(channels, selectedChannelId);
-      setCollapsedIds((current) =>
-        ancestors.some((id) => current.has(id))
-          ? new Set([...current].filter((id) => !ancestors.includes(id)))
-          : current
-      );
-    }
-  }
+  // just created in a collapsed category. The collapse state belongs to the
+  // sidebar, so it changes after rendering.
+  // Before paint, so the revealed categories never show collapsed
+  useLayoutEffect(() => {
+    if (selectedChannelId == null || selectedChannelId === "") return;
+    const ancestors = ancestorIds(channels, selectedChannelId);
+    setCollapsedIds((current) =>
+      ancestors.some((id) => current.has(id))
+        ? new Set([...current].filter((id) => !ancestors.includes(id)))
+        : current
+    );
+    // oxlint-disable-next-line react-hooks/exhaustive-deps, react/exhaustive-effect-dependencies -- Reveal only when the selection changes, not when the tree does.
+  }, [selectedChannelId]);
 
   const createChannelTooltip = canManageChannels
     ? "Create Channel"
@@ -356,7 +358,6 @@ export function ChannelSection({
 
                 {channel.kind === "category" ? (
                   <CategoryListItem
-                    host={selectedServer.server.host}
                     channel={channel}
                     isCollapsed={isCollapsed}
                     canManageChannels={canManageChannels}
@@ -371,13 +372,10 @@ export function ChannelSection({
                   />
                 ) : (
                   <ChannelListItem
-                    host={selectedServer.server.host}
                     channel={channel}
                     isSelected={channel.id === selectedChannelId}
                     canDeleteChannel={canManageChannels}
-                    onSelect={(nextChannel) => {
-                      onSelectChannel(selectedServer.server.id, nextChannel);
-                    }}
+                    onSelect={onSelectChannel}
                     onDeleteChannel={onDeleteChannel}
                     onEditChannel={onEditChannel}
                   />

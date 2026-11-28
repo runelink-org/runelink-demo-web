@@ -1,5 +1,6 @@
 import { useIsMounted } from "@/lib/use-is-mounted";
-import type { Server } from "@runelink/sdk";
+import { resourceKey } from "@runelink/sdk";
+import type { ResourceKey, ResourceRef, Server } from "@runelink/sdk";
 import { Globe } from "lucide-react";
 import { useEffect, useEffectEvent, useState } from "react";
 import {
@@ -23,10 +24,10 @@ import { runPromise } from "@/lib/runtime";
 type JoinServerDialogProps = {
   open: boolean;
   activeHost: string | null;
-  joinedServerIds: Set<string>;
+  joinedServerKeys: ReadonlySet<ResourceKey>;
   onOpenChange: (open: boolean) => void;
   onSearchServers: (host: string) => RequestEffect<readonly Server[]>;
-  onJoinServer: (serverId: string, serverHost: string) => RequestEffect<void>;
+  onJoinServer: (server: ResourceRef) => RequestEffect<void>;
 };
 
 export function JoinServerDialog(props: JoinServerDialogProps) {
@@ -45,7 +46,7 @@ export function JoinServerDialog(props: JoinServerDialogProps) {
 function JoinServerDialogForm({
   open,
   activeHost,
-  joinedServerIds,
+  joinedServerKeys,
   onOpenChange,
   onSearchServers,
   onJoinServer,
@@ -60,7 +61,9 @@ function JoinServerDialogForm({
   const [isSearching, setIsSearching] = useState(
     open && Boolean(activeHost?.trim())
   );
-  const [joiningServerId, setJoiningServerId] = useState<string | null>(null);
+  const [joiningServerKey, setJoiningServerKey] = useState<ResourceKey | null>(
+    null
+  );
 
   async function searchServers(nextHost: string) {
     if (!nextHost) {
@@ -118,11 +121,11 @@ function JoinServerDialogForm({
   }
 
   async function handleJoin(server: Server) {
-    setJoiningServerId(server.id);
+    setJoiningServerKey(resourceKey(server));
     setError(null);
 
     await runPromise(
-      onJoinServer(server.id, server.host).pipe(
+      onJoinServer(server).pipe(
         Effect.match({
           onSuccess: () => {
             if (isMounted()) onOpenChange(false);
@@ -133,7 +136,7 @@ function JoinServerDialogForm({
         })
       )
     ).finally(() => {
-      if (isMounted()) setJoiningServerId(null);
+      if (isMounted()) setJoiningServerKey(null);
     });
   }
 
@@ -165,14 +168,14 @@ function JoinServerDialogForm({
                 }}
                 placeholder="example.com"
                 className="pl-9"
-                disabled={isSearching || joiningServerId !== null}
+                disabled={isSearching || joiningServerKey !== null}
                 autoFocus
               />
             </div>
             <Button
               type="submit"
               variant="outline"
-              disabled={isSearching || joiningServerId !== null}
+              disabled={isSearching || joiningServerKey !== null}
             >
               {isSearching ? "Searching..." : "Search"}
             </Button>
@@ -186,14 +189,15 @@ function JoinServerDialogForm({
         </p>
         <div className="max-h-72 space-y-2 overflow-y-auto pr-1">
           {results.map((server) => {
-            const isJoined = joinedServerIds.has(server.id);
-            const isJoining = joiningServerId === server.id;
+            const serverKey = resourceKey(server);
+            const isJoined = joinedServerKeys.has(serverKey);
+            const isJoining = joiningServerKey === serverKey;
             const joinAction = isJoining ? "Joining..." : "Join";
             const joinLabel = isJoined ? "Joined" : joinAction;
 
             return (
               <div
-                key={server.id}
+                key={serverKey}
                 className="flex items-start gap-3 rounded-2xl border border-border/70 bg-muted/30 p-3"
               >
                 <div className="flex size-10 shrink-0 items-center justify-center rounded-2xl border border-border/70 bg-background/80 text-sm font-semibold text-foreground shadow-sm">
@@ -216,7 +220,7 @@ function JoinServerDialogForm({
                   type="button"
                   size="sm"
                   variant={isJoined ? "outline" : "default"}
-                  disabled={isJoined || joiningServerId !== null}
+                  disabled={isJoined || joiningServerKey !== null}
                   onClick={() => {
                     void handleJoin(server);
                   }}
@@ -246,7 +250,7 @@ function JoinServerDialogForm({
       ) : null}
 
       <AlertDialogFooter>
-        <AlertDialogCancel disabled={isSearching || joiningServerId !== null}>
+        <AlertDialogCancel disabled={isSearching || joiningServerKey !== null}>
           Close
         </AlertDialogCancel>
       </AlertDialogFooter>

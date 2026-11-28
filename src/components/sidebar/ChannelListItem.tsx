@@ -5,6 +5,8 @@ import { ChannelActionsMenu } from "@/components/sidebar/ChannelActionsMenu";
 import { NavigationLink } from "@/components/NavigationLink";
 import { buttonVariants } from "@/components/ui/button-variants";
 import { getAppRoutePath } from "@/lib/app-route";
+import { channelServerRef, textChannelRef } from "@runelink/sdk";
+import type { TextServerChannel } from "@/lib/runelink-store-utils";
 import { useContextActionsMenu } from "@/lib/use-context-actions-menu";
 import { cn } from "@/lib/utils";
 import { getState } from "@/lib/atom-registry";
@@ -18,8 +20,7 @@ import * as Effect from "effect/Effect";
 const PREFETCH_DELAY_MS = 150;
 
 type ChannelListItemProps = {
-  host: string;
-  channel: ServerChannel;
+  channel: TextServerChannel;
   isSelected: boolean;
   canDeleteChannel: boolean;
   onSelect: (channel: ServerChannel) => void;
@@ -28,7 +29,6 @@ type ChannelListItemProps = {
 };
 
 export function ChannelListItem({
-  host,
   channel,
   isSelected,
   canDeleteChannel,
@@ -46,14 +46,13 @@ export function ChannelListItem({
     }
   }
   // oxlint-disable-next-line react/exhaustive-effect-dependencies -- Cancel prefetch for the previous host or channel when the item is reused.
-  useEffect(() => cancelPrefetch, [channel.id, host]);
+  useEffect(() => cancelPrefetch, [channel.id, channel.host]);
 
   function prefetch() {
     cancelPrefetch();
     const account = authAtom.pipe(getState, getActiveAccount);
     const connection = getState(connectionAtom);
     if (
-      channel.kind !== "text" ||
       !account ||
       connection.status !== "connected" ||
       !sameUserRef(account, connection.connectedAccount)
@@ -62,10 +61,7 @@ export function ChannelListItem({
     }
 
     void runPromise(
-      fetchMessagesByTextChannel(
-        channel.text_channel_id,
-        host === account.host ? null : host
-      ).pipe(
+      fetchMessagesByTextChannel(textChannelRef(channel)).pipe(
         // Opening the channel retries a failed background fetch.
         Effect.ignore
       )
@@ -84,7 +80,7 @@ export function ChannelListItem({
       <NavigationLink
         href={getAppRoutePath({
           screen: "channel",
-          serverId: channel.server_id,
+          server: channelServerRef(channel),
           channelId: channel.id,
         })}
         aria-current={isSelected ? "page" : undefined}
@@ -128,7 +124,6 @@ export function ChannelListItem({
 
       <ChannelActionsMenu
         contextMenu={contextMenu}
-        host={host}
         channel={channel}
         canDeleteChannel={canDeleteChannel}
         className="absolute top-1/2 right-2 -translate-y-1/2"

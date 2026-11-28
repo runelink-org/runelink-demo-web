@@ -13,6 +13,7 @@ let sessionTag: typeof RunelinkSessionModule.RunelinkSession;
 
 let NotConnectedError: typeof RunelinkSessionModule.NotConnectedError;
 const requests: PendingRequest[] = [];
+const server = { host: "peer.example", id: "server" };
 
 beforeAll(() =>
   Effect.gen(function* () {
@@ -40,17 +41,17 @@ afterAll(() => {
 it.effect("concurrent channel loads of a server share one request", () =>
   Effect.gen(function* () {
     const first = yield* Effect.forkScoped(
-      servers.fetchServerWithChannels("server", "peer.example"),
+      servers.fetchServerWithChannels(server),
       { startImmediately: true }
     );
     const second = yield* Effect.forkScoped(
-      servers.fetchServerWithChannels("server", "peer.example"),
+      servers.fetchServerWithChannels(server),
       { startImmediately: true }
     );
     assert.equal(requests.length, 1);
     const sent = requests[0].request;
-    assert.ok("data" in sent && "target_host" in sent.data);
-    assert.equal(sent.data.target_host, "peer.example");
+    assert.ok("data" in sent && "server" in sent.data);
+    assert.deepEqual(sent.data.server, server);
     requests[0].reject(new NotConnectedError());
     assert.equal(
       (yield* first.pipe(Fiber.join, Effect.flip))._tag,
@@ -63,7 +64,7 @@ it.effect("concurrent channel loads of a server share one request", () =>
 
     // A settled load isn't shared with later loads
     const retry = yield* Effect.forkScoped(
-      servers.fetchServerWithChannels("server", "peer.example"),
+      servers.fetchServerWithChannels(server),
       { startImmediately: true }
     );
     assert.equal(requests.length, 2);

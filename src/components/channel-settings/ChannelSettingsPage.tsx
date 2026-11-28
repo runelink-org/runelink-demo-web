@@ -28,7 +28,6 @@ import { requestFailureMessage } from "@/lib/request-failure";
 
 type ChannelSettingsPageProps = {
   channel: ServerChannel | null;
-  host: string | null;
   canManage: boolean;
   isLoading: boolean;
   error: string | null;
@@ -38,18 +37,16 @@ type ChannelSettingsPageProps = {
 
 export function ChannelSettingsPage({
   channel,
-  host,
   canManage,
   isLoading,
   error,
   onDone,
   onDeleteChannel,
 }: ChannelSettingsPageProps) {
-  if (channel && host != null && host !== "") {
+  if (channel) {
     return (
       <ChannelSettingsForm
         channel={channel}
-        host={host}
         canManage={canManage}
         onDone={onDone}
         onDeleteChannel={onDeleteChannel}
@@ -127,13 +124,11 @@ function normalizeDescription(value: string | null): string {
 
 function ChannelSettingsForm({
   channel,
-  host,
   canManage,
   onDone,
   onDeleteChannel,
 }: {
   channel: ServerChannel;
-  host: string;
   canManage: boolean;
   onDone: () => void;
   onDeleteChannel: (channel: ServerChannel) => RequestEffect<void>;
@@ -186,13 +181,12 @@ function ChannelSettingsForm({
       request({
         type: "channels_update",
         data: {
-          channel_id: channel.id,
+          channel: { host: channel.host, id: channel.id },
           channel_update: {
             title: submittedTitle,
             description: submittedDescription || null,
             expected_updated_at: baseline.updated_at,
           },
-          target_host: host === account.host ? null : host,
         },
       }).pipe(
         Effect.match({

@@ -1,6 +1,9 @@
+import { resourceKey } from "@runelink/sdk";
 import type {
   FullServerMembership,
   NewServerMembership,
+  ResourceKey,
+  ResourceRef,
   ServerMember,
   ServerMembership,
   UserRef,
@@ -22,29 +25,28 @@ import {
   bindStoreToActiveAccount,
   userRefKey,
 } from "@/lib/runelink-store-utils";
-import type { ServerId, TargetHost } from "@/lib/runelink-store-utils";
 
 type MembershipsState = {
   membershipsByUserRefKey: Record<string, readonly ServerMembership[]>;
-  membersByServerId: Record<string, readonly ServerMember[]>;
-  hasFetchedMembersByServerId: Record<string, boolean>;
-  isLoadingByServerId: Record<string, boolean>;
+  membersByServerKey: Record<ResourceKey, readonly ServerMember[]>;
+  hasFetchedMembersByServerKey: Record<ResourceKey, boolean>;
+  isLoadingByServerKey: Record<ResourceKey, boolean>;
 };
 
 const initialState: MembershipsState = {
   membershipsByUserRefKey: {},
-  membersByServerId: {},
-  hasFetchedMembersByServerId: {},
-  isLoadingByServerId: {},
+  membersByServerKey: {},
+  hasFetchedMembersByServerKey: {},
+  isLoadingByServerKey: {},
 };
 
 export const membershipsAtom = stateAtom(initialState);
 
-function setServerLoading(serverId: ServerId, isLoading: boolean): void {
+function setServerLoading(serverKey: ResourceKey, isLoading: boolean): void {
   setState(membershipsAtom, (state) => ({
-    isLoadingByServerId: {
-      ...state.isLoadingByServerId,
-      [serverId]: isLoading,
+    isLoadingByServerKey: {
+      ...state.isLoadingByServerKey,
+      [serverKey]: isLoading,
     },
   }));
 }
@@ -65,7 +67,7 @@ export const fetchMembershipsByUser = Effect.fn("Memberships.fetchByUser")(
 
     debugRunelink("fetched memberships by user", {
       userRef,
-      serverIds: reply.data.map((membership) => membership.server.id),
+      servers: reply.data.map((membership) => resourceKey(membership.server)),
     });
 
     return reply.data;
@@ -73,34 +75,32 @@ export const fetchMembershipsByUser = Effect.fn("Memberships.fetchByUser")(
 );
 
 export const fetchMembersByServer = Effect.fn("Memberships.fetchMembers")(
-  function* (serverId: ServerId, targetHost: TargetHost = null) {
-    setServerLoading(serverId, true);
+  function* (server: ResourceRef) {
+    const serverKey = resourceKey(server);
+    setServerLoading(serverKey, true);
     const reply = yield* request({
       type: "memberships_get_members_by_server",
-      data: {
-        server_id: serverId,
-        target_host: targetHost,
-      },
+      data: { server },
     }).pipe(
       Effect.onError(() =>
         Effect.sync(() => {
-          setServerLoading(serverId, false);
+          setServerLoading(serverKey, false);
         })
       )
     );
 
     setState(membershipsAtom, (state) => ({
-      membersByServerId: {
-        ...state.membersByServerId,
-        [serverId]: reply.data,
+      membersByServerKey: {
+        ...state.membersByServerKey,
+        [serverKey]: reply.data,
       },
-      hasFetchedMembersByServerId: {
-        ...state.hasFetchedMembersByServerId,
-        [serverId]: true,
+      hasFetchedMembersByServerKey: {
+        ...state.hasFetchedMembersByServerKey,
+        [serverKey]: true,
       },
-      isLoadingByServerId: {
-        ...state.isLoadingByServerId,
-        [serverId]: false,
+      isLoadingByServerKey: {
+        ...state.isLoadingByServerKey,
+        [serverKey]: false,
       },
     }));
 
@@ -109,18 +109,15 @@ export const fetchMembersByServer = Effect.fn("Memberships.fetchMembers")(
 );
 
 export const upsertMembership = Effect.fn("Memberships.upsert")(function* (
-  serverId: ServerId,
   newMembership: NewServerMembership
 ) {
   const reply = yield* request({
     type: "memberships_upsert",
-    data: {
-      server_id: serverId,
-      new_membership: newMembership,
-    },
+    data: { new_membership: newMembership },
   });
 
   const userKey = userRefKey(reply.data.user);
+  const serverKey = resourceKey(newMembership.server);
   setState(membershipsAtom, (state) => ({
     membershipsByUserRefKey: {
       ...state.membershipsByUserRefKey,
@@ -129,17 +126,17 @@ export const upsertMembership = Effect.fn("Memberships.upsert")(function* (
         toServerMembership(reply.data)
       ),
     },
-    membersByServerId: {
-      ...state.membersByServerId,
-      [serverId]: upsertMember(
-        state.membersByServerId[serverId] ?? [],
+    membersByServerKey: {
+      ...state.membersByServerKey,
+      [serverKey]: upsertMember(
+        state.membersByServerKey[serverKey] ?? [],
         toServerMember(reply.data)
       ),
     },
   }));
 
   debugRunelink("created membership", {
-    serverId,
+    server: serverKey,
     user: reply.data.user,
   });
 
@@ -150,27 +147,30 @@ export const upsertMembership = Effect.fn("Memberships.upsert")(function* (
 // before the reply
 const deletingMemberships = new Set<string>();
 
+function deletingMembershipKey(server: ResourceRef, userRef: UserRef): string {
+  return `${resourceKey(server)}/${userRefKey(userRef)}`;
+}
+
 export function isDeletingMembership(
-  serverId: string,
+  server: ResourceRef,
   userRef: UserRef
 ): boolean {
-  return deletingMemberships.has(`${serverId}/${userRefKey(userRef)}`);
+  return deletingMemberships.has(deletingMembershipKey(server, userRef));
 }
 
 export const deleteMembership = Effect.fn("Memberships.delete")(function* (
-  serverId: ServerId,
-  userRef: UserRef,
-  targetHost: TargetHost = null
+  server: ResourceRef,
+  userRef: UserRef
 ) {
   const userKey = userRefKey(userRef);
-  const key = `${serverId}/${userKey}`;
+  const serverKey = resourceKey(server);
+  const key = deletingMembershipKey(server, userRef);
   deletingMemberships.add(key);
   yield* request({
     type: "memberships_delete",
     data: {
-      server_id: serverId,
+      server,
       user_ref: userRef,
-      target_host: targetHost,
     },
   }).pipe(
     // Already removed, such as by an admin or another tab
@@ -183,13 +183,13 @@ export const deleteMembership = Effect.fn("Memberships.delete")(function* (
       ...state.membershipsByUserRefKey,
       [userKey]: removeMembership(
         state.membershipsByUserRefKey[userKey] ?? [],
-        serverId
+        server
       ),
     },
-    membersByServerId: {
-      ...state.membersByServerId,
-      [serverId]: removeMember(
-        state.membersByServerId[serverId] ?? [],
+    membersByServerKey: {
+      ...state.membersByServerKey,
+      [serverKey]: removeMember(
+        state.membersByServerKey[serverKey] ?? [],
         userRef
       ),
     },

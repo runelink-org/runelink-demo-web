@@ -18,7 +18,12 @@ import { getState } from "@/lib/atom-registry";
 import { request } from "@/lib/runelink-session";
 import { runPromise } from "@/lib/runtime";
 import { handleRunelinkUpdate } from "@/lib/runelink-updates";
-import type { ServerMember, ServerWithChannels } from "@runelink/sdk";
+import { resourceKey } from "@runelink/sdk";
+import type {
+  ResourceRef,
+  ServerMember,
+  ServerWithChannels,
+} from "@runelink/sdk";
 import { ArrowLeft, LogOut, Trash2, Users } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { DeleteServerDialog } from "@/components/sidebar/DeleteServerDialog";
@@ -42,10 +47,6 @@ type ServerSettingsPageProps = {
   onDone: () => void;
 };
 
-function getTargetHost(serverHost: string, activeHost: string): string | null {
-  return serverHost === activeHost ? null : serverHost;
-}
-
 function formatServerTimestamp(value: string): string {
   return new Intl.DateTimeFormat(undefined, {
     month: "short",
@@ -60,7 +61,7 @@ export function ServerSettingsPage(props: ServerSettingsPageProps) {
   const account = useAtomValue(authAtom, getActiveAccount);
   return (
     <ServerSettingsContent
-      key={`${account ? userRefKey(account) : "none"}:${props.server?.server.id ?? "none"}`}
+      key={`${account ? userRefKey(account) : "none"}:${props.server ? resourceKey(props.server.server) : "none"}`}
       {...props}
     />
   );
@@ -168,13 +169,12 @@ function ServerSettingsContent({
       request({
         type: "servers_update",
         data: {
-          server_id: baseline.id,
+          server: { host: baseline.host, id: baseline.id },
           server_update: {
             title: submittedTitle,
             description: submittedDescription || null,
             expected_updated_at: baseline.updated_at,
           },
-          target_host: getTargetHost(baseline.host, account.host),
         },
       }).pipe(
         Effect.match({
@@ -204,27 +204,17 @@ function ServerSettingsContent({
   }
 
   const handleLeaveServer = withLeaveServerSpan(function* (
-    serverId: string,
-    serverHost: string
+    target: ResourceRef
   ) {
     if (!activeAccount) return;
-    yield* deleteMembership(
-      serverId,
-      activeAccount,
-      getTargetHost(serverHost, activeAccount.host)
-    );
+    yield* deleteMembership(target, activeAccount);
     onDone();
   });
 
   const handleDeleteServer = withDeleteServerSpan(function* (
-    serverId: string,
-    serverHost: string
+    target: ResourceRef
   ) {
-    if (!activeAccount) return;
-    yield* deleteServer(
-      serverId,
-      getTargetHost(serverHost, activeAccount.host)
-    );
+    yield* deleteServer(target);
     onDone();
   });
 
@@ -407,8 +397,7 @@ function ServerSettingsContent({
 
               <div className="mt-5">
                 <ServerMembersTable
-                  serverId={server.server.id}
-                  serverHost={server.server.host}
+                  server={server.server}
                   members={sortedMembers}
                   isLoadingMembers={isLoadingMembers}
                   membersError={membersError}

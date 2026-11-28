@@ -1,4 +1,4 @@
-import type { ServerMember } from "@runelink/sdk";
+import type { ResourceRef, ServerMember } from "@runelink/sdk";
 import { Badge } from "@/components/ui/badge";
 import { MemberActionsMenu } from "@/components/members/MemberActionsMenu";
 import { useContextActionsMenu } from "@/lib/use-context-actions-menu";
@@ -17,8 +17,7 @@ import {
 } from "@/components/ui/table";
 
 type ServerMembersTableProps = {
-  serverId: string;
-  serverHost: string;
+  server: ResourceRef;
   members: readonly ServerMember[];
   isLoadingMembers: boolean;
   membersError: string | null;
@@ -37,14 +36,13 @@ function formatServerTimestamp(value: string): string {
 }
 
 function ServerMemberTableRow({
-  serverId,
-  serverHost,
+  server,
   member,
   activeAccount,
   canModerateMembers,
 }: Pick<
   ServerMembersTableProps,
-  "serverId" | "serverHost" | "activeAccount" | "canModerateMembers"
+  "server" | "activeAccount" | "canModerateMembers"
 > & { member: ServerMember }) {
   const contextMenu = useContextActionsMenu();
 
@@ -97,8 +95,7 @@ function ServerMemberTableRow({
       <TableCell className="w-0 pr-3 text-right">
         <MemberActionsMenu
           contextMenu={contextMenu}
-          serverId={serverId}
-          serverHost={serverHost}
+          server={server}
           user={member.user}
           role={member.role}
           canModerateMembers={canModerateMembers}
@@ -109,8 +106,7 @@ function ServerMemberTableRow({
 }
 
 export function ServerMembersTable({
-  serverId,
-  serverHost,
+  server,
   members,
   isLoadingMembers,
   membersError,
@@ -157,8 +153,7 @@ export function ServerMembersTable({
           {members.map((member) => (
             <ServerMemberTableRow
               key={`${member.user.name}@${member.user.host}`}
-              serverId={serverId}
-              serverHost={serverHost}
+              server={server}
               member={member}
               activeAccount={activeAccount}
               canModerateMembers={canModerateMembers}

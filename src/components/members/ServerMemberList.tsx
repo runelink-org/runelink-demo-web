@@ -1,5 +1,5 @@
 import * as Arr from "effect/Array";
-import type { ServerMember, ServerRole } from "@runelink/sdk";
+import type { ResourceRef, ServerMember, ServerRole } from "@runelink/sdk";
 import { useMemo } from "react";
 import { MemberActionsMenu } from "@/components/members/MemberActionsMenu";
 import {
@@ -17,8 +17,7 @@ import { cn } from "@/lib/utils";
 import { useContextActionsMenu } from "@/lib/use-context-actions-menu";
 
 type ServerMemberListProps = {
-  serverId: string;
-  serverHost: string;
+  server: ResourceRef;
   members: readonly ServerMember[];
   isLoading: boolean;
   error: string | null;
@@ -28,14 +27,12 @@ type ServerMemberListProps = {
 const ROLE_ORDER: ServerRole[] = ["admin", "member"];
 
 function ServerMemberListItem({
-  serverId,
-  serverHost,
+  server,
   member,
   canModerateMembers,
-}: Pick<
-  ServerMemberListProps,
-  "serverId" | "serverHost" | "canModerateMembers"
-> & { member: ServerMember }) {
+}: Pick<ServerMemberListProps, "server" | "canModerateMembers"> & {
+  member: ServerMember;
+}) {
   const contextMenu = useContextActionsMenu();
 
   return (
@@ -72,8 +69,7 @@ function ServerMemberListItem({
       </p>
       <MemberActionsMenu
         contextMenu={contextMenu}
-        serverId={serverId}
-        serverHost={serverHost}
+        server={server}
         user={member.user}
         role={member.role}
         canModerateMembers={canModerateMembers}
@@ -83,8 +79,7 @@ function ServerMemberListItem({
 }
 
 export function ServerMemberList({
-  serverId,
-  serverHost,
+  server,
   members,
   isLoading,
   error,
@@ -130,8 +125,7 @@ export function ServerMemberList({
             {section.members.map((member) => (
               <ServerMemberListItem
                 key={`${member.user.name}@${member.user.host}`}
-                serverId={serverId}
-                serverHost={serverHost}
+                server={server}
                 member={member}
                 canModerateMembers={canModerateMembers}
               />

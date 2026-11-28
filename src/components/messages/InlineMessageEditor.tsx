@@ -3,7 +3,7 @@ import {
   restoreTextareaSelection,
   sameTextareaSelection,
 } from "@/lib/textarea-selection";
-import type { ActiveMessage } from "@runelink/sdk";
+import type { ActiveMessage, ResourceKey } from "@runelink/sdk";
 import { useCallback, useState } from "react";
 import { useAtomValue } from "@effect/atom-react";
 import {
@@ -25,13 +25,11 @@ import { requestFailureMessage } from "@/lib/request-failure";
 export function InlineMessageEditor({
   message,
   channelKey,
-  host,
   onClose,
   onDelete,
 }: {
   message: ActiveMessage;
-  channelKey: string;
-  host: string;
+  channelKey: ResourceKey;
   onClose: (reason: "cancel" | "saved") => void;
   onDelete: () => void;
 }) {
@@ -93,9 +91,8 @@ export function InlineMessageEditor({
       request({
         type: "messages_update",
         data: {
-          message_id: message.id,
+          message: { host: message.host, id: message.id },
           message_update: { body, expected_updated_at: message.updated_at },
-          target_host: host === account.host ? null : host,
         },
       }).pipe(
         Effect.match({
