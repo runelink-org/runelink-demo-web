@@ -140,6 +140,27 @@ it.effect(
     })
 );
 
+it("only approved HTTP counts as a host's known transport", () => {
+  setup({
+    stored: {
+      "a.example": { secure: false, allow_insecure: false },
+      "b.example": { secure: false, allow_insecure: true },
+    },
+  });
+  assert.equal(
+    hostTransport.getKnownHostTransport(fixtures.host("a.example")),
+    null
+  );
+  assert.equal(
+    hostTransport.getKnownHostTransport(fixtures.host("b.example")),
+    false
+  );
+  assert.equal(
+    hostTransport.getKnownHostTransport(fixtures.host("c.example")),
+    null
+  );
+});
+
 it.effect(
   "legacy HTTP preference requires approval and cancellation saves nothing",
   () =>
