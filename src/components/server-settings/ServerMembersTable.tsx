@@ -3,10 +3,12 @@ import { Badge } from "@/components/ui/badge";
 import { MemberActionsMenu } from "@/components/members/MemberActionsMenu";
 import { useContextActionsMenu } from "@/lib/use-context-actions-menu";
 import {
-  MemberStatus,
+  PRESENCE_STATUS_DISPLAY,
   ROLE_LABELS,
   ROLE_TEXT_CLASS_NAMES,
 } from "@/components/members/member-display";
+import { usePresenceStatus } from "@/components/members/use-presence-status";
+import { cn } from "@/lib/utils";
 import {
   Table,
   TableBody,
@@ -45,6 +47,7 @@ function ServerMemberTableRow({
   "serverRef" | "activeAccount" | "canModerateMembers"
 > & { member: ServerMember }) {
   const contextMenu = useContextActionsMenu();
+  const status = PRESENCE_STATUS_DISPLAY[usePresenceStatus(member.user)];
 
   const initials = member.user.name.slice(0, 2).toUpperCase();
   const isActiveAccount =
@@ -85,8 +88,8 @@ function ServerMemberTableRow({
       </TableCell>
       <TableCell>
         <span className="text-muted-foreground inline-flex items-center gap-1.5 text-sm">
-          <MemberStatus.Icon className="size-3.5" />
-          {MemberStatus.label}
+          <status.Icon className={cn("size-3.5", status.className)} />
+          {status.label}
         </span>
       </TableCell>
       <TableCell className="whitespace-nowrap text-sm text-muted-foreground">

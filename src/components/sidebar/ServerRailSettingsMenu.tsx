@@ -1,3 +1,6 @@
+import { ChosenPresenceStatusSchema } from "@runelink/sdk";
+import * as Effect from "effect/Effect";
+import * as Schema from "effect/Schema";
 import { Cog, MonitorSmartphone, Moon, Sun } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
@@ -8,16 +11,92 @@ import {
   DropdownMenuContent,
   DropdownMenuGroup,
   DropdownMenuLabel,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { PRESENCE_STATUS_DISPLAY } from "@/components/members/member-display";
 import { useAtomValue } from "@effect/atom-react";
+import { presenceAtom, updateChosenPresenceStatus } from "@/lib/presence-store";
+import { sameUserRef } from "@/lib/account-storage";
+import { authAtom, getActiveAccount } from "@/lib/auth-store";
+import { connectionAtom } from "@/lib/runelink-session";
+import { runPromise } from "@/lib/runtime";
+import { cn } from "@/lib/utils";
+import { toastFailure } from "@/lib/toast-failure";
 import {
   initializeThemeStore,
   resolveTheme,
   setSelectedTheme,
   themeAtom,
 } from "@/lib/theme";
+
+const isChosenPresenceStatus = Schema.is(ChosenPresenceStatusSchema);
+
+function chooseStatus(status: unknown): void {
+  if (!isChosenPresenceStatus(status)) return;
+  void runPromise(
+    updateChosenPresenceStatus(status).pipe(
+      Effect.catch((error) =>
+        Effect.sync(() => {
+          toastFailure("Couldn't change your status", error);
+        })
+      )
+    )
+  );
+}
+
+// Hidden on hosts without statuses, and disabled until the host sends the
+// current one.
+function PresenceStatusItems() {
+  const chosenStatus = useAtomValue(
+    presenceAtom,
+    (state) => state.chosenStatus
+  );
+  // The active account's socket, not one it is switching away from
+  const connectedAccount = useAtomValue(
+    connectionAtom,
+    (state) => state.connectedAccount
+  );
+  const activeAccount = useAtomValue(authAtom, getActiveAccount);
+  const canChoose =
+    connectedAccount !== null && sameUserRef(connectedAccount, activeAccount);
+  const isSupported = useAtomValue(
+    connectionAtom,
+    (state) =>
+      !state.capabilityIssues.some(
+        (issue) => issue.capability === "presence.status"
+      )
+  );
+  if (!isSupported) return null;
+
+  return (
+    <>
+      <DropdownMenuSeparator />
+      <DropdownMenuRadioGroup
+        value={chosenStatus ?? ""}
+        onValueChange={chooseStatus}
+      >
+        {ChosenPresenceStatusSchema.literals.map((status) => {
+          const display = PRESENCE_STATUS_DISPLAY[status];
+          return (
+            <DropdownMenuRadioItem
+              key={status}
+              value={status}
+              disabled={!canChoose || chosenStatus === null}
+              closeOnClick={false}
+              className="cursor-pointer gap-3 rounded-xl px-3 py-2"
+            >
+              <display.Icon className={cn("size-4", display.className)} />
+              <span className="font-medium">{display.label}</span>
+            </DropdownMenuRadioItem>
+          );
+        })}
+      </DropdownMenuRadioGroup>
+    </>
+  );
+}
 
 export function ServerRailSettingsMenu() {
   const triggerRef = useRef<HTMLSpanElement | null>(null);
@@ -139,6 +218,8 @@ export function ServerRailSettingsMenu() {
               <span className="font-medium">Dark Mode</span>
             </DropdownMenuCheckboxItem>
           </DropdownMenuGroup>
+
+          <PresenceStatusItems />
         </DropdownMenuContent>
       </DropdownMenu>
 

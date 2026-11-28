@@ -38,6 +38,10 @@ import { closeMessageEdit } from "@/lib/message-composer-store";
 import { isDeletingMessage, messagesAtom } from "@/lib/messages-store";
 import { navigationAtom } from "@/lib/navigation-store";
 import {
+  applyChosenPresenceStatus,
+  applyPresenceStatus,
+} from "@/lib/presence-store";
+import {
   channelRefOf,
   sameResource,
   userRefKey,
@@ -408,6 +412,14 @@ export function handleRunelinkUpdate(update: WsUpdate): void {
     }
     case "message_upserted": {
       handleMessageUpsert(update.data);
+      break;
+    }
+    case "presence_status_updated": {
+      applyPresenceStatus(update.data);
+      break;
+    }
+    case "chosen_presence_status_updated": {
+      applyChosenPresenceStatus(update.data.status);
       break;
     }
   }

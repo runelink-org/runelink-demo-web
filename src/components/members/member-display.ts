@@ -1,6 +1,8 @@
 import * as Order from "effect/Order";
 import type { ServerMember, ServerRole } from "@runelink/sdk";
-import { CircleDashed } from "lucide-react";
+import { Circle, CircleDashed } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
+import type { DisplayedPresenceStatus } from "@/lib/presence-store";
 
 export const ROLE_LABELS: Record<ServerRole, string> = {
   admin: "Admin",
@@ -21,8 +23,28 @@ export const memberNameOrder = Order.make<ServerMember>((left, right) =>
   )
 );
 
-// TODO: Show each member's synced presence instead of always offline (#14)
-export const MemberStatus = {
-  label: "Offline",
-  Icon: CircleDashed,
+export const PRESENCE_STATUS_DISPLAY: Record<
+  DisplayedPresenceStatus,
+  { label: string; Icon: LucideIcon; className: string }
+> = {
+  online: {
+    label: "Online",
+    Icon: Circle,
+    className: "fill-emerald-500 text-emerald-500",
+  },
+  do_not_disturb: {
+    label: "Do Not Disturb",
+    Icon: Circle,
+    className: "fill-red-500 text-red-500",
+  },
+  invisible: {
+    label: "Invisible",
+    Icon: CircleDashed,
+    className: "text-muted-foreground",
+  },
+  offline: {
+    label: "Offline",
+    Icon: CircleDashed,
+    className: "text-muted-foreground",
+  },
 };

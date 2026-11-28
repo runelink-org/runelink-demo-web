@@ -7,6 +7,7 @@ import assert from "node:assert/strict";
 import { afterAll, beforeAll, beforeEach, it, vi } from "@effect/vitest";
 import * as Context from "effect/Context";
 import type * as RunelinkUpdatesModule from "../src/lib/runelink-updates.ts";
+import type * as PresenceStoreModule from "../src/lib/presence-store.ts";
 import * as Effect from "effect/Effect";
 import * as FiberSet from "effect/FiberSet";
 import type { RequestFailure } from "../src/lib/runelink-session.ts";
@@ -20,6 +21,7 @@ let registry: typeof AtomRegistryModule.appAtomRegistry;
 let authStore: typeof AuthStoreModule;
 let session$: typeof RunelinkSessionModule;
 let handleRunelinkUpdate: typeof RunelinkUpdatesModule.handleRunelinkUpdate;
+let presenceStore: typeof PresenceStoreModule;
 let sockets: FakeSocket[];
 // Whether new sockets never open, like a host that stops responding
 let stalled: boolean;
@@ -151,6 +153,9 @@ beforeAll(() =>
     ({ handleRunelinkUpdate } = yield* Effect.promise(
       () => import("../src/lib/runelink-updates.ts")
     ));
+    presenceStore = yield* Effect.promise(
+      () => import("../src/lib/presence-store.ts")
+    );
   })
 );
 
@@ -448,6 +453,63 @@ it.effect(
           "RunelinkDisconnectedError"
         );
         assert.equal(sentIndex("ping"), -1);
+      })
+    ),
+  options
+);
+
+it.effect(
+  "a login keeps the presence statuses its host sent before replying",
+  () =>
+    withSession((session) =>
+      Effect.gen(function* () {
+        yield* authenticate();
+        const attempt = yield* Effect.forkScoped(
+          session.login({ host: "localhost", name: "new", password: "pw" }),
+          { startImmediately: true }
+        );
+        const sent = yield* waitForRequest("auth_token_password");
+        // Hosts send these as soon as the socket authenticates.
+        for (const update of [
+          {
+            type: "chosen_presence_status_updated",
+            data: { status: "online" },
+          },
+          {
+            type: "presence_status_updated",
+            data: { user_ref: other, status: "do_not_disturb" },
+          },
+        ]) {
+          sent.socket.receive({
+            type: "update",
+            data: { event_id: sent.request.request_id, update },
+          });
+        }
+        yield* waitFor(
+          () =>
+            registry.get(presenceStore.presenceAtom).chosenStatus === "online"
+        );
+        sent.socket.reply(sent, {
+          type: "auth_token",
+          data: {
+            access_token: "new",
+            token_type: "Bearer",
+            expires_in: 3600,
+            refresh_token: "new",
+            scope: "openid",
+          },
+        });
+        yield* Fiber.join(attempt);
+        assert.deepEqual(registry.get(presenceStore.presenceAtom), {
+          chosenStatus: "online",
+          statusByUserRefKey: { "other@localhost": "do_not_disturb" },
+        });
+
+        // A later socket gets them again.
+        sent.socket.close(4000);
+        yield* waitFor(
+          () => registry.get(presenceStore.presenceAtom).chosenStatus === null
+        );
       })
     ),
   options
