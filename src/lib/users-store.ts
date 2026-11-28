@@ -6,7 +6,6 @@ import {
   bindStoreToActiveAccount,
   userRefKey,
 } from "@/lib/runelink-store-utils";
-import type { TargetHost } from "@/lib/runelink-store-utils";
 
 type UsersState = {
   userByRefKey: Record<string, User>;
@@ -17,15 +16,11 @@ const initialState: UsersState = { userByRefKey: {} };
 export const usersAtom = stateAtom(initialState);
 
 export const fetchUserByRef = Effect.fn("Users.fetchByRef")(function* (
-  userRef: UserRef,
-  targetHost: TargetHost = null
+  userRef: UserRef
 ) {
   const reply = yield* request({
     type: "users_get_by_ref",
-    data: {
-      user_ref: userRef,
-      target_host: targetHost,
-    },
+    data: { user_ref: userRef },
   });
 
   setState(usersAtom, (state) => ({
