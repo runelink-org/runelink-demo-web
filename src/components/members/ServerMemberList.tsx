@@ -4,10 +4,11 @@ import { useMemo } from "react";
 import { MemberActionsMenu } from "@/components/members/MemberActionsMenu";
 import {
   memberNameOrder,
-  MemberStatus,
+  PRESENCE_STATUS_DISPLAY,
   ROLE_LABELS,
   ROLE_TEXT_CLASS_NAMES,
 } from "@/components/members/member-display";
+import { usePresenceStatus } from "@/components/members/use-presence-status";
 import {
   Tooltip,
   TooltipContent,
@@ -34,6 +35,7 @@ function ServerMemberListItem({
   member: ServerMember;
 }) {
   const contextMenu = useContextActionsMenu();
+  const status = PRESENCE_STATUS_DISPLAY[usePresenceStatus(member.user)];
 
   return (
     <li
@@ -49,14 +51,14 @@ function ServerMemberListItem({
             render={
               <span
                 role="img"
-                aria-label={MemberStatus.label}
+                aria-label={status.label}
                 className="absolute -right-1 -bottom-1 flex size-4 items-center justify-center rounded-full bg-background text-muted-foreground transition-colors group-hover:bg-muted"
               />
             }
           >
-            <MemberStatus.Icon className="size-3" />
+            <status.Icon className={cn("size-3", status.className)} />
           </TooltipTrigger>
-          <TooltipContent>{MemberStatus.label}</TooltipContent>
+          <TooltipContent>{status.label}</TooltipContent>
         </Tooltip>
       </div>
       <p
