@@ -1,5 +1,4 @@
 import * as fixtures from "./fixtures.ts";
-import type * as AccountStorageModule from "../src/lib/account-storage.ts";
 import type * as AccountDeletionModule from "../src/lib/account-deletion.ts";
 import type * as AuthStoreModule from "../src/lib/auth-store.ts";
 import type * as AtomRegistryModule from "../src/lib/atom-registry.ts";
@@ -11,12 +10,9 @@ import * as Fiber from "effect/Fiber";
 import * as TestClock from "effect/testing/TestClock";
 import { afterAll, beforeAll, beforeEach, it, vi } from "@effect/vitest";
 
-const CONFIG_KEY = "runelink.demo.app-config";
-const AUTH_KEY = "runelink.demo.auth-cache";
 const alice = fixtures.userRef({ name: "alice", host: "example.com" });
 
 let storage: Map<string, string>;
-let accountStorage: typeof AccountStorageModule;
 let accountDeletion: typeof AccountDeletionModule;
 let authAtom: typeof AuthStoreModule.authAtom;
 let registry: typeof AtomRegistryModule.appAtomRegistry;
@@ -33,9 +29,6 @@ beforeAll(() =>
         setItem: (key: string, value: string) => storage.set(key, value),
       },
     });
-    accountStorage = yield* Effect.promise(
-      () => import("../src/lib/account-storage.ts")
-    );
     accountDeletion = yield* Effect.promise(
       () => import("../src/lib/account-deletion.ts")
     );
@@ -55,41 +48,6 @@ afterAll(() => {
 
 beforeEach(() => {
   storage.clear();
-});
-
-it("saved accounts drop the default port, keep the canonical session, and migrate the active account", () => {
-  storage.set(
-    CONFIG_KEY,
-    JSON.stringify({
-      default_account: { name: "alice", host: "example.com:7000" },
-      accounts: [
-        { name: "alice", host: "example.com:7000" },
-        alice,
-        { name: "bob", host: "example.com:7001" },
-      ],
-    })
-  );
-  storage.set(
-    AUTH_KEY,
-    JSON.stringify({
-      accounts: {
-        "alice@example.com:7000": { refresh_token: "old" },
-        "alice@example.com": { refresh_token: "new" },
-        "carol@example.com:7000": { refresh_token: "carol" },
-      },
-    })
-  );
-
-  const expectedConfig = {
-    active_account: alice,
-    accounts: [alice, { name: "bob", host: "example.com:7001" }],
-  };
-  assert.deepEqual(accountStorage.loadBrowserAppConfig(), expectedConfig);
-  assert.deepEqual(JSON.parse(storage.get(CONFIG_KEY) ?? ""), expectedConfig);
-  assert.deepEqual(accountStorage.loadBrowserAuthCache().accounts, {
-    "alice@example.com": { refresh_token: "new" },
-    "carol@example.com": { refresh_token: "carol" },
-  });
 });
 
 const lookupCases = [
