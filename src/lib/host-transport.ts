@@ -37,7 +37,7 @@ type HostTransport = typeof HostTransportSchema.Type;
 
 // Keys must already be canonical, so that spellings of one host can't merge
 // their HTTP approvals. Other spellings fail to decode and are backed up.
-const isCanonicalHost = Schema.is(Schema.toType(HostSchema));
+const isCanonicalHost = Schema.is(HostSchema);
 const decodeHostTransports = Schema.decodeUnknownOption(
   Schema.fromJsonString(
     Schema.Record(Schema.String, HostTransportSchema).check(

@@ -162,20 +162,19 @@ it("only approved HTTP counts as a host's known transport", () => {
   );
 });
 
-it.effect("approvals saved under another spelling of a host don't apply", () =>
-  Effect.gen(function* () {
-    setup({
-      stored: { "localhost:7000": { secure: false, allow_insecure: true } },
-    });
-    const pending = yield* Effect.forkScoped(
-      hostTransport.resolveHostTransport(fixtures.host("localhost")),
-      { startImmediately: true }
-    );
-    (yield* waitForPrompt()).respond(false);
-    yield* pending.pipe(Fiber.join, Effect.flip);
-    assert.ok(storage.has("runelink.demo.host-transports.bak"));
-  })
-);
+it("approvals saved under another spelling of a host don't apply", () => {
+  const stored = {
+    localhost: { secure: false, allow_insecure: true },
+    "localhost:7000": { secure: false, allow_insecure: true },
+  };
+  setup({ stored });
+  const host = fixtures.host("localhost");
+  assert.equal(hostTransport.getKnownHostTransport(host), null);
+  assert.equal(
+    storage.get("runelink.demo.host-transports.bak"),
+    encodeJson(stored)
+  );
+});
 
 it.effect(
   "legacy HTTP preference requires approval and cancellation saves nothing",
