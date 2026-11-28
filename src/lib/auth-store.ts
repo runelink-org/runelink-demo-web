@@ -9,7 +9,6 @@ import {
   hasAccount,
   loadBrowserAppConfig,
   loadBrowserAuthCache,
-  normalizeAccountInput,
   sameUserRef,
   saveBrowserAppConfig,
   saveBrowserAuthCache,
@@ -132,12 +131,10 @@ export function getActiveAccountAuth(
 }
 
 export function selectAccount(userRef: UserRef): void {
-  const normalizedAccount = normalizeAccountInput(userRef);
-
   setState(authAtom, (state) => {
     const nextConfig = {
-      active_account: normalizedAccount,
-      accounts: upsertAccount(state.config.accounts, normalizedAccount),
+      active_account: userRef,
+      accounts: upsertAccount(state.config.accounts, userRef),
     };
 
     saveBrowserAppConfig(nextConfig);
@@ -193,23 +190,14 @@ export function storeAccountToken(
   tokenResponse: TokenResponse,
   clientId: string
 ): void {
-  const normalizedAccount = normalizeAccountInput(userRef);
   // Refreshes only replace tokens, so the account config is left alone.
-  const nextAuthCache = storeLatestToken(
-    normalizedAccount,
-    tokenResponse,
-    clientId
-  );
+  const nextAuthCache = storeLatestToken(userRef, tokenResponse, clientId);
   saveBrowserAuthCache(nextAuthCache);
   setState(authAtom, { authCache: nextAuthCache, authError: null });
 }
 
 export function clearAccountAuth(userRef: UserRef, errorMessage?: string) {
-  const normalizedAccount = normalizeAccountInput(userRef);
-  const nextAuthCache = clearTokenState(
-    loadBrowserAuthCache(),
-    normalizedAccount
-  );
+  const nextAuthCache = clearTokenState(loadBrowserAuthCache(), userRef);
   saveBrowserAuthCache(nextAuthCache);
   setState(authAtom, {
     authCache: nextAuthCache,

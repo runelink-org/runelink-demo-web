@@ -19,7 +19,6 @@ import {
   FieldLabel,
 } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
-import { normalizeHostDraft } from "@/lib/account-storage";
 import { cn } from "@/lib/utils";
 import { authAtom, getActiveAccount, setAuthError } from "@/lib/auth-store";
 import { requestFailureMessage } from "@/lib/request-failure";
@@ -244,7 +243,7 @@ export function AuthScreen({
                     placeholder="runelink.chat"
                     value={host}
                     onChange={(event) => {
-                      setHost(normalizeHostDraft(event.target.value));
+                      setHost(event.target.value);
                     }}
                     required
                   />

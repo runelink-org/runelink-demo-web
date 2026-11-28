@@ -4,7 +4,7 @@ import {
   validateHost,
   validateUsername,
 } from "@runelink/sdk";
-import type { Host, UserRef } from "@runelink/sdk";
+import type { UserRef } from "@runelink/sdk";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
@@ -92,22 +92,8 @@ export function normalizeAccountInput(input: {
   };
 }
 
-const tryValidateHost = Option.liftThrowable(validateHost);
-
 /** The host that a person entered, if it is one. */
-export function enteredHost(input: string): Option.Option<Host> {
-  return tryValidateHost(input);
-}
-
-/** A host as a person types it, without a URL scheme or trailing slashes. */
-export function normalizeHostDraft(host: string): string {
-  // Only ASCII is lowercased, since the rest is left to IDNA when parsed.
-  return host
-    .trim()
-    .replaceAll(/[A-Z]/gu, (letter) => letter.toLowerCase())
-    .replace(/^https?:\/\//u, "")
-    .replace(/\/+$/u, "");
-}
+export const enteredHost = Option.liftThrowable(validateHost);
 
 export function accountStorageKey(userRef: UserRef): string {
   return `${userRef.name}@${userRef.host}`;
