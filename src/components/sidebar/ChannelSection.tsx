@@ -144,7 +144,7 @@ export function ChannelSection({
   // sidebar, so it changes after rendering.
   // Before paint, so the revealed categories never show collapsed
   useLayoutEffect(() => {
-    if (selectedChannelId == null || selectedChannelId === "") return;
+    if (selectedChannelId === null) return;
     const ancestors = ancestorIds(channels, selectedChannelId);
     setCollapsedIds((current) =>
       ancestors.some((id) => current.has(id))
