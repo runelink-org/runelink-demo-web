@@ -46,9 +46,14 @@ function canUseStorage(): boolean {
   return typeof window !== "undefined" && window.localStorage !== undefined;
 }
 
+// Such as when storage is full
+const trySetItem = Option.liftThrowable((key: string, value: string) => {
+  window.localStorage.setItem(key, value);
+});
+
 // Moves a value to the first unused backup key, without replacing an earlier
-// backup.
-function backUp(key: string, value: string): string {
+// backup, or leaves it in place until the next save if it can't.
+function tryBackUp(key: string, value: string): Option.Option<string> {
   let backupKey = `${key}.bak`;
   for (
     let index = 1;
@@ -57,12 +62,13 @@ function backUp(key: string, value: string): string {
   ) {
     backupKey = `${key}.bak.${index}`;
   }
-  window.localStorage.setItem(backupKey, value);
-  window.localStorage.removeItem(key);
-  return backupKey;
+  return trySetItem(backupKey, value).pipe(
+    Option.map(() => {
+      window.localStorage.removeItem(key);
+      return backupKey;
+    })
+  );
 }
-
-const tryBackUp = Option.liftThrowable(backUp);
 
 // Data that doesn't decode, such as data saved by an older version, isn't
 // migrated. It is moved to a `.bak` key and replaced with the fallback.
@@ -79,7 +85,6 @@ export function loadStoredJson<T>(
   if (rawValue == null || rawValue === "") return fallback;
 
   return Option.getOrElse(decode(rawValue), () => {
-    // Left in place if it can't be backed up, such as when storage is full
     const backedUp = tryBackUp(key, rawValue);
     // Not the stored value itself, which may hold tokens
     reportRunelinkFailure(
