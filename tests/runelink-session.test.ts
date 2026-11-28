@@ -1,3 +1,4 @@
+import * as fixtures from "./fixtures.ts";
 import type * as AtomRegistryModule from "../src/lib/atom-registry.ts";
 import type * as AuthStoreModule from "../src/lib/auth-store.ts";
 import type * as RunelinkSessionModule from "../src/lib/runelink-session.ts";
@@ -38,8 +39,8 @@ const originals = {
   window: globalThis.window,
   document: globalThis.document,
 };
-const account = { name: "test", host: "localhost" };
-const other = { name: "other", host: "localhost" };
+const account = fixtures.userRef({ name: "test", host: "localhost" });
+const other = fixtures.userRef({ name: "other", host: "localhost" });
 
 // A host that accepts every offered capability and lets the test answer
 // requests

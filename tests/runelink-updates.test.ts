@@ -8,7 +8,12 @@ import type * as ServersStoreModule from "../src/lib/servers-store.ts";
 import assert from "node:assert/strict";
 import { afterAll, beforeAll, beforeEach, it, vi } from "@effect/vitest";
 import { resourceKey } from "@runelink/sdk";
-import type { ActiveMessage, Message, ServerChannel } from "@runelink/sdk";
+import type {
+  ActiveMessage,
+  Host,
+  Message,
+  ServerChannel,
+} from "@runelink/sdk";
 import * as Effect from "effect/Effect";
 import * as fixtures from "./fixtures.ts";
 
@@ -25,18 +30,18 @@ const serverId = fixtures.serverId(fixtures.uuid(1));
 const channelId = fixtures.serverChannelId(fixtures.uuid(2));
 const textChannelId = fixtures.textChannelId(fixtures.uuid(3));
 const messageId = fixtures.messageId(fixtures.uuid(4));
-const hosts = ["a.example", "b.example"] as const;
+const hosts = [fixtures.host("a.example"), fixtures.host("b.example")];
 const at = "2026-11-27T12:00:00Z";
 const bob = {
   name: "bob",
-  host: "a.example",
+  host: fixtures.host("a.example"),
   role: "user" as const,
   created_at: at,
   updated_at: at,
   synced_at: null,
 };
 
-function server(host: string) {
+function server(host: Host) {
   return {
     id: serverId,
     host,
@@ -47,7 +52,7 @@ function server(host: string) {
   };
 }
 
-function channel(host: string): ServerChannel {
+function channel(host: Host): ServerChannel {
   return {
     id: channelId,
     host,
@@ -63,7 +68,7 @@ function channel(host: string): ServerChannel {
   };
 }
 
-function message(host: string, body = "hello"): ActiveMessage {
+function message(host: Host, body = "hello"): ActiveMessage {
   return {
     id: messageId,
     host,
@@ -78,9 +83,8 @@ function message(host: string, body = "hello"): ActiveMessage {
   };
 }
 
-const serverKey = (host: string) => resourceKey(server(host));
-const textChannelKey = (host: string) =>
-  resourceKey({ host, id: textChannelId });
+const serverKey = (host: Host) => resourceKey(server(host));
+const textChannelKey = (host: Host) => resourceKey({ host, id: textChannelId });
 
 beforeAll(() =>
   Effect.gen(function* () {
@@ -118,7 +122,7 @@ afterAll(() => {
 
 beforeEach(() => {
   registry.set(composer.messageComposerAtom, {});
-  const entries = <T>(value: (host: string) => T) =>
+  const entries = <T>(value: (host: Host) => T) =>
     Object.fromEntries(hosts.map((host) => [serverKey(host), value(host)]));
   registry.set(servers.serversAtom, {
     serverByKey: entries(server),
@@ -200,7 +204,7 @@ it("updates about a server affect it and not another host's with the same ID", (
 });
 
 it("deleting a message closes only its own host's edit", () => {
-  const edit = (host: string) => {
+  const edit = (host: Host) => {
     composer.updateComposer(resourceKey(channel(host)), (current) => ({
       ...current,
       focusedInput: "edit",

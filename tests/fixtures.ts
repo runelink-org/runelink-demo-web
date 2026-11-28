@@ -1,5 +1,6 @@
 import {
   ActiveMessageSchema,
+  HostSchema,
   MessageIdSchema,
   MessageSchema,
   ServerChannelIdSchema,
@@ -8,10 +9,13 @@ import {
   ServerRefSchema,
   ServerSchema,
   TextChannelIdSchema,
+  UserRefSchema,
 } from "@runelink/sdk";
 import * as Schema from "effect/Schema";
 
 // Fixtures are decoded through the SDK's schemas, which brand their IDs.
+export const host = Schema.decodeUnknownSync(HostSchema);
+export const userRef = Schema.decodeUnknownSync(UserRefSchema);
 export const serverId = Schema.decodeUnknownSync(ServerIdSchema);
 export const serverChannelId = Schema.decodeUnknownSync(ServerChannelIdSchema);
 export const textChannelId = Schema.decodeUnknownSync(TextChannelIdSchema);

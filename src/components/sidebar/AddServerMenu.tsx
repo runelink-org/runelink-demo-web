@@ -1,4 +1,10 @@
-import type { ResourceKey, Server, ServerId, ServerRef } from "@runelink/sdk";
+import type {
+  Host,
+  ResourceKey,
+  Server,
+  ServerId,
+  ServerRef,
+} from "@runelink/sdk";
 import { Plus, Search } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
@@ -15,14 +21,14 @@ import type { RequestEffect } from "@/lib/runelink-session";
 
 type AddServerMenuProps = {
   contextMenu: ReturnType<typeof useContextActionsMenu>;
-  activeHost: string | null;
+  activeHost: Host | null;
   joinedServerKeys: ReadonlySet<ResourceKey<ServerId>>;
   onCreateServer: (
-    host: string,
+    host: Host,
     title: string,
     description: string
   ) => RequestEffect<void>;
-  onSearchServers: (host: string) => RequestEffect<readonly Server[]>;
+  onSearchServers: (host: Host) => RequestEffect<readonly Server[]>;
   onJoinServer: (serverRef: ServerRef) => RequestEffect<void>;
 };
 

@@ -75,7 +75,7 @@ it.effect("concurrent channel loads of a server share one request", () =>
     const data = {
       server: {
         id: serverRef.id,
-        host: "peer.example",
+        host: serverRef.host,
         title: "Test",
         description: null,
         created_at: "2026-11-27T12:00:00Z",

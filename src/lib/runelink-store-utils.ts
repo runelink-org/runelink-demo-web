@@ -6,6 +6,7 @@ import type {
   ServerChannelId,
   ServerChannelRef,
   ServerRef,
+  Host,
   TextChannelRef,
   UserRef,
 } from "@runelink/sdk";
@@ -17,7 +18,7 @@ import {
   getActiveAccountAuth,
 } from "@/lib/auth-store";
 
-export type TargetHost = string | null;
+export type TargetHost = Host | null;
 
 export type TextServerChannel = Extract<ServerChannel, { kind: "text" }>;
 

@@ -1,11 +1,10 @@
 import {
+  HostSchema,
   UserRefSchema,
-  normalizeHostInput,
-  stripDefaultPort,
   validateHost,
   validateUsername,
 } from "@runelink/sdk";
-import type { UserRef } from "@runelink/sdk";
+import type { Host, UserRef } from "@runelink/sdk";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
@@ -83,28 +82,30 @@ function saveStoredJson(key: string, value: unknown): void {
   window.localStorage.setItem(key, JSON.stringify(value));
 }
 
-// Hosts identify default-port users without the port, so saved accounts do
-// too. Otherwise lookups, deletions, and updates would not match them.
-function normalizeHost(host: string): string {
-  return stripDefaultPort(validateHost(host));
-}
-
-function canonicalUserRef(userRef: UserRef): UserRef {
-  return { ...userRef, host: stripDefaultPort(userRef.host) };
-}
-
 export function normalizeAccountInput(input: {
   name: string;
   host: string;
 }): UserRef {
   return {
     name: validateUsername(input.name),
-    host: normalizeHost(input.host),
+    host: validateHost(input.host),
   };
 }
 
+const tryValidateHost = Option.liftThrowable(validateHost);
+
+/** The host that a person entered, if it is one. */
+export function enteredHost(input: string): Option.Option<Host> {
+  return tryValidateHost(input);
+}
+
+/** A host as a person types it, without a URL scheme or trailing slashes. */
 export function normalizeHostDraft(host: string): string {
-  return normalizeHostInput(host);
+  return host
+    .trim()
+    .toLowerCase()
+    .replace(/^https?:\/\//u, "")
+    .replace(/\/+$/u, "");
 }
 
 export function accountStorageKey(userRef: UserRef): string {
@@ -145,13 +146,13 @@ export function loadBrowserAppConfig(): BrowserAppConfig {
   });
   const activeAccount = config.active_account ?? config.default_account;
   // Accounts saved before hosts were canonical may include the default
-  // port, so merge accounts that only differed by it.
+  // port, which decoding drops, so merge accounts that only differed by it.
   let accounts: readonly UserRef[] = [];
   for (const account of config.accounts) {
-    accounts = upsertAccount(accounts, canonicalUserRef(account));
+    accounts = upsertAccount(accounts, account);
   }
   const migrated: BrowserAppConfig = {
-    active_account: activeAccount ? canonicalUserRef(activeAccount) : null,
+    active_account: activeAccount ?? null,
     accounts,
   };
   if (config.default_account !== undefined) {
@@ -173,12 +174,24 @@ export function loadBrowserAuthCache(): BrowserAuthCache {
   // default port, so it wins when both exist.
   const accounts: Record<string, StoredAccountAuth> = {};
   for (const [key, auth] of Object.entries(cache.accounts)) {
-    const canonicalKey = stripDefaultPort(key);
+    const canonicalKey = canonicalAccountKey(key);
     if (key === canonicalKey || !(canonicalKey in cache.accounts)) {
       accounts[canonicalKey] = auth;
     }
   }
   return { accounts };
+}
+
+const decodeHost = Schema.decodeUnknownOption(HostSchema);
+
+// Keys saved before hosts were canonical may name the default port.
+function canonicalAccountKey(key: string): string {
+  // Names have no `@`
+  const at = key.indexOf("@");
+  return Option.match(decodeHost(key.slice(at + 1)), {
+    onNone: () => key,
+    onSome: (host) => `${key.slice(0, at)}@${host}`,
+  });
 }
 
 export function saveBrowserAuthCache(cache: BrowserAuthCache): void {

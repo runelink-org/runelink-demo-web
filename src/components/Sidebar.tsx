@@ -1,5 +1,6 @@
 import { serverRefOf, resourceKey } from "@runelink/sdk";
 import type {
+  Host,
   ResourceKey,
   Server,
   ServerChannel,
@@ -42,18 +43,18 @@ type SidebarProps = {
   isLoading: boolean;
   error: string | null;
   isSelectedServerHydrating: boolean;
-  activeHost: string | null;
+  activeHost: Host | null;
   accountRailOnly?: boolean;
   onManageAccounts: () => void;
   onSelectAccount: () => void;
   onSelectServer: (serverRef: ServerRef) => void;
   onSelectChannel: (channel: ServerChannel) => void;
   onCreateServer: (
-    host: string,
+    host: Host,
     title: string,
     description: string
   ) => RequestEffect<void>;
-  onSearchServers: (host: string) => RequestEffect<readonly Server[]>;
+  onSearchServers: (host: Host) => RequestEffect<readonly Server[]>;
   onJoinServer: (serverRef: ServerRef) => RequestEffect<void>;
   onOpenServerSettings: (server: Server) => void;
   onLeaveServer: (serverRef: ServerRef) => RequestEffect<void>;
