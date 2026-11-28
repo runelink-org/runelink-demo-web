@@ -42,24 +42,28 @@ const decodeHost = Schema.decodeUnknownOption(HostSchema);
 // Saved before hosts were canonical, keys may name the default port. Spellings
 // of one host keep HTTP approval only if all of them had it, and keys that
 // aren't hosts are dropped.
-function loadHostTransports(): Record<Host, HostTransport> {
+function loadHostTransports(): Map<Host, HostTransport> {
   const raw = window.localStorage.getItem(STORAGE_KEY);
   const stored: Readonly<Record<string, HostTransport>> =
     raw != null && raw !== ""
       ? Option.getOrElse(decodeHostTransports(raw), () => ({}))
       : {};
-  const hosts: Record<Host, HostTransport> = {};
+  // A map, since a host such as `constructor` would find an object's
+  // prototype
+  const hosts = new Map<Host, HostTransport>();
   for (const [key, transport] of Object.entries(stored)) {
     const host = decodeHost(key);
     if (Option.isNone(host)) continue;
-    const merged: HostTransport | undefined = hosts[host.value];
-    hosts[host.value] =
+    const merged = hosts.get(host.value);
+    hosts.set(
+      host.value,
       merged === undefined
         ? transport
         : {
             secure: merged.secure || transport.secure,
             allow_insecure: merged.allow_insecure && transport.allow_insecure,
-          };
+          }
+    );
   }
   return hosts;
 }
@@ -67,7 +71,10 @@ function loadHostTransports(): Record<Host, HostTransport> {
 function saveHostTransports(
   hosts: ReturnType<typeof loadHostTransports>
 ): void {
-  window.localStorage.setItem(STORAGE_KEY, JSON.stringify(hosts));
+  window.localStorage.setItem(
+    STORAGE_KEY,
+    JSON.stringify(Object.fromEntries(hosts))
+  );
 }
 
 type TransportPrompt = { host: Host; respond: (approved: boolean) => void };
@@ -130,7 +137,11 @@ const probe = Effect.fn("HostTransport.probe")(function* (apiUrl: string) {
 // Returns whether a previously connected host uses HTTPS, or null if this
 // browser has not connected to it. Never prompts.
 export function getKnownHostTransport(host: Host): boolean | null {
-  return loadHostTransports()[host]?.secure ?? null;
+  const transport = loadHostTransports().get(host);
+  // HTTP only counts once the user has approved it.
+  if (transport === undefined) return null;
+  if (transport.secure) return true;
+  return transport.allow_insecure ? false : null;
 }
 
 // Whether to connect to the host securely. Interrupting it closes any
@@ -150,7 +161,7 @@ export const resolveHostTransport = Effect.fn("HostTransport.resolve")(
         });
       }
       const approved =
-        loadHostTransports()[host]?.allow_insecure ||
+        loadHostTransports().get(host)?.allow_insecure === true ||
         (yield* confirmInsecureHost(host));
       if (!approved) {
         return yield* new HostTransportError({
@@ -159,10 +170,10 @@ export const resolveHostTransport = Effect.fn("HostTransport.resolve")(
       }
     }
     const hosts = loadHostTransports();
-    hosts[host] = {
+    hosts.set(host, {
       secure,
-      allow_insecure: !secure || (hosts[host]?.allow_insecure ?? false),
-    };
+      allow_insecure: !secure || (hosts.get(host)?.allow_insecure ?? false),
+    });
     yield* Effect.try({
       try: () => {
         saveHostTransports(hosts);
