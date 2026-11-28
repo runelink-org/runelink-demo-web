@@ -17,7 +17,10 @@ import { useAtomValue } from "@effect/atom-react";
 import { getState } from "@/lib/atom-registry";
 import { request } from "@/lib/runelink-session";
 import { runPromise } from "@/lib/runtime";
-import { handleRunelinkUpdate } from "@/lib/runelink-updates";
+import {
+  handleRunelinkUpdate,
+  removeServerState,
+} from "@/lib/runelink-updates";
 import { resourceKey } from "@runelink/sdk";
 import type {
   ServerMember,
@@ -215,6 +218,8 @@ function ServerSettingsContent({
     serverRef: ServerRef
   ) {
     yield* deleteServer(serverRef);
+    // Now, since the update may come later
+    removeServerState(serverRef);
     onDone();
   });
 
